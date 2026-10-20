@@ -1,0 +1,28 @@
+{
+    "name": "aminarjmand/pure-captcha",
+    "description": "A secure, customizable and lightweight PHP CAPTCHA package with multiple difficulty levels",
+    "keywords": ["captcha", "security", "php", "image", "spam", "bot-protection"],
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://aminarjmand.com",
+    "authors": [
+        {
+            "name": "Amin Arjmand",
+            "email": "aminarj2000@gmail.com",
+            "homepage": "https://aminarjmand.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "ext-gd": "*",
+        "ext-session": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "AminArjmand\\PureCaptcha\\": "src/"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

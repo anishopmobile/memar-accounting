@@ -1,0 +1,364 @@
+/* =====================================================================
+ * invoice-pdf.css — استایل اختصاصی سند PDF فاکتور فروش
+ *
+ * این استایل فقط داخل سند PDF تولیدی (mPDF) استفاده می‌شود و به‌هیچ‌وجه
+ * در UI برنامه (style.css) بارگذاری نمی‌شود؛ در نتیجه هیچ تأثیری روی
+ * ظاهر صفحات وب ندارد.
+ * ===================================================================== */
+
+body,
+.invoice-doc {
+    font-family: xbriyaz, sans-serif;
+    direction: rtl;
+    text-align: right;
+    font-size: 10pt;
+    color: #202b3d;
+}
+
+.invoice-doc {
+    width: 100%;
+}
+
+/* ---------- هدر ---------- */
+.head-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 6pt;
+}
+
+.head-table td {
+    vertical-align: middle;
+    padding: 0;
+}
+
+.head-logo {
+    width: 50%;
+    text-align: right;
+}
+
+.head-logo img {
+    max-height: 50mm;
+}
+
+.store-name {
+    font-size: 9.5pt;
+    font-weight: bold;
+    color: #33415c;
+    margin-top: 2pt;
+}
+
+.head-title {
+    width: 40%;
+    text-align: center;
+}
+
+.inv-title {
+    font-size: 17pt;
+    font-weight: bold;
+    margin: 0;
+    color: #1c2740;
+}
+
+.head-meta {
+    width: 40%;
+    text-align: left;
+}
+
+.meta-box {
+    width: auto;
+    margin-left: auto;
+    padding: 4pt 6pt;
+}
+
+.meta-box td {
+    font-size: 9pt;
+    padding: 1.5pt 3pt;
+}
+
+.meta-label {
+    color: #5d6b85;
+}
+
+.meta-value {
+    font-weight: bold;
+    text-align: left;
+}
+
+.accent-rule {
+    border-bottom: 1.1pt solid #2068ff;
+    margin: 4pt 0 8pt 0;
+}
+
+/* ---------- بخش‌ها ---------- */
+.section-title {
+    font-size: 11pt;
+    font-weight: bold;
+    margin: 8pt 0 4pt 0;
+    padding: 2.5pt 6pt;
+    background: #eef3fb;
+    border-right: 3pt solid #2068ff;
+    color: #1c2740;
+}
+
+.section-title.small {
+    font-size: 9.5pt;
+    margin: 0 0 3pt 0;
+}
+
+/* ---------- جدول اطلاعات فروشنده/خریدار ---------- */
+.info-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 4pt;
+}
+
+.info-table td {
+    border: 0.5pt solid #c3cede;
+    padding: 3.5pt 6pt;
+}
+
+.info-cell .lbl {
+    font-size: 7.8pt;
+    color: #5d6b85;
+    margin-top: 2pt;
+}
+
+.info-cell .val {
+    font-size: 9.5pt;
+    color: #202b3d;
+}
+
+.info-full .lbl-inline {
+    font-size: 8.5pt;
+    color: #5d6b85;
+    margin-left: 6pt;
+}
+
+/* ---------- جدول اقلام ---------- */
+.items-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    margin: 4pt 0 6pt 0;
+}
+
+.items-table thead {
+    display: table-header-group;
+}
+
+.items-table th {
+    background: #eef3fb;
+    border: 0.5pt solid #c3cede;
+    color: #1c2740;
+    font-weight: bold;
+    font-size: 8.5pt;
+    padding: 4pt 3pt;
+    text-align: center;
+}
+
+.items-table td {
+    border: 0.5pt solid #c3cede;
+    font-size: 8.5pt;
+    padding: 3.5pt 3pt;
+    vertical-align: top;
+}
+
+.items-table tr {
+    page-break-inside: avoid;
+}
+
+.c1 { width: 6%; }
+.c2 { width: 11%; }
+.c3 { width: 36%; }
+.c4 { width: 12%; }
+.c5 { width: 12%; }
+.c6 { width: 12%; }
+.c7 { width: 11%; }
+
+.p3-description { width: 52%; }
+.p4 { width: 10%; }
+.p5 { width: 15%; }
+.p6 { width: 15%; }
+
+.center { text-align: center; }
+.left { text-align: left; }
+.right { text-align: right; }
+
+.qty {
+    white-space: nowrap;
+}
+.c1.center{
+	text-align:center;
+}
+/* ---------- جمع‌بندی / شرایط پرداخت ---------- */
+.summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: avoid;
+    margin: 6pt 0;
+}
+
+.summary-table > tbody > tr > td {
+    vertical-align: top;
+    padding: 1pt;
+}
+
+.summary-side {
+    width: 58%;
+}
+
+.payment-side {
+    width: 42%;
+}
+
+.totals-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 0.5pt solid #c3cede;
+}
+
+.totals-table td {
+    padding: 3.5pt 6pt;
+    font-size: 9pt;
+    border-bottom: 0.4pt solid #dee5f0;
+}
+
+.totals-table tr:last-child td {
+    border-bottom: none;
+}
+
+.totals-table .money {
+    text-align: left;
+    white-space: nowrap;
+}
+
+.totals-table .grand td {
+    background: #eef3fb;
+    font-weight: bold;
+    border-top: 0.8pt solid #c3cede;
+}
+
+.totals-table .strong {
+    font-size: 10.5pt;
+    color: #1f4799;
+}
+
+.words-cell {
+    padding: 6pt 4pt 0 4pt;
+    font-size: 10pt;
+    font-weight: bold;
+}
+
+/* ---------- امضا ---------- */
+.sig-table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: avoid;
+    margin-top: 8pt;
+}
+
+.sig-table td {
+    border: 0.6pt solid #b9c6da;
+    padding: 7pt;
+    vertical-align: top;
+}
+
+.sig-table .sig-box {
+    width: 50%;
+    height: 22mm;
+}
+
+.sig-title {
+    font-size: 9.5pt;
+    font-weight: bold;
+    color: #202b3d;
+    margin-bottom: 5pt;
+}
+
+.sig-box img {
+    max-height: 19mm;
+    margin-left: 6pt;
+    vertical-align: middle;
+}
+
+/* ---------- قالب پیش‌فاکتور ---------- */
+.pro-head {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 6pt;
+}
+
+.pro-head td {
+    vertical-align: middle;
+}
+
+.ec-code {
+    border: 0.6pt solid #c3cede;
+    padding: 5pt 8pt;
+    font-size: 8.5pt;
+    text-align: center;
+    color: #5d6b85;
+}
+
+.ec-code strong {
+    display: block;
+    font-size: 10.5pt;
+    color: #1c2740;
+    margin-top: 2pt;
+}
+
+.pro-info {
+    width: 100%;
+    border-collapse: collapse;
+    border: 0.5pt solid #c3cede;
+    margin: 8pt 0 2pt 0;
+}
+
+.pro-info td {
+    padding: 4pt 6pt;
+    font-size: 9pt;
+}
+
+.pro-info .info-label {
+    background: #eef3fb;
+    color: #5d6b85;
+    width: 12%;
+}
+
+.pro-info .info-value {
+    font-weight: bold;
+    width: 21%;
+}
+
+.pro-summary {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: avoid;
+    margin: 6pt 0;
+    border: 0.5pt solid #c3cede;
+}
+
+.pro-summary td {
+    padding: 6pt;
+    font-size: 10pt;
+    border-bottom: 0.4pt solid #dee5f0;
+}
+
+.pro-summary .grand td {
+    background: #eef3fb;
+    font-weight: bold;
+}
+
+.pro-summary .lbl {
+    width: 20%;
+    color: #5d6b85;
+}
+
+.pro-summary .money {
+    text-align: left;
+    white-space: nowrap;
+}
+
+.page-break {
+    page-break-before: always;
+}
