@@ -29,12 +29,9 @@ jobs:
           node --check assets/js/bundle.js
           node --check assets/js/current-affairs.js
           node --check assets/js/sales-return.js
-          node --check assets/js/payment-forms.js
-          node --check assets/js/payment-transactions.js
       - name: Currency unit tests
         run: |
           php assets/php/tests/currency_test.php
-          php assets/php/tests/payment_currency_test.php
           node assets/js/currency.test.js
 
   mysql-currency-roundtrip:

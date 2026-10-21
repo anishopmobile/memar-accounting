@@ -42,8 +42,8 @@ $statuses = [
                 <option value="<?php echo (int) $f->id; ?>"><?php echo htmlspecialchars($f->title, ENT_QUOTES, 'UTF-8'); ?></option>
             <?php endforeach; ?>
         </select>
-        <input type="text" id="txAmountMin" placeholder="از مبلغ (<?php echo htmlspecialchars(getCurrencyLabel(), ENT_QUOTES, 'UTF-8'); ?>)" inputmode="numeric">
-        <input type="text" id="txAmountMax" placeholder="تا مبلغ (<?php echo htmlspecialchars(getCurrencyLabel(), ENT_QUOTES, 'UTF-8'); ?>)" inputmode="numeric">
+        <input type="text" id="txAmountMin" placeholder="از مبلغ" inputmode="numeric">
+        <input type="text" id="txAmountMax" placeholder="تا مبلغ" inputmode="numeric">
         <input type="date" id="txDateFrom" title="از تاریخ">
         <input type="date" id="txDateTo" title="تا تاریخ">
         <button type="button" class="button" id="txApply">اعمال فیلتر</button>

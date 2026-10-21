@@ -11,7 +11,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/../boot.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/payment_loader.php';
-require_once __DIR__ . '/payment_currency.php';
 
 $id = (int) ($_GET['id'] ?? 0);
 if ($id <= 0) {
@@ -30,7 +29,7 @@ $e = static function ($v): string {
     return htmlspecialchars((string) ($v ?? ''), ENT_QUOTES, 'UTF-8');
 };
 
-$amountSuffix = ' ' . getCurrencyLabel();
+$amountSuffix = ' ریال';
 ?>
 <div class="card" style="min-width: 420px;">
     <div class="page-actions">
@@ -56,11 +55,11 @@ $amountSuffix = ' ' . getCurrencyLabel();
             <label>مبلغ</label>
             <div>
                 <?php if ($form->isFixed()): ?>
-                    <?php echo PaymentDisplayCurrency::formatRial($form->fixedAmount); ?>
+                    <?php echo number_format($form->fixedAmount) . $amountSuffix; ?>
                 <?php elseif ($form->isCustom()): ?>
-                    <?php echo ($form->minAmount ? PaymentDisplayCurrency::fromRial($form->minAmount) : 0) . ' تا ' . ($form->maxAmount ? PaymentDisplayCurrency::fromRial($form->maxAmount) : 'نامحدود') . $amountSuffix; ?>
+                    <?php echo ($form->minAmount ? number_format($form->minAmount) : 0) . ' تا ' . ($form->maxAmount ? number_format($form->maxAmount) : 'نامحدود') . $amountSuffix; ?>
                 <?php else: ?>
-                    <?php foreach ($form->amountOptions as $a): ?><span dir="ltr" style="margin-inline-end:8px;"><?php echo htmlspecialchars(PaymentDisplayCurrency::formatRial((int) $a), ENT_QUOTES, 'UTF-8'); ?></span><?php endforeach; ?>
+                    <?php foreach ($form->amountOptions as $a): ?><span dir="ltr" style="margin-inline-end:8px;"><?php echo number_format($a); ?></span><?php endforeach; ?>
                 <?php endif; ?>
             </div>
         </div>

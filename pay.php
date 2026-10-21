@@ -14,7 +14,6 @@ declare(strict_types=1);
 
 require __DIR__ . '/assets/php/db.php';
 require __DIR__ . '/assets/php/payment/payment_loader.php';
-require __DIR__ . '/assets/php/payment/payment_currency.php';
 require __DIR__ . '/assets/php/payment/public/public_helpers.php';
 
 $svc = new PaymentService($mysqli);
@@ -53,7 +52,7 @@ if ($action === 'callback' || isset($_GET['Authority']) || isset($_GET['Status']
         echo '<h1 class="pay-result-title">پرداخت با موفقیت انجام شد</h1>';
         if ($tx !== null) {
             echo '<div class="pay-result-grid">';
-            echo '<div><span>مبلغ</span><strong>' . pe(PaymentDisplayCurrency::formatRial((int) $tx->amount)) . '</strong></div>';
+            echo '<div><span>مبلغ</span><strong>' . number_format((int) $tx->amount) . ' ریال</strong></div>';
             echo '<div><span>موضوع</span><strong>' . pe($formName) . '</strong></div>';
             echo '<div><span>کد پیگیری</span><strong dir="ltr">' . pe((string) ($tx->refId ?: $tx->number)) . '</strong></div>';
             echo '</div>';
@@ -105,23 +104,7 @@ if ($action === 'submit' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // Normalize namespaced dynamic fields (f[...]) into flat keys the backend
     // expects; the real amount comes from the top-level `amount` field.
     $submitted = is_array($_POST['f'] ?? null) ? $_POST['f'] : [];
-    // A stale public form must not charge in a different unit after preferences change.
-    if ((string) ($_POST['display_currency_code'] ?? '') !== PaymentDisplayCurrency::code()) {
-        payHeader(pe($form->title));
-        publicFriendlyError('واحد پولی سایت تغییر کرده است. صفحه پرداخت را مجدداً باز کنید.');
-        payEnd();
-        $mysqli->close();
-        exit;
-    }
-    try {
-        $submitted['amount'] = (string) PaymentDisplayCurrency::toRial((string) ($_POST['amount'] ?? ''));
-    } catch (InvalidArgumentException $e) {
-        payHeader(pe($form->title));
-        echo renderLocalForm($form, 'مبلغ پرداخت معتبر نیست.');
-        payEnd();
-        $mysqli->close();
-        exit;
-    }
+    $submitted['amount'] = (string) ($_POST['amount'] ?? '');
     $submitted['slug'] = $formSlug;
 
     $begin = $svc->begin($form, $submitted);

@@ -8,7 +8,7 @@
 declare(strict_types=1);
 /** @var PaymentForm $form */
 $ptpl = static function ($v): string { return htmlspecialchars((string) ($v ?? ''), ENT_QUOTES, 'UTF-8'); };
-$amountTpl = static function (int $n): string { return PaymentDisplayCurrency::formatRial($n); };
+$amountTpl = static function (int $n): string { return number_format($n) . ' ریال'; };
 ?>
 <div class="pay-card pay-theme-default">
     <div class="pay-head">
@@ -26,7 +26,6 @@ $amountTpl = static function (int $n): string { return PaymentDisplayCurrency::f
         <input type="hidden" name="action" value="submit">
         <input type="hidden" name="slug" value="<?php echo $ptpl($form->slug); ?>">
         <input type="hidden" name="token" value="<?php echo $ptpl($token); ?>">
-        <input type="hidden" name="display_currency_code" value="<?php echo $ptpl(PaymentDisplayCurrency::code()); ?>">
 
         <?php if ($errors !== ''): ?>
             <div class="pay-alert pay-alert-error" role="alert"><?php echo $ptpl($errors); ?></div>
@@ -75,7 +74,7 @@ $amountTpl = static function (int $n): string { return PaymentDisplayCurrency::f
 
         <?php if ($form->isCustom()): ?>
             <div class="pay-field">
-                <label class="pay-label" for="payAmount">مبلغ پرداخت (<?php echo $ptpl(getCurrencyLabel()); ?>)</label>
+                <label class="pay-label" for="payAmount">مبلغ پرداخت (ریال)</label>
                 <input type="text" id="payAmount" name="amount" class="pay-input" inputmode="numeric" placeholder="مبلغ دلخواه" required>
             </div>
         <?php elseif ($form->isSelectable()): ?>
@@ -84,7 +83,7 @@ $amountTpl = static function (int $n): string { return PaymentDisplayCurrency::f
                 <div class="pay-amounts">
                     <?php foreach ($form->amountOptions as $a): ?>
                         <label class="pay-amount-option">
-                            <input type="radio" name="amount" value="<?php echo $ptpl(PaymentDisplayCurrency::fromRial((int) $a)); ?>" required>
+                            <input type="radio" name="amount" value="<?php echo (int) $a; ?>" required>
                             <span><?php echo $amountTpl((int) $a); ?></span>
                         </label>
                     <?php endforeach; ?>
@@ -94,7 +93,7 @@ $amountTpl = static function (int $n): string { return PaymentDisplayCurrency::f
             <div class="pay-field pay-fixed-amount">
                 <span class="pay-fixed-label">مبلغ قابل پرداخت</span>
                 <span class="pay-fixed-value"><?php echo $amountTpl((int) $form->authoritativeAmount()); ?></span>
-                <input type="hidden" name="amount" value="<?php echo $ptpl(PaymentDisplayCurrency::fromRial((int) $form->authoritativeAmount())); ?>">
+                <input type="hidden" name="amount" value="<?php echo (int) $form->authoritativeAmount(); ?>">
             </div>
         <?php endif; ?>
 
