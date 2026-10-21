@@ -1,0 +1,143 @@
+/* Locally hosted HCG v1.0.4 integration, additive to existing Tabler RTL. */
+@font-face {
+  font-family: 'estedadv';
+  src: url('../webfonts/estedad-fd-var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+body .hcg-select.memar-searchable-select {
+  --hcg-select-font-family: 'estedadv', estedad, sans-serif;
+  --hcg-select-font-size: 13px;
+  --hcg-select-option-font-size: 13px;
+  --hcg-select-border: #dce5f1;
+  --hcg-select-border-focus: #206bc4;
+  --hcg-select-radius: 8px;
+  --hcg-select-z: 1550;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  font-family: 'estedadv', estedad, sans-serif;
+  direction: rtl;
+  text-align: right;
+}
+body .hcg-select.memar-searchable-select :is(.hcg-select-control,.hcg-select-panel,.hcg-select-search,.hcg-select-option,.hcg-select-group,.hcg-select-empty,.hcg-select-label) {
+  font-family: 'estedadv', estedad, sans-serif;
+  direction: rtl;
+  text-align: right;
+}
+body .hcg-select.memar-searchable-select .hcg-select-control {
+  min-height: 40px;
+  padding: 8px 11px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: #fff;
+}
+body .hcg-select.memar-searchable-select .hcg-select-panel {
+  right: 0;
+  left: auto;
+  width: max(100%, min(285px, calc(100vw - 35px)));
+  max-width: calc(100vw - 20px);
+  padding: 7px;
+  background: #fff;
+  border-radius: 9px;
+  box-shadow: 0 14px 35px rgba(16, 36, 64, .17);
+}
+body .hcg-select.memar-searchable-select .hcg-select-search {
+  direction: rtl;
+  font-size: 13px;
+  padding: 8px 10px;
+  margin: 0 0 7px;
+}
+body .hcg-select.memar-searchable-select .hcg-select-list {
+  max-height: min(260px, 36vh);
+  margin: 0;
+  padding: 0;
+}
+body .hcg-select.memar-searchable-select .hcg-select-option {
+  padding: 8px 10px;
+  font-size: 13px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+body .hcg-select.memar-searchable-select .hcg-select-option.is-grouped {
+  padding-inline-start: 20px;
+}
+body .hcg-select.memar-searchable-select .hcg-select-caret {
+  margin-left: 1px;
+}
+body .hcg-select.memar-searchable-select .hcg-select-clear {
+  width: 22px;
+  height: 22px;
+  font-size: 18px;
+}
+body .hcg-select.memar-searchable-select .hcg-select-native {
+  /* Native <select> remains the actual submitted control and event source. */
+  width: 1px !important;
+  min-width: 0 !important;
+  max-width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+}
+/* Toolbar controls must retain the prior one/two-row RTL layout. */
+body.tabler-admin .filter-panel > .hcg-select.memar-searchable-select,
+body.tabler-admin .page-actions > .hcg-select.memar-searchable-select {
+  flex: 0 0 175px;
+  width: 175px;
+  min-width: 0;
+  max-width: 210px;
+}
+body.tabler-admin .filter-panel .page-size-label + .hcg-select,
+body.tabler-admin .filter-panel .hcg-select:has(> #productPageSize) {
+  flex: 0 0 86px;
+  width: 86px;
+  max-width: 100px;
+}
+/* The native province/category select has a previously requested 200px cap. */
+body.tabler-admin #goods-and-services .filter-panel .hcg-select:has(> #productCategoryFilter) {
+  flex-basis: 200px;
+  width: 200px;
+  max-width: 200px;
+}
+body.tabler-admin .page-size-label .hcg-select {
+  display: inline-flex;
+  width: 85px;
+  vertical-align: middle;
+}
+body.tabler-admin .toolbar-actions .hcg-select { flex: 0 0 auto; min-width: 125px; }
+body.tabler-admin .form-row > .hcg-select { width: 100%; max-width: 100%; }
+body.tabler-admin td > .hcg-select .hcg-select-control {
+  min-height: 36px;
+  padding: 6px 8px;
+}
+/* Overflow-scrolling filter strips clip absolutely positioned dropdowns.
+ * Let just the open dropdown escape while preserving scroll/nowrap at rest.
+ * The menu itself stays a bounded, vertically-scrollable floating panel.
+ */
+body.tabler-admin .filter-panel:has(.hcg-select.is-open),
+body.tabler-admin .page-actions:has(.hcg-select.is-open),
+body.tabler-admin .toolbar-actions:has(.hcg-select.is-open) {
+  overflow: visible !important;
+  position: relative;
+  z-index: 1550;
+}
+body.tabler-admin :is(.modal,.modal-content,.card,.table-wrapper):has(.hcg-select.is-open) {
+  z-index: 1500;
+}
+body.tabler-admin .modal-content:has(.hcg-select.is-open) {
+  overflow: visible !important;
+}
+body.tabler-admin .hcg-select.is-open { z-index: 1600; }
+/* Avoid desktop inline <label> layout collapses after HCG moves its wrapper
+ * next to the native select (which remains inside the original label). */
+body.tabler-admin .page-size-label { display:inline-flex; align-items:center; gap:6px; }
+body.tabler-admin .page-size-label + .hcg-select { display:inline-block; }
+@media (max-width: 1024px) {
+  body.tabler-admin .filter-panel > .hcg-select.memar-searchable-select { flex: 0 0 170px; width:170px; }
+  body.tabler-admin .form-row > .hcg-select { flex: 1 1 100%; width:100%; }
+}
+/* Public payment selects use the same font and controls, no change to public
+ * payment forms, submission endpoints, fees, JS or financial handling. */
+body .pay-page .hcg-select { width:100%; }
+body .pay-page .hcg-select-control { min-height:44px; }
+body .pay-page .hcg-select-panel { z-index:1500; }
