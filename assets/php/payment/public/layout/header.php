@@ -14,6 +14,10 @@ $pt = (string) ($pageTitle ?? 'پرداخت');
     <meta name="robots" content="noindex">
     <title><?php echo htmlspecialchars($pt, ENT_QUOTES, 'UTF-8'); ?></title>
     <link rel="stylesheet" href="assets/css/payment-public.css">
+    <link rel="stylesheet" href="assets/vendor/hcg-searchable-select/hcg-select.css">
+    <link rel="stylesheet" href="assets/css/hcg-select-integration.css">
+    <script src="assets/vendor/hcg-searchable-select/hcg-select.js" defer></script>
+    <script src="assets/js/hcg-select-integration.js" defer></script>
 </head>
 <body>
 <div class="pay-page">
