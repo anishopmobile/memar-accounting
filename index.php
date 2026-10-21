@@ -25,6 +25,22 @@ $pages = [
     'payment-zarinpal-settings' => 'تنظیمات زرین‌پال',
     'account' => 'حساب کاربری',
 ];
+/* Application branding is UI-only and separate from store/invoice identity. */
+require_once __DIR__ . '/assets/php/db.php';
+$brandMode = 'name';
+$brandLogo = '';
+$brandResult = $mysqli->query('SELECT display_mode, logo_path FROM app_brand_settings WHERE id = 1 LIMIT 1');
+if ($brandResult && ($brandRow = $brandResult->fetch_assoc())) {
+    $candidate = (string) ($brandRow['logo_path'] ?? '');
+    if (preg_match('#^assets/uploads/brand_[0-9a-f]{32}\\.(png|jpg|webp)$#D', $candidate) === 1
+        && is_file(__DIR__ . '/' . $candidate)) {
+        $brandLogo = $candidate;
+    }
+    $candidateMode = (string) ($brandRow['display_mode'] ?? 'name');
+    if ($brandLogo !== '' && in_array($candidateMode, ['logo', 'logo_name'], true)) {
+        $brandMode = $candidateMode;
+    }
+}
 $page = $_GET['page'] ?? 'dashboard';
 if (!array_key_exists($page, $pages)) {
     $page = 'dashboard';
@@ -44,6 +60,7 @@ if (!array_key_exists($page, $pages)) {
     <link rel="stylesheet" href="assets/css/tabler-integration.css">
     <link rel="stylesheet" href="assets/css/navbar-toolbar.css">
     <link rel="stylesheet" href="assets/css/dashboard-about.css">
+    <link rel="stylesheet" href="assets/css/product-brand-defective.css">
     <script src="assets/js/jquery.min.js"></script>
     <script src="assets/js/kamadatepicker.js"></script>
     <script>window.APP_CURRENCY = <?php echo json_encode(getCurrentCurrency(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;</script>
@@ -107,9 +124,13 @@ if (!array_key_exists($page, $pages)) {
         <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
         <aside class="sidebar" id="appSidebar" aria-label="منوی مدیریت">
             <div class="app-sidebar-heading">
-            <div class="brand-panel">
-                <div class="brand-title">حسابداری معمار</div>
-                <div class="brand-subtitle">حسابداری ساده</div>
+            <div class="brand-panel brand-mode-<?php echo $brandMode; ?>" aria-label="حسابداری معمار">
+                <?php if ($brandLogo !== '' && $brandMode !== 'name'): ?>
+                    <img class="brand-logo" src="<?php echo htmlspecialchars($brandLogo, ENT_QUOTES, 'UTF-8'); ?>" alt="لوگوی حسابداری معمار" width="52" height="42">
+                <?php endif; ?>
+                <?php if ($brandMode !== 'logo'): ?>
+                    <div class="brand-title">حسابداری معمار</div>
+                <?php endif; ?>
             </div>
             <button type="button" class="sidebar-close" id="sidebarClose" aria-label="بستن منو"><i class="fas fa-times" aria-hidden="true"></i></button>
             </div>
