@@ -60,3 +60,8 @@ jobs:
         run: php assets/php/tests/currency_mysql_test.php
       - name: Current affairs database regression (disposable database)
         run: php assets/php/tests/current_affairs_test.php
+      - name: Invoice, inventory and Excel regression (ephemeral MySQL instance)
+        run: |
+          php assets/php/tests/multi_unit_inventory_test.php
+          php assets/php/tests/sales_return_test.php
+          php assets/php/tests/excel_import_duplicate_test.php
