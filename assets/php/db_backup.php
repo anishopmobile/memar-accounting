@@ -1,5 +1,7 @@
 <?php
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/boot.php';
+require_once __DIR__ . '/media_common.php';
+require_once __DIR__ . '/media_backup.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -28,6 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 $action = $_POST['action'] ?? '';
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') respond(false, 'روش درخواست نامعتبر است.');
+require_csrf_or_fail();
 
 /**
  * Resolve a server-side directory path.
@@ -73,6 +77,41 @@ if ($action === 'save_dir') {
         respond(false, 'خطا در ذخیره‌سازی آدرس پشتیبان.');
     }
     respond(true, 'آدرس پوشه پشتیبان ذخیره شد.', ['backup_dir' => $backup_dir]);
+}
+
+
+/* ---------- Full archive: SQL + private media files (not Excel or financial writes) ---------- */
+if ($action === 'backup_full') {
+    $storedDir = $settings['backup_dir'] ?? '';
+    if (trim($storedDir) === '') respond(false, 'آدرس پشتیبان را ابتدا ذخیره کنید.');
+    $targetDir = resolveBackupDir($storedDir);
+    if (!is_dir($targetDir) && !@mkdir($targetDir, 0700, true) && !is_dir($targetDir)) {
+        respond(false, 'ایجاد پوشه پشتیبان ممکن نیست.');
+    }
+    try {
+        $path = media_full_backup_create($mysqli, $targetDir, exportDatabase($mysqli));
+        respond(true, 'نسخه کامل دیتابیس و تصاویر تهیه شد.', [
+            'filename'=>basename($path), 'path'=>$path, 'size'=>filesize($path)
+        ]);
+    } catch (Throwable $e) {
+        error_log('media backup failed: ' . $e->getMessage());
+        respond(false, 'پشتیبان کامل ناموفق بود؛ دسترسی پوشه و افزونه ZIP را بررسی کنید.');
+    }
+}
+if ($action === 'restore_full') {
+    if (empty($_FILES['backup_file']) || ($_FILES['backup_file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
+        || !is_uploaded_file((string)$_FILES['backup_file']['tmp_name'])) {
+        respond(false, 'فایل ZIP پشتیبان کامل انتخاب نشده است.');
+    }
+    try {
+        $result = media_full_backup_restore($mysqli, $_FILES['backup_file']['tmp_name'],
+            static fn($sql) => restoreDatabase($mysqli, $sql),
+            static fn() => exportDatabase($mysqli));
+        respond(true, 'پشتیبان کامل بازیابی شد.', $result);
+    } catch (Throwable $e) {
+        error_log('media restore failed: ' . $e->getMessage());
+        respond(false, 'بازگردانی نسخه کامل به دلیل خطا یا عدم اعتبار بسته متوقف شد. لاگ سرور را بررسی کنید.');
+    }
 }
 
 /* ---------- تهیه نسخه پشتیبان ---------- */
