@@ -1,0 +1,110 @@
+/* Local Tabler v1.6.1 RTL login skin. All authentication behavior stays server-side. */
+body.login-page.tabler-auth {
+  --login-primary: #206bc4;
+  --login-primary-soft: #eaf2fc;
+  --login-bg: #f3f6fb;
+  --login-text: #23364e;
+  --login-muted: #728199;
+  --tblr-font-sans-serif: 'estedadv', estedad, sans-serif;
+  direction: rtl;
+  font-family: 'estedadv', estedad, sans-serif;
+  display: grid; place-items: center;
+  min-height: 100vh; min-height: 100dvh;
+  background:
+    radial-gradient(circle at 12% 20%, rgba(32,107,196,.10), transparent 27%),
+    radial-gradient(circle at 85% 80%, rgba(32,107,196,.055), transparent 26%),
+    #f3f6fb;
+  padding: 14px;
+}
+body.login-page.tabler-auth::before {
+  background: linear-gradient(125deg,rgba(255,255,255,.56),rgba(225,237,251,.2));
+}
+body.tabler-auth .login-grid { opacity: .12; }
+body.tabler-auth .login-orb-one { background: radial-gradient(circle,#206bc421,transparent 70%); }
+body.tabler-auth .login-orb-two { background: radial-gradient(circle,#81a3ca25,transparent 70%); }
+body.tabler-auth .login-layout {
+  width: min(100%, 480px);
+  padding: 14px; margin: 0 auto;
+}
+body.tabler-auth .login-card.card {
+  display: block;
+  width: 100%; min-width: 0;
+  border: 1px solid #dce5f1;
+  border-radius: 16px;
+  padding: clamp(20px,3vw,38px);
+  color: #253750;
+  background: #fff;
+  box-shadow: 0 17px 48px rgba(27,54,89,.11);
+  backdrop-filter: none;
+}
+body.tabler-auth .login-brand { margin-bottom: 26px; gap: 14px; }
+body.tabler-auth .login-brand-mark {
+  width: 50px; height: 50px; flex: 0 0 50px;
+  border-radius: 12px;
+  background: #206bc4;
+  box-shadow: 0 5px 16px #206bc42a;
+  transform: none;
+}
+body.tabler-auth .login-brand-mark-inner {
+  width: 39px; height: 39px; border-radius: 9px; transform: none;
+}
+body.tabler-auth .login-brand-name {
+  font-size: 22px; color: #203b62; line-height: 1.3;
+}
+body.tabler-auth .login-brand-caption { color: #72839a; font-size: 12px; }
+body.tabler-auth .login-brand-en {
+  display: block; width: fit-content; margin-top: 2px;
+  direction: ltr; font-size: 10px; letter-spacing: .05em;
+  color: #8292ab; text-align: left;
+}
+body.tabler-auth .login-kicker {
+  border: 1px solid #d6e5f7;
+  border-radius: 7px; padding: 3px 9px; font-weight: 650;
+}
+body.tabler-auth .login-heading { margin-bottom: 21px; }
+body.tabler-auth .login-heading h1 { color: #23364e; font-size: 24px; }
+body.tabler-auth .login-heading p { color: #72839a; }
+body.tabler-auth .login-field { margin-bottom: 15px; }
+body.tabler-auth .login-field label { font-size: 13px; }
+body.tabler-auth .login-input-wrap .form-control {
+  background: #fbfdff;
+  width: 100%;
+  height: 46px; padding-inline: 42px 47px;
+  border-radius: 9px; border: 1px solid #d8e2ee;
+  font-size: 13px; color: #263951;
+  box-shadow: none; text-align: right; direction: rtl;
+}
+body.tabler-auth .login-input-wrap .form-control:focus {
+  border-color: #6da0de;
+  box-shadow: 0 0 0 3px #206bc421;
+  background: white;
+}
+body.tabler-auth .login-input-icon { height: 46px; }
+body.tabler-auth .login-password-toggle { color: #6b7c92; }
+body.tabler-auth .login-submit.btn.btn-primary {
+  display: flex; width: 100%; height: 47px;
+  margin-top: 16px; border-radius: 9px;
+  border: 1px solid #206bc4; color: #fff; background: #206bc4;
+  font-family: inherit; font-size: 14px; font-weight: 750;
+  box-shadow: 0 5px 13px rgba(32,107,196,.20);
+  text-transform: none;
+}
+body.tabler-auth .login-submit.btn.btn-primary:hover {
+  background: #1c5da8; box-shadow: 0 8px 18px rgba(32,107,196,.22);
+}
+body.tabler-auth .login-submit.btn.btn-primary:focus-visible,
+body.tabler-auth :is(button,input):focus-visible {
+  outline: 3px solid #9fc5f3;
+  outline-offset: 2px;
+}
+body.tabler-auth .login-captcha-box { min-width: 0; max-width: 100%; }
+body.tabler-auth .login-captcha-box img {
+  max-width: 100%; height: auto; object-fit: contain;
+}
+body.tabler-auth .login-alert { border-color: #f5c4c4; background: #fff4f4; }
+body.tabler-auth .login-footer { color: #8391a4; margin-top: 20px; }
+@media (max-width: 480px) {
+  body.tabler-auth .login-layout { padding: 0; }
+  body.tabler-auth .login-card.card { padding: 22px 18px; border-radius: 13px; }
+  body.tabler-auth .login-brand-name { font-size: 19px; }
+}
