@@ -7,6 +7,8 @@ if [[ "${GITHUB_ACTIONS:-}" != true ]]; then
   exit 1
 fi
 # Payment has separate idempotent schema migrations; initialize only the disposable CI database.
+# The Current Affairs module has a separate one-time schema migration.
+php assets/php/current_affairs/migration.php
 php assets/php/payment/payment_migration.php
 php assets/php/payment/payment_public_migration.php
 php assets/php/payment/payment_rate_limit_migration.php
