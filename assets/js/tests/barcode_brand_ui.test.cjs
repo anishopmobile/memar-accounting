@@ -91,8 +91,10 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
       // Success intentionally reloads the page and can release the response body
       // before Playwright can read it; verify persisted state via GET instead.
       assert.equal(resp.status(),200,'brand save HTTP result');
-      await page.waitForLoadState('load');
-      await page.reload({waitUntil:'domcontentloaded'});
+      // The UI reloads automatically on success. Wait for the new server-side
+      // brand mode; forcing a second reload races with the first navigation.
+      await page.waitForFunction(mode => !!document.querySelector('.brand-panel.brand-mode-'+mode),
+        mode, {timeout:15000});
       const state = await (await page.request.get(base+'/assets/php/app_brand_settings.php')).json();
       assert.equal(state.data.display_mode,mode);
       return state.data;
