@@ -48,6 +48,19 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
           const display = await page.locator('#notesBoard').evaluate(el => getComputedStyle(el).display);
           assert.equal(display, 'grid', 'notes use responsive layout');
         }
+        if (id === 'notes') {
+          // CRUD must continue working with both absolute desktop coordinates and mobile grid.
+          await page.locator('#createNoteButton').click();
+          const note = page.locator('#notesBoard .sticky-note').last();
+          await note.waitFor({state:'visible',timeout:5000});
+          await note.locator('.sticky-note-title').fill('آزمون رابط فارسی');
+          await note.locator('.sticky-note-content').fill('متن آزمایشی یادداشت');
+          await note.locator('.sticky-note-save').click();
+          await note.locator('.sticky-note-status.success').waitFor({state:'visible',timeout:5000});
+          page.once('dialog', dialog => dialog.accept());
+          await note.locator('.sticky-note-delete').click();
+          await note.waitFor({state:'detached',timeout:5000});
+        }
         if (id === 'dashboard') {
           assert.equal(await page.locator('.quick-action-card[href]').count(), 4);
         }
