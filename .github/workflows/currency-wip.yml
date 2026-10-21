@@ -76,3 +76,37 @@ jobs:
           php assets/php/tests/defective_return_test.php
       - name: Security and financial HTTP smoke tests
         run: bash assets/php/tests/currency_security_smoke.sh
+      - name: All-page Tabler RTL/local-asset HTTP smoke tests
+        run: bash assets/php/tests/tabler_ui_smoke.sh
+
+  responsive-ui-browser:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP/MySQL
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mysqlnd, bcmath, mbstring
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test runner (CI only)
+        run: |
+          npm install --no-save --no-audit --ignore-scripts --package-lock=false playwright@1.56.0
+          npx playwright install --with-deps chromium
+      - name: Browser regression on 22 routes at 1440, 768 and 390px
+        run: bash assets/php/tests/tabler_browser_smoke.sh
