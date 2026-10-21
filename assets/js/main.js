@@ -871,6 +871,7 @@ $(function() {
         $('#productUnitsTable tbody').html('');
         productsEditOriginal = null;
         productsUnitsOriginalJson = '';
+        if (window.MediaEditor) window.MediaEditor.reset('product');
     }
 
     function productModalState(mode, data) {
@@ -932,6 +933,7 @@ $(function() {
             };
         }
         renderProductUnits(units);
+        if (window.MediaEditor) window.MediaEditor.prepare('product', mode === 'edit' && data ? data.id : 0);
         $('#productModal').addClass('open');
         $('body').addClass('modal-open');
     }
@@ -1069,6 +1071,10 @@ $(function() {
 
     $('#productForm').on('submit', function(e) {
         e.preventDefault();
+        if (window.MediaEditor && !window.MediaEditor.canSave('product')) {
+            alert('ابتدا بارگذاری تصاویر قبلی محصول کامل شود.'); return;
+        }
+        if ($('#saveProductButton').prop('disabled')) return;
         if ($('#productName').val().trim() === '') {
             alert('نام کالا نمی‌تواند خالی باشد.');
             return;
@@ -1106,7 +1112,7 @@ $(function() {
                     break;
                 }
             }
-            if (!changed && productsUnitsOriginalJson === JSON.stringify(unitsList)) {
+            if (!changed && productsUnitsOriginalJson === JSON.stringify(unitsList) && !(window.MediaEditor && window.MediaEditor.isDirty('product'))) {
                 closeProductModal();
                 return;
             }
@@ -1116,6 +1122,7 @@ $(function() {
         var priceDisplay = { pp: $('#productPurchasePrice').val(), sp: $('#productSalePrice').val() };
         $('#productPurchasePrice').val(unformatPrice(priceDisplay.pp));
         $('#productSalePrice').val(unformatPrice(priceDisplay.sp));
+        $('#saveProductButton').prop('disabled', true);
         $.post($form.attr('action'), $form.serialize(), function(response) {
             if (response.success) {
                 var isAddMode = $('#productId').val() === '';
@@ -1125,6 +1132,7 @@ $(function() {
                 } else {
                     // حالت افزودن: مودال باز می‌ماند و فرم برای کالای بعدی آماده می‌شود
                     $('#productForm')[0].reset();
+                    if (window.MediaEditor) window.MediaEditor.reset('product');
                     $('#productId').val('');
                     $('#productCodeHidden').val('');
                     $('#productUnitsJson').val('');
@@ -1154,8 +1162,10 @@ $(function() {
                 alert(response.message || 'خطا در ذخیره‌سازی کالا.');
             }
         }, 'json').fail(function() {
+            $('#productPurchasePrice').val(priceDisplay.pp);
+            $('#productSalePrice').val(priceDisplay.sp);
             alert('خطا در ارتباط با سرور.');
-        });
+        }).always(function() { $('#saveProductButton').prop('disabled', false); });
     });
 
     $('#productSearch').on('input', function() {
