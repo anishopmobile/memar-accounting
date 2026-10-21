@@ -8,6 +8,7 @@ $pages = [
     'sales-return' => 'برگشت فروش',
     'product-categories' => 'دسته‌بندی کالاها',
     'goods-and-services' => 'کالاها و خدمات',
+    'media-library' => 'کتابخانه تصاویر',
     'defective-goods' => 'کالاهای معیوب',
     'customers' => 'مشتریان',
     'suppliers' => 'تامین‌کنندگان',
@@ -63,14 +64,21 @@ if (!array_key_exists($page, $pages)) {
     <link rel="stylesheet" href="assets/css/product-brand-defective.css">
     <link rel="stylesheet" href="assets/vendor/hcg-searchable-select/hcg-select.css">
     <link rel="stylesheet" href="assets/css/hcg-select-integration.css">
+    <?php if (in_array($page, ['goods-and-services','product-categories','media-library','settings','factors','purchase-invoice','sales-return','defective-goods','report-inventory','report-sold-items-detail','dashboard'], true)): ?>
+    <link rel="stylesheet" href="assets/css/media-library.css">
+    <?php endif; ?>
     <script src="assets/js/jquery.min.js"></script>
     <script src="assets/js/kamadatepicker.js"></script>
-    <script>window.APP_CURRENCY = <?php echo json_encode(getCurrentCurrency(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;</script>
+    <script>window.APP_CURRENCY = <?php echo json_encode(getCurrentCurrency(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;
+    window.APP_CSRF_TOKEN = <?php echo json_encode(csrf_token(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;</script>
     <script src="assets/vendor/hcg-searchable-select/hcg-select.js" defer></script>
     <script src="assets/js/hcg-select-integration.js" defer></script>
     <script src="assets/js/currency.js" defer></script>
     <script src="assets/js/currency-settings.js" defer></script>
     <script src="assets/js/main.js" defer></script>
+    <?php if (in_array($page, ['goods-and-services','product-categories','media-library','settings','factors','purchase-invoice','sales-return','defective-goods','report-inventory','report-sold-items-detail','dashboard'], true)): ?>
+    <script src="assets/js/media-ui.js" defer></script>
+    <?php endif; ?>
     <script src="assets/js/brand-settings.js" defer></script>
     <script src="assets/js/layout.js" defer></script>
     <script src="assets/js/invoice.js" defer></script>
