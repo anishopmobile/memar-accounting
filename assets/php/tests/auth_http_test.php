@@ -29,10 +29,10 @@ require_once $root . '/assets/php/db.php';
 
 /* ---------- ثبت وضعیت اولیه ---------- */
 $origUsers = $mysqli->query('SELECT * FROM users');
-$origUsersRows = $origUsers ? $origUsers->fetch_all() : [];
+$origUsersRows = $origUsers ? $origUsers->fetch_all(MYSQLI_ASSOC) : [];
 $origSettings = $mysqli->query('SELECT * FROM auth_settings WHERE id = 1')->fetch_assoc();
 $origAtt = $mysqli->query('SELECT * FROM auth_attempts');
-$origAttRows = $origAtt ? $origAtt->fetch_all() : [];
+$origAttRows = $origAtt ? $origAtt->fetch_all(MYSQLI_ASSOC) : [];
 $origAvatars = [];
 $r = $mysqli->query("SELECT avatar_path FROM users WHERE avatar_path IS NOT NULL");
 if ($r) {
@@ -170,7 +170,8 @@ function h_start_server(): void
         . ' -S 127.0.0.1:' . $GLOBALS['H_PORT']
         . ' -d session.save_path=' . sys_get_temp_dir()
         . ' -t ' . $GLOBALS['H_ROOT'];
-    $spec = [0 => ['file', 'NUL', 'r'], 1 => $errFile, 2 => $errFile];
+    $nullFile = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+    $spec = [0 => ['file', $nullFile, 'r'], 1 => $errFile, 2 => $errFile];
     $GLOBALS['H_PROC'] = proc_open($cmd, $spec, $pipes);
 
     /* انتظار آماده‌شدن سرور (تا ۶ ثانیه) */
@@ -191,6 +192,14 @@ function h_start_server(): void
 /** یافتن PID سرور تست بر اساس پورت (CIM). */
 function h_find_pid(): string
 {
+    if (PHP_OS_FAMILY !== 'Windows') {
+        $proc = $GLOBALS['H_PROC'] ?? null;
+        if (!is_resource($proc)) {
+            return '';
+        }
+        $status = proc_get_status($proc);
+        return (string) ($status['pid'] ?? '');
+    }
     $psCmd = "powershell -Command \"Get-CimInstance Win32_Process -Filter 'name=''php.exe''' | Where-Object { \$_.CommandLine -like '*:" . $GLOBALS['H_PORT'] . " *' } | Select-Object -ExpandProperty ProcessId\" 2>&1";
     $out = (string) shell_exec($psCmd);
     return trim((string) preg_replace('/\s+/', '', $out));
@@ -200,9 +209,12 @@ function h_find_pid(): string
 function h_kill_server(): void
 {
     $pid = h_find_pid();
-    if (ctype_digit($pid)) {
+    if (ctype_digit($pid) && PHP_OS_FAMILY === 'Windows') {
         shell_exec('taskkill /F /T /PID ' . $pid . ' > NUL 2>&1');
         usleep(300000);
+    } elseif (ctype_digit($pid) && isset($GLOBALS['H_PROC']) && is_resource($GLOBALS['H_PROC'])) {
+        @proc_terminate($GLOBALS['H_PROC']);
+        usleep(150000);
     }
     if (isset($GLOBALS['H_PROC']) && is_resource($GLOBALS['H_PROC'])) {
         @proc_close($GLOBALS['H_PROC']);
