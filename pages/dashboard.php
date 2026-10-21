@@ -222,7 +222,7 @@ foreach ($salesByDay as $date => $amount) {
 
 <!-- کارت‌های عملیات سریع -->
 <div class="quick-actions">
-    <div class="quick-action-card blue" onclick="window.location='?page=factors&action=new_sales'">
+    <a class="quick-action-card blue" href="?page=factors&action=new_sales">
         <div class="quick-action-icon">
             <i class="fas fa-file-invoice-dollar"></i>
         </div>
@@ -230,8 +230,8 @@ foreach ($salesByDay as $date => $amount) {
             <h3>ثبت فاکتور فروش</h3>
             <p>ایجاد فاکتور فروش جدید</p>
         </div>
-    </div>
-    <div class="quick-action-card orange" onclick="window.location='?page=goods-and-services&action=new_product'">
+    </a>
+    <a class="quick-action-card orange" href="?page=goods-and-services&action=new_product">
         <div class="quick-action-icon">
             <i class="fas fa-box-open"></i>
         </div>
@@ -239,8 +239,8 @@ foreach ($salesByDay as $date => $amount) {
             <h3>ثبت کالا و خدمات</h3>
             <p>افزودن کالا یا خدمت جدید</p>
         </div>
-    </div>
-    <div class="quick-action-card purple" onclick="window.location='?page=product-categories&action=new_category'">
+    </a>
+    <a class="quick-action-card purple" href="?page=product-categories&action=new_category">
         <div class="quick-action-icon">
             <i class="fas fa-sitemap"></i>
         </div>
@@ -248,10 +248,10 @@ foreach ($salesByDay as $date => $amount) {
             <h3>ثبت دسته‌بندی جدید</h3>
             <p>افزودن دسته‌بندی جدید</p>
         </div>
-    </div>
+    </a>
     
     
-    <div class="quick-action-card green" onclick="window.location='?page=purchase-invoice&action=new_purchase'">
+    <a class="quick-action-card green" href="?page=purchase-invoice&action=new_purchase">
         <div class="quick-action-icon">
             <i class="fas fa-cart-plus"></i>
         </div>
@@ -259,7 +259,7 @@ foreach ($salesByDay as $date => $amount) {
             <h3>ثبت فاکتور خرید</h3>
             <p>ایجاد فاکتور خرید جدید</p>
         </div>
-    </div>
+    </a>
     
 </div>
 
