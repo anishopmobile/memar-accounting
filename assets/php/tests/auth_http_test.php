@@ -68,7 +68,7 @@ function h_restore_db(): void
         $x1 = $u['id']; $x2 = $u['username']; $x3 = $u['first_name']; $x4 = $u['last_name'];
         $x5 = $u['password_hash']; $x6 = $u['avatar_path']; $x7 = (int) $u['is_active'];
         $x8 = $u['created_at']; $x9 = $u['updated_at'];
-        $stmt->bind_param('isssssiis', $x1, $x2, $x3, $x4, $x5, $x6, $x7, $x8, $x9);
+        $stmt->bind_param('isssssiss', $x1, $x2, $x3, $x4, $x5, $x6, $x7, $x8, $x9);
         $stmt->execute();
         $stmt->close();
     }
