@@ -24,7 +24,9 @@ if ($result) {
 ?>
 <div class="card">
     <div class="page-actions">
+        <div class="toolbar-actions">
         <a href="assets/php/report_inventory_export.php" class="button-secondary" id="exportInventoryBtn">خروجی اکسل</a>
+                </div>
         <div class="filter-panel">
             <input type="search" id="inventorySearch" placeholder="جستجو بر اساس نام کالا، دسته‌بندی، نوع یا بارکد...">
             <select id="inventoryCategoryFilter">
