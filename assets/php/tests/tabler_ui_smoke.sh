@@ -6,6 +6,10 @@ if [[ "${GITHUB_ACTIONS:-}" != true ]]; then
   echo "Refusing to run outside isolated GitHub Actions" >&2
   exit 1
 fi
+# Payment has separate idempotent schema migrations; initialize only the disposable CI database.
+php assets/php/payment/payment_migration.php
+php assets/php/payment/payment_public_migration.php
+php assets/php/payment/payment_rate_limit_migration.php
 php -r '
 require "assets/php/db.php";
 $name = "ci_tabler_layout_user";
