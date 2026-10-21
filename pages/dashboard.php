@@ -314,14 +314,32 @@ foreach ($salesByDay as $date => $amount) {
 </div>
 
 
-<div class="panel-row">
+<?php
+// تعریف رنگ‌های پاستلی ملایم برای پس‌زمینه ردیف‌ها
+$rowColors = [
+    '#e3f2fd', // آبی خیلی روشن
+    '#f3e5f5', // بنفش خیلی روشن
+    '#e8f5e9', // سبز خیلی روشن
+    '#fff3e0', // نارنجی خیلی روشن
+    '#fce4ec', // صورتی خیلی روشن
+    '#e0f7fa', // فیروزه‌ای خیلی روشن
+    '#fff8e1', // زرد خیلی روشن
+    '#f1f8e9', // سبز لیمویی خیلی روشن
+];
+
+// آرایه‌ای برای نگاشت customer_id به رنگ
+$customerColorMap = [];
+$colorIndex = 0;
+?>
+
+<div class="panel-row dashboard-insights">
     <div class="card panel">
         <h2>نمودار فروش ماهانه</h2>
         <?php if ($hasSalesData): ?>
-            <div style="position: relative; height: 380px; width: 100%; padding: 10px 4px;">
+            <div class="dashboard-chart-canvas">
                 <canvas id="monthlySalesChart"></canvas>
             </div>
-            <!-- Chart.js از CDN -->
+            <!-- Chart.js محلی؛ بدون وابستگی به CDN -->
             <script src="assets/js/chart.umd.min.js"></script>
             <script>
                 (function() {
@@ -445,51 +463,6 @@ foreach ($salesByDay as $date => $amount) {
             </div>
         <?php endif; ?>
     </div>
-</div>
-
-<div class="table-panel">
-    <div class="card panel">
-        <h2>کالاهای کم‌موجودی</h2>
-
-        <div class="table-wrapper">
-            <table class="action-table dashboard-low-stock-table">
-                <thead>
-                    <tr>
-                        <th>نام کالا</th>
-                        <th>موجودی</th>
-                    </tr>
-                </thead>
-
-                <tbody id="lowStockTableBody">
-                    <tr>
-                        <td colspan="2" class="empty-state">
-                            در حال دریافت اطلاعات...
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div id="lowStockPagination"></div>
-    </div>
-
-<?php
-// تعریف رنگ‌های پاستلی ملایم برای پس‌زمینه ردیف‌ها
-$rowColors = [
-    '#e3f2fd', // آبی خیلی روشن
-    '#f3e5f5', // بنفش خیلی روشن
-    '#e8f5e9', // سبز خیلی روشن
-    '#fff3e0', // نارنجی خیلی روشن
-    '#fce4ec', // صورتی خیلی روشن
-    '#e0f7fa', // فیروزه‌ای خیلی روشن
-    '#fff8e1', // زرد خیلی روشن
-    '#f1f8e9', // سبز لیمویی خیلی روشن
-];
-
-// آرایه‌ای برای نگاشت customer_id به رنگ
-$customerColorMap = [];
-$colorIndex = 0;
-?>
 
 <div class="card panel">
     <h2>آخرین فاکتورها</h2>
@@ -568,4 +541,32 @@ $colorIndex = 0;
         </table>
     </div>
 </div>
+</div>
+
+<div class="table-panel dashboard-low-stock-row">
+    <div class="card panel">
+        <h2>کالاهای کم‌موجودی</h2>
+
+        <div class="table-wrapper">
+            <table class="action-table dashboard-low-stock-table">
+                <thead>
+                    <tr>
+                        <th>نام کالا</th>
+                        <th>موجودی</th>
+                    </tr>
+                </thead>
+
+                <tbody id="lowStockTableBody">
+                    <tr>
+                        <td colspan="2" class="empty-state">
+                            در حال دریافت اطلاعات...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="lowStockPagination"></div>
+    </div>
+
 </div>
