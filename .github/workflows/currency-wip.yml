@@ -58,7 +58,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mysqli, mysqlnd, bcmath, mbstring
+          extensions: mysqli, mysqlnd, bcmath, mbstring, gd
           coverage: none
       - name: Run isolated MySQL currency persistence check
         run: php assets/php/tests/currency_mysql_test.php
@@ -78,6 +78,8 @@ jobs:
         run: bash assets/php/tests/currency_security_smoke.sh
       - name: All-page Tabler RTL/local-asset HTTP smoke tests
         run: bash assets/php/tests/tabler_ui_smoke.sh
+      - name: Authentication / CSRF / captcha / brute-force HTTP regression
+        run: php assets/php/tests/auth_http_test.php
 
   responsive-ui-browser:
     runs-on: ubuntu-latest
