@@ -3,6 +3,7 @@ require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/product_common.php';
 require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/bundle_common.php';
+require_once __DIR__ . '/media_common.php';
 header('Content-Type: application/json; charset=UTF-8');
 
 $action = $_GET['action'] ?? ($_POST['action'] ?? '');
@@ -454,6 +455,9 @@ if ($product_id !== '') {
             }
         }
 
+        if (array_key_exists('media_ids', $_POST)) {
+            media_sync_product($mysqli, $product_id, (string) $_POST['media_ids']);
+        }
         $mysqli->commit();
     } catch (Exception $e) {
         $mysqli->rollback();
@@ -525,6 +529,9 @@ try {
         $stmt->close();
     }
 
+    if (array_key_exists('media_ids', $_POST)) {
+        media_sync_product($mysqli, $id, (string) $_POST['media_ids']);
+    }
     $mysqli->commit();
 } catch (Exception $e) {
     $mysqli->rollback();
