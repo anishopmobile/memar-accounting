@@ -36,13 +36,14 @@ if (!array_key_exists($page, $pages)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>کوشا حساب | <?php echo $pages[$page]; ?></title>
+    <title>حسابداری معمار | <?php echo $pages[$page]; ?></title>
     <link rel="stylesheet" href="assets/vendor/tabler/tabler.rtl.min.css">
     <link rel="stylesheet" href="assets/css/fontawesome.css">
     <link rel="stylesheet" href="assets/css/style.css">
     <link rel="stylesheet" href="assets/css/kamadatepicker.css">
     <link rel="stylesheet" href="assets/css/tabler-integration.css">
     <link rel="stylesheet" href="assets/css/navbar-toolbar.css">
+    <link rel="stylesheet" href="assets/css/dashboard-about.css">
     <script src="assets/js/jquery.min.js"></script>
     <script src="assets/js/kamadatepicker.js"></script>
     <script>window.APP_CURRENCY = <?php echo json_encode(getCurrentCurrency(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;</script>
@@ -107,7 +108,7 @@ if (!array_key_exists($page, $pages)) {
         <aside class="sidebar" id="appSidebar" aria-label="منوی مدیریت">
             <div class="app-sidebar-heading">
             <div class="brand-panel">
-                <div class="brand-title">کوشا حساب</div>
+                <div class="brand-title">حسابداری معمار</div>
                 <div class="brand-subtitle">حسابداری ساده</div>
             </div>
             <button type="button" class="sidebar-close" id="sidebarClose" aria-label="بستن منو"><i class="fas fa-times" aria-hidden="true"></i></button>
@@ -116,27 +117,37 @@ if (!array_key_exists($page, $pages)) {
                 <?php
                 /* فاکتور خرید و برگشت فروش فقط زیرمنوی «فاکتورها» هستند */
                 /* زیرمنوهای گزارشات (به‌جز اولین که منوی «گزارشات» را باز می‌کند) در نوار اصلی نمایش داده نمی‌شوند */
-                $factorsChildren = ['factors', 'purchase-invoice', 'sales-return'];
-                $reportsChildren = ['report-inventory', 'report-customer-debt', 'report-supplier-debt'];
+                $factorsChildren = ['factors', 'purchase-invoice', 'sales-return', 'defective-goods'];
+                $reportsChildren = ['report-inventory', 'report-customer-debt', 'report-supplier-debt', 'report-sold-items-detail'];
                 foreach ($pages as $key => $label):
-                    if (in_array($key, ['purchase-invoice', 'sales-return', 'report-customer-debt', 'report-supplier-debt', 'report-sold-items-detail', 'payment-transactions', 'payment-sms-settings', 'payment-zarinpal-settings', 'account'], true)) {
+                    if (in_array($key, ['purchase-invoice', 'sales-return', 'report-customer-debt', 'report-supplier-debt', 'report-sold-items-detail', 'defective-goods', 'notes', 'payment-forms', 'payment-transactions', 'payment-sms-settings', 'payment-zarinpal-settings', 'account'], true)) {
 							continue;
 						}
                     $iconClass = $navIcons[$key] ?? 'fa-circle';
                 ?>
-                    <?php if ($key === 'payment-forms'): ?>
-                        <?php $paymentActive = in_array($page, ['payment-forms', 'payment-transactions', 'payment-sms-settings', 'payment-zarinpal-settings'], true); ?>
-                        <div class="nav-dropdown<?php echo $paymentActive ? ' open' : ''; ?>">
-                            <a href="?page=payment-forms" class="nav-link nav-dropdown-toggle<?php echo $paymentActive ? ' active' : ''; ?>">
-                                <span class="nav-icon"><i class="fas fa-credit-card"></i></span>
-                                <span class="nav-text">پرداخت‌ها</span>
+                    <?php if ($key === 'settings'): ?>
+                        <?php
+                        $paymentActive = in_array($page, ['payment-forms', 'payment-transactions', 'payment-sms-settings', 'payment-zarinpal-settings'], true);
+                        $settingsActive = in_array($page, ['settings', 'notes', 'payment-forms', 'payment-transactions', 'payment-sms-settings', 'payment-zarinpal-settings'], true);
+                        ?>
+                        <div class="nav-dropdown<?php echo $settingsActive ? ' open' : ''; ?>">
+                            <a href="?page=settings" class="nav-link nav-dropdown-toggle<?php echo $settingsActive ? ' active' : ''; ?>" aria-expanded="<?php echo $settingsActive ? 'true' : 'false'; ?>" aria-haspopup="true">
+                                <span class="nav-icon"><i class="fas fa-cog"></i></span>
+                                <span class="nav-text">تنظیمات</span>
                                 <span class="nav-caret"><i class="fas fa-chevron-down"></i></span>
                             </a>
                             <div class="nav-dropdown-menu">
-                                <a href="?page=payment-forms" class="nav-sub-link<?php echo $page === 'payment-forms' ? ' active' : ''; ?>">فرم‌های پرداخت</a>
-                                <a href="?page=payment-transactions" class="nav-sub-link<?php echo $page === 'payment-transactions' ? ' active' : ''; ?>">تراکنش‌ها</a>
-                                <a href="?page=payment-sms-settings" class="nav-sub-link<?php echo $page === 'payment-sms-settings' ? ' active' : ''; ?>">تنظیمات پیامک</a>
-                                <a href="?page=payment-zarinpal-settings" class="nav-sub-link<?php echo $page === 'payment-zarinpal-settings' ? ' active' : ''; ?>">تنظیمات زرین‌پال</a>
+                                <a href="?page=settings" class="nav-sub-link<?php echo $page === 'settings' ? ' active' : ''; ?>">تنظیمات سیستم</a>
+                                <a href="?page=notes" class="nav-sub-link<?php echo $page === 'notes' ? ' active' : ''; ?>">یادداشت‌ها</a>
+                                <details class="nav-subgroup"<?php echo $paymentActive ? ' open' : ''; ?>>
+                                    <summary class="<?php echo $paymentActive ? 'active' : ''; ?>">پرداخت‌ها <i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
+                                    <div class="nav-subgroup-links">
+                                        <a href="?page=payment-forms" class="nav-sub-link<?php echo $page === 'payment-forms' ? ' active' : ''; ?>">فرم‌های پرداخت</a>
+                                        <a href="?page=payment-transactions" class="nav-sub-link<?php echo $page === 'payment-transactions' ? ' active' : ''; ?>">تراکنش‌ها</a>
+                                        <a href="?page=payment-sms-settings" class="nav-sub-link<?php echo $page === 'payment-sms-settings' ? ' active' : ''; ?>">تنظیمات پیامک</a>
+                                        <a href="?page=payment-zarinpal-settings" class="nav-sub-link<?php echo $page === 'payment-zarinpal-settings' ? ' active' : ''; ?>">تنظیمات زرین‌پال</a>
+                                    </div>
+                                </details>
                             </div>
                         </div>
                     <?php elseif ($key === 'factors'): ?>
@@ -151,6 +162,7 @@ if (!array_key_exists($page, $pages)) {
                                 <a href="?page=factors" class="nav-sub-link<?php echo $page === 'factors' ? ' active' : ''; ?>">فاکتور فروش</a>
                                 <a href="?page=purchase-invoice" class="nav-sub-link<?php echo $page === 'purchase-invoice' ? ' active' : ''; ?>">فاکتور خرید</a>
                                 <a href="?page=sales-return" class="nav-sub-link<?php echo $page === 'sales-return' ? ' active' : ''; ?>">برگشت فروش</a>
+                                <a href="?page=defective-goods" class="nav-sub-link<?php echo $page === 'defective-goods' ? ' active' : ''; ?>">کالاهای معیوب</a>
                             </div>
                         </div>
                     <?php elseif ($key === 'report-inventory'): ?>
