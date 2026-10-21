@@ -36,3 +36,28 @@ jobs:
           php assets/php/tests/currency_test.php
           php assets/php/tests/payment_currency_test.php
           node assets/js/currency.test.js
+
+  mysql-currency-roundtrip:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP 8.4 and MySQL drivers
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mysqlnd, bcmath, mbstring
+          coverage: none
+      - name: Run isolated MySQL currency persistence check
+        run: php assets/php/tests/currency_mysql_test.php
