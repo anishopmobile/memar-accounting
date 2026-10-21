@@ -64,6 +64,7 @@
     </div>
     <div id="invoice-settings" class="settings-section" style="display:none;">
         <form id="invoiceSettingsForm">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
             <div class="form-grid">
                 <div class="form-row">
                     <label for="officialDirection">جهت فاکتور رسمی</label>
@@ -108,6 +109,7 @@
     </div>
     <div id="taxes" class="settings-section" style="display:none;">
         <form id="taxSettingsForm">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
             <div class="form-grid">
                 <div class="form-row" style="grid-column: span 2;">
                     <label>وضعیت مالیات</label>

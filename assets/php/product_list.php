@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/product_common.php';
 require_once __DIR__ . '/bundle_common.php';
 header('Content-Type: application/json; charset=UTF-8');

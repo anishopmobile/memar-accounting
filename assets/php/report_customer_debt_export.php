@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/report_excel_lib.php';
