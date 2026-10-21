@@ -31,21 +31,24 @@ if (!array_key_exists($page, $pages)) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" data-bs-theme="light">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>کوشا حساب | <?php echo $pages[$page]; ?></title>
+    <link rel="stylesheet" href="assets/vendor/tabler/tabler.rtl.min.css">
     <link rel="stylesheet" href="assets/css/fontawesome.css">
     <link rel="stylesheet" href="assets/css/style.css">
     <link rel="stylesheet" href="assets/css/kamadatepicker.css">
+    <link rel="stylesheet" href="assets/css/tabler-integration.css">
     <script src="assets/js/jquery.min.js"></script>
     <script src="assets/js/kamadatepicker.js"></script>
     <script>window.APP_CURRENCY = <?php echo json_encode(getCurrentCurrency(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;</script>
     <script src="assets/js/currency.js" defer></script>
     <script src="assets/js/currency-settings.js" defer></script>
     <script src="assets/js/main.js" defer></script>
+    <script src="assets/js/layout.js" defer></script>
     <script src="assets/js/invoice.js" defer></script>
     <script src="assets/js/bundle.js" defer></script>
     <script src="assets/js/payment-forms.js" defer></script>
@@ -55,7 +58,7 @@ if (!array_key_exists($page, $pages)) {
     <script src="assets/js/payment-zarinpal.js" defer></script>
 </head>
 
-<body id="<?php echo $page; ?>">
+<body id="<?php echo $page; ?>" class="tabler-admin">
     <?php
     date_default_timezone_set('Asia/Tehran');
     require_once __DIR__ . '/assets/php/jdf.php';
@@ -99,10 +102,14 @@ if (!array_key_exists($page, $pages)) {
     }
     ?>
     <div class="app-shell">
-        <aside class="sidebar">
+        <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+        <aside class="sidebar" id="appSidebar" aria-label="منوی مدیریت">
+            <div class="app-sidebar-heading">
             <div class="brand-panel">
                 <div class="brand-title">کوشا حساب</div>
                 <div class="brand-subtitle">حسابداری ساده</div>
+            </div>
+            <button type="button" class="sidebar-close" id="sidebarClose" aria-label="بستن منو"><i class="fas fa-times" aria-hidden="true"></i></button>
             </div>
             <nav class="main-nav">
                 <?php
@@ -183,9 +190,10 @@ if (!array_key_exists($page, $pages)) {
 			    <button type="submit" class="logout-button">خروج</button>
 			</form>
         </aside>
-        <main class="main-content">
+        <main class="main-content" id="mainContent">
             <header class="page-header">
-                <div>
+                <div class="page-heading">
+                    <button type="button" id="sidebarOpen" class="sidebar-toggle" aria-label="باز کردن منو" aria-controls="appSidebar" aria-expanded="false"><i class="fas fa-bars" aria-hidden="true"></i></button>
                     <h1><?php echo $pages[$page]; ?></h1>
                 </div>
                 <div class="page-meta"><?php echo $shamsiDate; ?></div>
