@@ -58,3 +58,5 @@ jobs:
           coverage: none
       - name: Run isolated MySQL currency persistence check
         run: php assets/php/tests/currency_mysql_test.php
+      - name: Current affairs database regression (disposable database)
+        run: php assets/php/tests/current_affairs_test.php
