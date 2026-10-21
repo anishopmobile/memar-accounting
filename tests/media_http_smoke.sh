@@ -66,3 +66,32 @@ code="$(curl -sS -b "$tmp/cookies" -o "$tmp/deny-delete.json" -w '%{http_code}' 
   --data-urlencode "csrf_token=$token" "$base/assets/php/media_api.php")"
 [[ "$code" == '422' ]] || { echo "Expected linked-media deletion to return 422, got $code" >&2; exit 1; }
 echo 'PASS shared-media deletion protection'
+
+# Create a real full SQL + private-media backup, then restore into this
+# disposable CI database and verify the removed original was recovered.
+curl -sS -b "$tmp/cookies" -o "$tmp/set-backup.json" \
+  --data-urlencode action=save_dir --data-urlencode "backup_dir=$tmp" \
+  --data-urlencode "csrf_token=$token" "$base/assets/php/db_backup.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])) {fwrite(STDERR,json_encode($j));exit(1);}' "$tmp/set-backup.json"
+curl -sS -b "$tmp/cookies" -o "$tmp/full-backup.json" \
+  --data-urlencode action=backup_full --data-urlencode "csrf_token=$token" "$base/assets/php/db_backup.php"
+archive="$(php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||empty($j["data"]["path"])){fwrite(STDERR,json_encode($j));exit(1);}echo $j["data"]["path"];' "$tmp/full-backup.json")"
+test -s "$archive"
+php -r '
+$z=new ZipArchive();if($z->open($argv[1])!==true)exit(1);
+if($z->locateName("database.sql")===false || $z->locateName("manifest.json")===false)exit(2);
+$manifest=json_decode($z->getFromName("manifest.json"),true);
+if(empty($manifest["files"])||count($manifest["files"])!==2)exit(3);
+$z->close();
+' "$archive"
+echo 'PASS checksum-manifest SQL and media full ZIP backup'
+test "$(find "$tmp/private-media/original" -type f | wc -l)" -eq 1
+find "$tmp/private-media/original" -type f -delete
+test "$(find "$tmp/private-media/original" -type f | wc -l)" -eq 0
+curl -sS -b "$tmp/cookies" -o "$tmp/full-restore.json" \
+  -F action=restore_full -F "csrf_token=$token" -F "backup_file=@$archive" "$base/assets/php/db_backup.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])){fwrite(STDERR,json_encode($j,JSON_UNESCAPED_UNICODE).PHP_EOL);exit(1);}' "$tmp/full-restore.json"
+test "$(find "$tmp/private-media/original" -type f | wc -l)" -eq 1
+curl -sSf -b "$tmp/cookies" "$base/assets/php/media_file.php?id=$id&size=original" -o "$tmp/restored.png"
+php -r '$x=getimagesize($argv[1]);if(!$x||$x["mime"]!=="image/png")exit(1);' "$tmp/restored.png"
+echo 'PASS full ZIP restoration of missing original and SQL records'
