@@ -13,7 +13,7 @@ foreach (["ci_currency_owner", "ci_currency_staff"] as $name) {
     $stmt->bind_param("ss", $name, $hash);
     $stmt->execute();
     $id = (int) $stmt->insert_id;
-    session_id("ci_currency_" . ($name === "ci_currency_owner" ? "owner" : "staff") . "_1234567");
+    session_id("ci-currency-" . ($name === "ci_currency_owner" ? "owner" : "staff") . "-1234567");
     session_start();
     $_SESSION["auth_user_id"] = $id;
     $_SESSION["auth_user"] = $name;
@@ -31,8 +31,8 @@ for attempt in $(seq 1 60); do
   sleep 0.2
 done
 url="http://127.0.0.1:$PORT"
-owner='PHPSESSID=ci_currency_owner_1234567'
-staff='PHPSESSID=ci_currency_staff_1234567'
+owner='PHPSESSID=ci-currency-owner-1234567'
+staff='PHPSESSID=ci-currency-staff-1234567'
 check() {
   local expected="$1" title="$2"
   shift 2
