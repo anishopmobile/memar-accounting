@@ -147,7 +147,8 @@ $accent = pdf_esc($accent);
             <tr>
                 <th class="c1">ردیف</th>
                 <th class="c2">کد کالا</th>
-                <th class="c3">شرح کالا یا خدمات</th>
+                <?php if (!empty($media_enabled)): ?><th class="media-pdf-col">تصویر</th><?php endif; ?>
+<th class="c3">شرح کالا یا خدمات</th>
                 <th class="c4">تعداد</th>
                 <th class="c5">مبلغ واحد</th>
                 <th class="c6">مبلغ کل</th>
@@ -159,7 +160,12 @@ $accent = pdf_esc($accent);
             <tr>
                 <td class="c1 center"><?php echo $rowNo; ?></td>
                 <td class="c2 center"><?php echo pdf_esc($it['product_code'] ?? ''); ?></td>
-                <td class="c3"><?php echo pdf_esc($it['product_name'] ?? ''); ?></td>
+                <?php if (!empty($media_enabled)): ?>
+<td class="media-pdf-col"><?php
+$mediaSource = !empty($it['media_print_path']) ? $it['media_print_path'] : (__DIR__ . '/../../img/product-placeholder.svg');
+?><img src="<?php echo pdf_esc($mediaSource); ?>" alt="" style="max-width:11mm;max-height:11mm;width:11mm;height:11mm;"></td>
+<?php endif; ?>
+<td class="c3"><?php echo pdf_esc($it['product_name'] ?? ''); ?></td>
                 <td class="c4 center qty">
                     <?php echo pdf_money_format($it['quantity'] ?? '0'); ?>
                     <?php if (!empty($it['unit_name'])): ?><?php echo ' ' . pdf_esc($it['unit_name']); ?><?php endif; ?>
