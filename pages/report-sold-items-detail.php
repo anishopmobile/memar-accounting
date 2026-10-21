@@ -270,7 +270,10 @@ function invoiceBlockHtml(inv) {
     var itemsHtml = '';
     (inv.items || []).forEach(function (it) {
         itemsHtml += '<tr>'
-            + '<td style="text-align: right;">' + esc(it.product_code) + ' — ' + esc(it.product_name)
+            + '<td style="text-align: right;">' + (it.media_id === undefined ? '' :
+    '<img loading="lazy" class="media-thumb" data-id="' + (Number(it.media_id)||0) + '" width="36" height="36" alt="" style="vertical-align:middle;margin-left:6px" src="' +
+    (Number(it.media_id) ? 'assets/php/media_file.php?id=' + Number(it.media_id) + '&size=thumb' : 'assets/img/product-placeholder.svg') + '">')
+    + esc(it.product_code) + ' — ' + esc(it.product_name)
             + (it.barcode ? '<br><small style="color: #888;">بارکد: ' + esc(it.barcode) + '</small>' : '')
             + '</td>'
             + '<td>' + esc(it.unit_name) + '</td>'
