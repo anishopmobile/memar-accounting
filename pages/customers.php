@@ -33,7 +33,9 @@ if ($result) {
 ?>
 <div class="card">
     <div class="page-actions">
+        <div class="toolbar-actions">
         <button class="button" id="openCustomerModal">+ مشتری جدید</button>
+                </div>
         <div class="filter-panel">
             <input type="search" id="customerSearch" placeholder="جستجو...">
         </div>
