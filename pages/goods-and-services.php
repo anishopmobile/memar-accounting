@@ -8,12 +8,14 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
 <input type="hidden" id="bundleCsrfToken" value="<?php echo csrf_token(); ?>">
 <div class="card">
     <div class="page-actions">
+        <div class="toolbar-actions">
         <a href="#" id="new-products" class="button">+ کالای جدید</a>
         <button type="button" class="button button-success" id="openPriceIncreaseModal">افزایش قیمت</button>
         <button type="button" class="button button-success" id="openBundleModal">بسته‌بندی کالا</button>
         <a href="index.php?page=defective-goods" class="button-secondary" id="registerDefectiveLink">ثبت کالای معیوب</a>
         <a href="assets/php/export_products.php" class="button-secondary">خروجی اکسل</a>
         <button type="button" class="button-secondary" id="openProductImportModal">ورود از اکسل</button>
+                </div>
         <div class="filter-panel">
             <span>تعداد:</span>
             <span id="productCount" class="value-badge"><?php echo $summary['total']; ?></span>
