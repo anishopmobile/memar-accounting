@@ -34,6 +34,16 @@ function media_full_backup_create(mysqli $db, string $destination, string $sql):
                 }
             }
         }
+        // A successful full backup must contain every DB-referenced media file.
+        $registered = $db->query('SELECT original_path, thumbnail_path FROM media');
+        while ($registered && ($record = $registered->fetch_assoc())) {
+            foreach (['original_path','thumbnail_path'] as $column) {
+                $ref = (string)($record[$column] ?? '');
+                if ($ref === '' || !isset($manifest['files'][$ref])) {
+                    throw new RuntimeException('Missing registered media during full backup: ' . $ref);
+                }
+            }
+        }
         $manifestJson = json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         if (!$zip->addFromString('manifest.json', $manifestJson)) throw new RuntimeException('ZIP manifest failure');
         if (!$zip->close()) throw new RuntimeException('Cannot close ZIP');
