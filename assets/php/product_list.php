@@ -2,6 +2,7 @@
 require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/product_common.php';
 require_once __DIR__ . '/bundle_common.php';
+require_once __DIR__ . '/media_common.php';
 header('Content-Type: application/json; charset=UTF-8');
 
 $search = trim($_GET['search'] ?? '');
@@ -124,6 +125,8 @@ if ($listStmt) {
         }
         $result->free();
         $unitsMap = getUnitsMapForProducts($mysqli, array_column($rows, 'id'));
+        $imageEnabled = (int)(media_settings($mysqli)['products_list'] ?? 1) === 1;
+        $mediaMap = $imageEnabled ? media_primary_map($mysqli, array_column($rows, 'id')) : [];
 
         /* موجودی مشتق‌شده بسته‌ها (منبع حقیقت: کالاهای جزء) */
         $bundleIds = [];
@@ -139,6 +142,8 @@ if ($listStmt) {
             if (($row['product_kind'] ?? 'standard') === 'bundle') {
                 $row['display_stock'] = $bundleStockMap[(int) $row['id']] ?? '0';
             }
+            $row['primary_media_id'] = $mediaMap[(int)$row['id']]['id'] ?? null;
+            $row['images_enabled'] = $imageEnabled;
             $tableBody .= buildProductRow($row, $unitsMap[(int) $row['id']] ?? null);
         }
     }
