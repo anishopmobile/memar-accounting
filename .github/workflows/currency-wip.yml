@@ -65,3 +65,8 @@ jobs:
           php assets/php/tests/multi_unit_inventory_test.php
           php assets/php/tests/sales_return_test.php
           php assets/php/tests/excel_import_duplicate_test.php
+      - name: Sales invoice and bundle integration
+        run: |
+          php assets/php/tests/sales_invoice_product_service_test.php
+          php assets/php/tests/product_bundling_test.php
+          php assets/php/tests/defective_return_test.php
