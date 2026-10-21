@@ -110,5 +110,11 @@ jobs:
         run: |
           npm install --no-save --no-audit --ignore-scripts --package-lock=false playwright@1.56.0
           npx playwright install --with-deps chromium
-      - name: Browser regression on 22 routes at 1440, 768 and 390px
+      - name: Ensure PDF raster tools for visual barcode regression (CI only)
+        run: |
+          if ! command -v pdfinfo >/dev/null || ! command -v pdftoppm >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq poppler-utils
+          fi
+      - name: Browser and actual rasterized PDF regression
         run: bash assets/php/tests/tabler_browser_smoke.sh
