@@ -98,12 +98,16 @@ try {
         }
         if (!extension_loaded('gd')) respond_error('کتابخانه GD سرور برای تصاویر فعال نیست.', 503);
         $hash = hash_file('sha256', $tmp);
-        $existing = $mysqli->prepare('SELECT id FROM media WHERE sha256=? LIMIT 1');
+        $existing = $mysqli->prepare('SELECT id,original_path,thumbnail_path FROM media WHERE sha256=? LIMIT 1');
         $existing->bind_param('s', $hash);
         $existing->execute();
         $found = $existing->get_result()->fetch_assoc();
         $existing->close();
         if ($found) {
+            if (!media_absolute_path((string)$found['original_path'])
+                || !media_absolute_path((string)$found['thumbnail_path'])) {
+                respond_error('این تصویر در کتابخانه ثبت شده اما فایل اصلی یا بندانگشتی آن پیدا نشد؛ پشتیبان رسانه‌ها را بررسی کنید.', 409);
+            }
             $id = (int)$found['id'];
             respond_json(true, 'این تصویر قبلاً در کتابخانه وجود دارد.', [
                 'id'=>$id, 'url'=>media_image_url($id), 'reused'=>true
@@ -180,6 +184,10 @@ try {
             $duplicate = $stmt->get_result()->fetch_assoc();
             $stmt->close();
             if (!$duplicate) throw $e;
+            if (!media_absolute_path((string)$duplicate['original_path'])
+                || !media_absolute_path((string)$duplicate['thumbnail_path'])) {
+                throw new RuntimeException('نسخه موجود تصویر در کتابخانه آسیب دیده است.');
+            }
             $id = (int)$duplicate['id'];
         }
         respond_json(true, 'تصویر در کتابخانه ذخیره شد.', [
