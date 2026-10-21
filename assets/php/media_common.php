@@ -23,6 +23,13 @@ function media_directory(bool $create = false): string
     if ($create && !is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
         throw new RuntimeException('ایجاد پوشه خصوصی رسانه‌ها ممکن نیست؛ تنظیمات هاست را بررسی کنید.');
     }
+    // Refuse a storage directory inside the web document root, even via symlink.
+    $resolved = realpath($dir);
+    $webroot = realpath(dirname(__DIR__, 2));
+    if ($resolved && $webroot && ($resolved === $webroot
+        || str_starts_with($resolved, $webroot . DIRECTORY_SEPARATOR))) {
+        throw new RuntimeException('ذخیره‌سازی تصاویر باید خارج از پوشه عمومی سایت باشد.');
+    }
     if ($create && !is_writable($dir)) {
         throw new RuntimeException('پوشه خصوصی رسانه‌ها قابل نوشتن نیست.');
     }
