@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light">
     <meta name="robots" content="noindex, nofollow">
-    <title>ایجاد حساب نخست | کوشا حساب</title>
+    <title>ایجاد حساب نخست | حسابداری معمار</title>
     <link rel="stylesheet" href="assets/css/fontawesome.css">
     <link rel="stylesheet" href="assets/css/style.css">
     <link rel="stylesheet" href="assets/css/login.css">
@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </span>
                 </div>
                 <div>
-                    <div class="login-brand-name">کوشا حساب</div>
+                    <div class="login-brand-name">حسابداری معمار</div>
                     <div class="login-brand-caption">حسابداری ساده و دقیق</div>
                 </div>
             </div>
