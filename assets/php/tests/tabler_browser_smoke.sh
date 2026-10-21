@@ -45,6 +45,13 @@ node assets/js/tests/admin_ui.test.cjs || {
   tail -80 "$log"
   exit 1
 }
+# Every admin route, native jQuery/AJAX event, dynamic invoice/payment select and
+# secure public form keep their existing value when enhanced by HCG.
+node assets/js/tests/hcg_select_ui.test.cjs || {
+  echo "--- Searchable select PHP diagnostics ---"
+  tail -100 "$log"
+  exit 1
+}
 # Verify barcode labels, PDF downloads, secure display preferences, and dense defective layout.
 node assets/js/tests/barcode_brand_ui.test.cjs || {
   echo "--- Barcode/brand PHP diagnostics ---"
