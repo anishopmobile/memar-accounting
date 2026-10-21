@@ -124,16 +124,18 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 
     /* ---------- product picker modal ---------- */
     function loadProducts(q) {
-        $.getJSON('assets/php/invoice_products.php?type=product&search=' + encodeURIComponent(q || ''))
+        $.getJSON('assets/php/invoice_products.php?media_section=defective&type=product&search=' + encodeURIComponent(q || ''))
             .done(function (res) {
                 var rows = res.data || [];
                 var html = '';
                 if (!rows.length) html = '<tr><td colspan="6" class="empty-state">کالایی یافت نشد.</td></tr>';
                 rows.forEach(function (p) {
-                    html += '<tr>'
+                    var img = p.media_id === undefined ? '' : '<img class="media-thumb" loading="lazy" width="38" height="38" alt="" src="' +
+                    (Number(p.media_id) ? 'assets/php/media_file.php?id=' + Number(p.media_id) + '&size=thumb' : 'assets/img/product-placeholder.svg') + '" style="vertical-align:middle;margin-left:5px">';
+                html += '<tr>'
                         + '<td>' + esc(p.code) + '</td>'
                         + '<td dir="ltr">' + esc(p.barcode || '-') + '</td>'
-                        + '<td>' + esc(p.name) + '</td>'
+                        + '<td>' + img + esc(p.name) + '</td>'
                         + '<td>' + esc(p.unit) + '</td>'
                         + '<td>' + splitNum(Number(p.stock).toString()) + '</td>'
                         + '<td><button type="button" class="button-secondary small def-product-pick" data-id="' + escAttr(p.id) + '" data-name="' + escAttr(p.name) + '" data-code="' + escAttr(p.code) + '" data-barcode="' + escAttr(p.barcode || '') + '" data-stock="' + escAttr(p.stock) + '" data-unit="' + escAttr(p.unit) + '">انتخاب</button></td>'
