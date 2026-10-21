@@ -45,6 +45,12 @@ node assets/js/tests/admin_ui.test.cjs || {
   tail -80 "$log"
   exit 1
 }
+# Verify barcode labels, PDF downloads, secure display preferences, and dense defective layout.
+node assets/js/tests/barcode_brand_ui.test.cjs || {
+  echo "--- Barcode/brand PHP diagnostics ---"
+  tail -100 "$log"
+  exit 1
+}
 # Authentication layout tests use the same disposable MySQL schema.
 # Explicitly exercise both feature-flag states without changing production settings.
 php -r 'require "assets/php/db.php"; $mysqli->query("UPDATE auth_settings SET login_captcha_enabled=0 WHERE id=1");'
