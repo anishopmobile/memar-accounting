@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once dirname(__DIR__) . '/currency.php';
+require_once dirname(__DIR__) . '/invoice_pdf_common.php';
 $tests = 0;
 function eq($actual, $expected): void { global $tests; $tests++; if ($actual !== $expected) throw new RuntimeException("Test #{$tests}: ".var_export($actual,true)." != ".var_export($expected,true)); }
 function rejected(callable $f): void {global $tests; $tests++; try {$f();} catch (InvalidArgumentException $e) {return;} throw new RuntimeException("Test #{$tests}: expected rejection"); }
@@ -29,4 +30,8 @@ rejected(fn()=>parseMoneyInput('9999999999999', 'TOMAN'));
 eq(parseMoneyInput('999999999999999999', 'TOMAN', 18), '999999999999999999');
 rejected(fn()=>parseMoneyInput('9999999999999999999', 'TOMAN', 18));
 rejected(fn()=>convertToBaseCurrency('100', 'USD'));
+eq(pdf_amount_in_words('10000'), 'ده هزار تومان');
+eq(pdf_amount_in_words('10000.05'), 'ده هزار و پنج صدم تومان');
+eq(pdf_amount_in_words('-100.2'), 'منفی صد و دو دهم تومان');
+eq(pdf_amount_in_words('0.01'), 'صفر و یک صدم تومان');
 echo "PASS {$tests} currency assertions\n";
