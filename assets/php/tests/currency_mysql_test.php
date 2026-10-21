@@ -7,6 +7,7 @@
 declare(strict_types=1);
 require_once dirname(__DIR__) . '/db.php';
 require_once dirname(__DIR__) . '/currency.php';
+require_once dirname(__DIR__) . '/invoice_pdf_common.php';
 
 $check = static function(bool $ok, string $label): void {
     if (!$ok) throw new RuntimeException('FAIL: ' . $label);
@@ -36,6 +37,8 @@ try {
     $check($row['sale_price'] === '10000.00', 'stored TOMAN sale price unchanged');
     $check($row['purchase_price'] === '2500.50', 'stored TOMAN purchase price unchanged');
     $check(formatMoney($row['sale_price'], 'IRR') === '100,000 ریال', 'IRR display is exact');
+    $check(pdf_amount_in_words('0.01') === 'صفر و یک دهم ریال', 'PDF amount words preserve IRR tenths');
+    $check(pdf_amount_in_words('-100') === 'منفی هزار ریال', 'PDF amount words preserve minus sign in IRR');
     $check(parseMoneyInput('100000', 'IRR') === '10000', 'IRR input roundtrips without multiplying existing rows');
 
     $check($mysqli->query("UPDATE currency_settings SET currency_code = 'TOMAN' WHERE id = 1") !== false, 'switch preference back to TOMAN');
