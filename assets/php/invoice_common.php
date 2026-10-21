@@ -143,7 +143,7 @@ function opToMovement(string $type, string $op, string $delta = '0'): array
                 return ['sales_return_edit', money_cmp($delta, '0') >= 0 ? 'in' : 'out'];
             }
             if ($sales) {
-                return ['sale_edit', money_cmp($delta, '0') >= 0 ? 'out' : 'in'];
+                return ['sale_edit', money_cmp($delta, '0') >= 0 ? 'in' : 'out'];
             }
             return ['purchase_edit', money_cmp($delta, '0') >= 0 ? 'in' : 'out'];
         case 'return':
@@ -282,9 +282,34 @@ function productTypeMap(mysqli $mysqli, array $ids): array
 }
 
 /**
+ * فاکتورهای قدیمی خدمت را از موجودی کم نمی‌کردند. فقط خدماتی که این فاکتور
+ * واقعاً برایشان گردش فروش دارد، هنگام ویرایش/حذف معکوس می‌شوند.
+ * رکوردهای گردش مستقل از اقلام فاکتور باقی می‌مانند.
+ *
+ * @return array<int,bool>
+ */
+function invoiceStockTrackedSaleProducts(mysqli $mysqli, int $invoiceId): array
+{
+    $stmt = $mysqli->prepare(
+        "SELECT DISTINCT product_id FROM stock_movements
+         WHERE invoice_id = ? AND type IN ('sale', 'sale_edit')"
+    );
+    $stmt->bind_param('i', $invoiceId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $stmt->close();
+    $tracked = [];
+    while ($res && ($row = $res->fetch_assoc())) {
+        $tracked[(int) $row['product_id']] = true;
+    }
+    return $tracked;
+}
+
+/**
  * اعتبارسنجی اقلام فاکتور فروش (Backend Enforcement):
  *  - کالای نوع «product» باید موجودی فعلی > 0 داشته باشد؛ در غیر این صورت خطا.
- *  - خدمت («service») بدون محدودیت موجودی قابل ثبت است.
+ *  - موجودی خدمت هنگام ثبت فاکتور قطعی، داخل تراکنش کنترل و کسر می‌شود.
+ *    پیش‌فاکتور همچنان تغییری در موجودی ندارد.
  * برای فاکتورهای خرید هیچ محدودیتی اعمال نمی‌شود (رفتار قبلی حفظ می‌شود).
  * موجودی و نوع هر کالا از جدول products خوانده می‌شود؛ مقدار ارسالی کلاینت
  * هرگز منبع حقیقت نیست.
@@ -903,8 +928,6 @@ function createInvoice(mysqli $mysqli, array $in): array
 
         // موجودی — فقط فاکتور قطعی
         if (isFinal($type)) {
-            $typeMap = productTypeMap($mysqli, $allPids);
-
             /* نیازمندی کالاهای جزء بسته‌ها (فقط فروش) */
             $componentReq = isSales($type) ? bundleComponentRequirementsFromItems($mysqli, $items) : [];
 
@@ -915,14 +938,11 @@ function createInvoice(mysqli $mysqli, array $in): array
             }
             $stocks = $lockIds ? lockProductsById($mysqli, $lockIds) : [];
 
-            /* کالاهای عادی — رفتار قبلی بدون تغییر */
+            /* اقلام عادی شامل کالا و خدمت؛ بسته خودش موجودی ندارد */
             foreach ($items as $it) {
                 $pid = (int) $it['product_id'];
                 if (($createKindMap[$pid] ?? PRODUCT_KIND_STANDARD) === PRODUCT_KIND_BUNDLE) {
                     continue; // بسته خودش موجودی فیزیکی ندارد
-                }
-                if (isSales($type) && ($typeMap[$pid] ?? '') === 'service') {
-                    continue; // خدمت در فاکتور فروش موجودی را کاهش نمی‌دهد
                 }
                 $baseQty = (string) ($it['base_quantity'] ?? $it['quantity']);
                 $change = isSales($type) ? money_mul('-1', $baseQty) : $baseQty;
@@ -1170,14 +1190,19 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
             }
             $stocks = $lockIds ? lockProductsById($mysqli, $lockIds) : [];
             $typeMap = productTypeMap($mysqli, $allPids);
+            $trackedSaleProducts = isSales($newType) ? invoiceStockTrackedSaleProducts($mysqli, $invoiceId) : [];
+            $oldNormalPids = array_fill_keys(array_map('intval', array_column($oldNorm, 'product_id')), true);
 
             foreach ($deltas as $pid => $delta) {
                 $pid = (int) $pid;
                 if (money_cmp($delta, '0') === 0) {
                     continue; // فقط قیمت/تخفیف/شماره تغییر کرده → موجودی تغییر نکند
                 }
-                if (isSales($newType) && ($typeMap[$pid] ?? '') === 'service') {
-                    continue; // خدمت در فاکتور فروش موجودی را تغییر نمی‌دهد
+                // برای خدمتِ ثبت‌شده در فاکتور قدیمی بدون گردش موجودی،
+                // به‌صورت عطف‌به‌ماسبق موجودی را دستکاری نکن؛ خدمت جدید کسر می‌شود.
+                if (isSales($newType) && ($typeMap[$pid] ?? '') === 'service'
+                    && isset($oldNormalPids[$pid]) && !isset($trackedSaleProducts[$pid])) {
+                    continue;
                 }
                 $change = isSales($newType) ? money_mul('-1', $delta) : $delta;
                 $stocks[$pid] = applyStockChange($mysqli, $pid, $stocks[$pid], $change, $invoiceId, $newType, 'edit');
@@ -1305,15 +1330,16 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
         // فقط فاکتور قطعی روی موجودی اثر داشته؛ حذف آن برعکس اعمال می‌شود
         if (isFinal($type)) {
             $typeMap = productTypeMap($mysqli, $allPids);
+            $trackedSaleProducts = isSales($type) ? invoiceStockTrackedSaleProducts($mysqli, $invoiceId) : [];
 
-            /* کالاهای عادی — رفتار قبلی بدون تغییر */
+            /* کالاها و خدمات ثبت‌شده با گردش واقعی */
             foreach ($oldItems as $it) {
                 $pid = (int) $it['product_id'];
                 if (($deleteKindMap[$pid] ?? PRODUCT_KIND_STANDARD) === PRODUCT_KIND_BUNDLE) {
                     continue; // بسته خودش موجودی فیزیکی نداشته است
                 }
-                if (isSales($type) && ($typeMap[$pid] ?? '') === 'service') {
-                    continue; // خدمت در فاکتور فروش هیچ تغییری در موجودی نداشته است
+                if (isSales($type) && ($typeMap[$pid] ?? '') === 'service' && !isset($trackedSaleProducts[$pid])) {
+                    continue; // خدمات فاکتورهای قدیمی از موجودی کسر نشده‌اند
                 }
                 // Sales: stock += base_qty | Purchase: stock -= base_qty (با چک منفی)
                 $baseQty = (string) ($it['base_quantity'] ?? $it['quantity']);
@@ -1404,15 +1430,10 @@ function convertInvoice(mysqli $mysqli, int $invoiceId): array
         }
         $stocks = $lockIds ? lockProductsById($mysqli, $lockIds) : [];
         $newNumber = generateInvoiceNumber($mysqli, $finalType);
-        $typeMap = productTypeMap($mysqli, $allPids);
-
         foreach ($items as $it) {
             $pid = (int) $it['product_id'];
             if (($convKindMap[$pid] ?? PRODUCT_KIND_STANDARD) === PRODUCT_KIND_BUNDLE) {
                 continue; // بسته خودش موجودی فیزیکی ندارد؛ اجزایش جداگانه مصرف می‌شود
-            }
-            if ($isSales && ($typeMap[$pid] ?? '') === 'service') {
-                continue; // خدمت در تبدیل پیش‌فاکتور فروش موجودی را تغییر نمی‌دهد
             }
             $baseQty = (string) ($it['base_quantity'] ?? $it['quantity']);
             $change = $isSales ? money_mul('-1', $baseQty) : $baseQty;
