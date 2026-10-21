@@ -1,0 +1,35 @@
+name: Currency WIP checks
+on:
+  push:
+    branches:
+      - 'feature/currency-toman-irr-wip-*'
+  workflow_dispatch:
+
+jobs:
+  lint-and-pure-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, bcmath, mysqli
+          coverage: none
+      - name: PHP syntax checks
+        run: |
+          php -l index.php
+          find assets/php pages assets/invoice-pdf/templates -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: JS syntax checks
+        run: |
+          node --check assets/js/currency.js
+          node --check assets/js/currency-settings.js
+          node --check assets/js/main.js
+          node --check assets/js/invoice.js
+          node --check assets/js/bundle.js
+          node --check assets/js/current-affairs.js
+          node --check assets/js/sales-return.js
+      - name: Currency unit tests
+        run: |
+          php assets/php/tests/currency_test.php
+          node assets/js/currency.test.js

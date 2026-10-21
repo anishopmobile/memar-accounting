@@ -2799,7 +2799,7 @@ $(function () {
     }
 
     function phFormatMoney(n) {
-        return phFormatNumber(n) + ' ریال';
+        return window.Currency.format(n);
     }
 
     function phEsc(value) {
@@ -2831,7 +2831,7 @@ $(function () {
         var qtys = [];
         $.each(periods, function (i, p) {
             labels.push(p.from_shamsi_short || p.from_shamsi || '');
-            prices.push(parseFloat(p.price) || 0);
+            prices.push(parseFloat(window.Currency.fromBase(p.price)) || 0);
             qtys.push(parseFloat(p.qty) || 0);
         });
         var canvas = document.getElementById('productHistoryChartCanvas');
@@ -2855,7 +2855,7 @@ type: 'bar',
                     },
                     {
                         type: 'line',
-                        label: 'قیمت فروش (ریال)',
+                        label: 'قیمت فروش (' + window.Currency.label + ')',
                         data: prices,
                         borderColor: '#1769e0',
                         backgroundColor: 'rgba(23, 105, 224, 0.12)',
@@ -2897,7 +2897,7 @@ plugins: {
                                 if (context.datasetIndex === 0) {
                                     return context.dataset.label + ': ' + phFormatNumber(context.parsed.y);
                                 }
-                                return 'قیمت فروش: ' + phFormatMoney(context.parsed.y);
+                                return 'قیمت فروش: ' + phFormatNumber(context.parsed.y) + ' ' + window.Currency.label;
                             }
                         }
                     }
@@ -2925,7 +2925,7 @@ plugins: {
                         grid: { drawOnChartArea: false },
                         title: {
                             display: true,
-                            text: 'قیمت (ریال)',
+                            text: 'قیمت (' + window.Currency.label + ')',
                             font: { family: 'Tahoma, sans-serif', size: 11 },
                             color: '#64748b'
                         },

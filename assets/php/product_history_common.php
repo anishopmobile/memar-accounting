@@ -22,6 +22,7 @@
  */
 
 require_once __DIR__ . '/invoice_common.php';
+require_once __DIR__ . '/currency.php';
 
 /**
  * بارگذاری ردیف کالا
@@ -151,7 +152,7 @@ function ph_fmt_qty($v): string
  */
 function ph_fmt_money($v): string
 {
-    return number_format((float) $v);
+    return formatMoneyNumber((string) $v);
 }
 /**
  * ساخت توضیحات فارسی پویا بر اساس داده‌های واقعی محاسبه‌شده.
@@ -180,13 +181,13 @@ function ph_build_explanation(
             $qty = ph_fmt_qty($p['qty']);
             $from = (string) $p['from_shamsi'];
             if ($total === 1) {
-                $lines[] = 'فروش این کالا از تاریخ ' . $from . ' با قیمت واحد ' . $price . ' ریال ثبت شده است و از آن تاریخ تاکنون ' . $qty . $unit . ' فروخته شده است.';
+                $lines[] = 'فروش این کالا از تاریخ ' . $from . ' با قیمت واحد ' . $price . ' ' . getCurrencyLabel() . ' ثبت شده است و از آن تاریخ تاکنون ' . $qty . $unit . ' فروخته شده است.';
             } elseif ($idx === 0) {
-                $lines[] = 'از تاریخ ' . $from . ' قیمت واحد این کالا ' . $price . ' ریال ثبت شده است؛ تا قبل از تغییر قیمت بعدی ' . $qty . $unit . ' فروخته شده است.';
+                $lines[] = 'از تاریخ ' . $from . ' قیمت واحد این کالا ' . $price . ' ' . getCurrencyLabel() . ' ثبت شده است؛ تا قبل از تغییر قیمت بعدی ' . $qty . $unit . ' فروخته شده است.';
             } elseif ($idx === $total - 1) {
-                $lines[] = 'در تاریخ ' . $from . ' قیمت واحد کالا به ' . $price . ' ریال تغییر کرده است و از آن تاریخ تاکنون ' . $qty . $unit . ' فروخته شده است.';
+                $lines[] = 'در تاریخ ' . $from . ' قیمت واحد کالا به ' . $price . ' ' . getCurrencyLabel() . ' تغییر کرده است و از آن تاریخ تاکنون ' . $qty . $unit . ' فروخته شده است.';
             } else {
-                $lines[] = 'در تاریخ ' . $from . ' قیمت واحد کالا به ' . $price . ' ریال تغییر کرده است؛ تا قبل از تغییر قیمت بعدی ' . $qty . $unit . ' فروخته شده است.';
+                $lines[] = 'در تاریخ ' . $from . ' قیمت واحد کالا به ' . $price . ' ' . getCurrencyLabel() . ' تغییر کرده است؛ تا قبل از تغییر قیمت بعدی ' . $qty . $unit . ' فروخته شده است.';
             }
         }
     }
@@ -198,9 +199,9 @@ function ph_build_explanation(
     $lines[] = 'موجودی فعلی کالا ' . ph_fmt_qty($currentStock) . $unit . ' است.';
 
     if ($lastSoldPrice !== null && money_cmp($lastSoldPrice, $currentPrice) !== 0) {
-        $lines[] = 'توجه: آخرین قیمت ثبت‌شده در فاکتورهای فروش (' . ph_fmt_money($lastSoldPrice) . ' ریال) با قیمت فروش فعلی (' . ph_fmt_money($currentPrice) . ' ریال) متفاوت است؛ تاریخ دقیق این تغییر قیمت در سیستم ثبت نشده است.';
+        $lines[] = 'توجه: آخرین قیمت ثبت‌شده در فاکتورهای فروش (' . ph_fmt_money($lastSoldPrice) . ' ' . getCurrencyLabel() . ') با قیمت فروش فعلی (' . ph_fmt_money($currentPrice) . ' ' . getCurrencyLabel() . ') متفاوت است؛ تاریخ دقیق این تغییر قیمت در سیستم ثبت نشده است.';
     } else {
-        $lines[] = 'قیمت فروش فعلی کالا ' . ph_fmt_money($currentPrice) . ' ریال است.';
+        $lines[] = 'قیمت فروش فعلی کالا ' . ph_fmt_money($currentPrice) . ' ' . getCurrencyLabel() . ' است.';
     }
 
     return implode("\n", $lines);

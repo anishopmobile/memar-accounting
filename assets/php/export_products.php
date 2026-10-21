@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/db.php';
 
 /* ---------- دریافت لیست کامل محصولات به همراه نام دسته‌بندی ---------- */
@@ -122,8 +123,8 @@ foreach ($products as $p) {
         $p['category_name'] !== null ? $p['category_name'] : '-',
         $typeLabels[$p['type']] ?? 'محصول',
         $p['unit'],
-        number_format((float) $p['purchase_price']),
-        number_format((float) $p['sale_price']),
+        formatMoneyNumber((string) $p['purchase_price']),
+        formatMoneyNumber((string) $p['sale_price']),
         number_format((float) $p['stock']),
         number_format((float) $p['min_stock']),
         $p['description'],
@@ -172,8 +173,8 @@ foreach ($unitRows as $u) {
         $u['unit_id'],
         $u['unit_name'],
         $u['conversion_factor'],
-        number_format((float) $u['pu_purchase_price']),
-        number_format((float) $u['pu_sale_price']),
+        formatMoneyNumber((string) $u['pu_purchase_price']),
+        formatMoneyNumber((string) $u['pu_sale_price']),
         $u['pu_barcode'],
         $baseLabel,
     ];

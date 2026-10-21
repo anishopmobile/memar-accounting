@@ -26,15 +26,7 @@ $(function () {
     });
 }
     /* نمایش مبلغ ریالی به‌صورت عدد صحیح با جداکننده هزارگان (بدون اعشار) — فقط لایه نمایش */
-    function fmtRial(n) {
-        if (n === null || n === undefined || n === '') return '0';
-        var neg = '';
-        var s = String(n).trim();
-        if (s.charAt(0) === '-') { neg = '-'; s = s.slice(1); }
-        s = s.replace(/,/g, '').split('.')[0];
-        if (!/^\d+$/.test(s)) s = '0';
-        return neg + s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    }
+    function fmtRial(n) { return window.Currency.formatNumber(n == null || n === '' ? '0' : String(n)); }
     function pad2(n) { return (n < 10 ? '0' : '') + n; }
     function todayISO() { var d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
 
@@ -113,7 +105,7 @@ $(function () {
                 + '<td dir="ltr">' + esc(r.invoice_number) + '</td>'
                 + '<td>' + esc(r.customer_name || '—') + '</td>'
                 + '<td>' + esc(r.return_date_shamsi) + '</td>'
-                + '<td class="sr-money-cell">' + fmtRial(r.payable_amount) + ' ریال</td>'
+                + '<td class="sr-money-cell">' + fmtRial(r.payable_amount) + ' ' + window.Currency.label + '</td>'
                 + '<td>' + esc(r.item_count) + '</td>'
                 + '<td class="invoice-actions">'
                 + '<button type="button" class="button-secondary small sr-view" data-id="' + escAttr(r.id) + '">مشاهده</button> '
@@ -184,7 +176,7 @@ $(function () {
                     + '<td dir="ltr">' + esc(r.invoice_number) + '</td>'
                     + '<td>' + esc(r.customer_name || '—') + ' <span class="sr-returnable-hint">' + esc(r.customer_phone || '') + '</span></td>'
                     + '<td>' + esc(r.invoice_date_shamsi) + '</td>'
-                    + '<td class="sr-money-cell">' + splitNum(r.payable_amount) + ' ریال <span class="sr-returnable-hint">' + esc(st) + '</span></td>'
+                    + '<td class="sr-money-cell">' + window.Currency.formatNumber(r.payable_amount) + ' ' + window.Currency.label + ' <span class="sr-returnable-hint">' + esc(st) + '</span></td>'
                     + '<td><button type="button" class="button-secondary small sr-invoice-pick" data-id="' + escAttr(r.id) + '">انتخاب</button></td>'
                     + '</tr>';
             });
@@ -292,7 +284,7 @@ $(function () {
             + '<td>' + splitNum(it.quantity) + '</td>'
             + '<td>' + splitNum(it.returned_display != null ? it.returned_display : '0') + '</td>'
             + '<td>' + splitNum(it.returnable_display) + '<span class="sr-returnable-hint">' + esc(hint) + '</span></td>'
-            + '<td>' + splitNum(it.unit_price) + '</td>'
+            + '<td>' + window.Currency.formatNumber(it.unit_price) + '</td>'
             + '<td class="sr-line-disc">0</td>'
             + '<td><input type="number" class="sr-qty sr-qty-input" min="0" step="0.01" value="' + escAttr(qtyVal) + '" placeholder="0"></td>'
             + '<td class="sr-line">0</td>'
@@ -322,7 +314,7 @@ $(function () {
         $('#srItemsTable tbody tr').each(function () {
             var f = lineFields($(this));
             $('.sr-line-disc', this).text(f.allocDisc ? splitNum(f.allocDisc) : '0');
-            $('.sr-line', this).text(splitNum(f.line) + ' ریال');
+            $('.sr-line', this).text(window.Currency.formatNumber(f.line) + ' ' + window.Currency.label);
             subtotal += f.line;
         });
         var docDisc = (invDisc && invSubtotal && subtotal) ? Math.round(invDisc * subtotal / invSubtotal) : 0;
@@ -333,10 +325,10 @@ $(function () {
             tax = (invRate > 0) ? Math.round(taxable * invRate / 100) : 0;
         }
         var payable = taxable + tax;
-        $('#srSubtotal').text(splitNum(subtotal) + ' ریال');
-        $('#srDocDiscount').text(docDisc ? splitNum(docDisc) + ' ریال' : '0');
-        $('#srTax').text(splitNum(tax) + ' ریال');
-        $('#srPayable').text(splitNum(payable) + ' ریال');
+        $('#srSubtotal').text(window.Currency.formatNumber(subtotal) + ' ' + window.Currency.label);
+        $('#srDocDiscount').text(docDisc ? window.Currency.formatNumber(docDisc) + ' ' + window.Currency.label : '0');
+        $('#srTax').text(window.Currency.formatNumber(tax) + ' ' + window.Currency.label);
+        $('#srPayable').text(window.Currency.formatNumber(payable) + ' ' + window.Currency.label);
     }
 
     /* ---------- بارگذاری نرخ مالیات برای پیش‌نمایش (سرور مرجع نهایی است) ---------- */
@@ -454,9 +446,9 @@ $(function () {
                     + '<td dir="ltr">' + esc(it.product_code) + '</td>'
                     + '<td>' + esc(it.product_name) + '</td>'
                     + '<td>' + splitNum(it.quantity) + ' ' + esc(it.unit_name || '') + '</td>'
-                    + '<td>' + splitNum(it.unit_price) + '</td>'
-                    + '<td>' + splitNum(it.discount) + '</td>'
-                    + '<td>' + splitNum(it.line_total) + '</td>'
+                    + '<td>' + window.Currency.formatNumber(it.unit_price) + '</td>'
+                    + '<td>' + window.Currency.formatNumber(it.discount) + '</td>'
+                    + '<td>' + window.Currency.formatNumber(it.line_total) + '</td>'
                     + '</tr>';
             });
             if (!itemsHtml) itemsHtml = '<tr><td colspan="7">—</td></tr>';
@@ -471,17 +463,17 @@ $(function () {
                 + '<div class="form-row"><label>فاکتور اصلی</label><div class="money-cell" dir="ltr">' + esc(r.invoice_number) + '</div></div>'
                 + '<div class="form-row"><label>مشتری</label><div class="money-cell">' + esc(cust.name || '—') + '</div></div>'
                 + '<div class="form-row"><label>تاریخ برگشت</label><div class="money-cell">' + esc(r.return_date_shamsi) + '</div></div>'
-                + '<div class="form-row"><label>مبلغ فاکتور اصلی</label><div class="money-cell">' + splitNum(r.invoice_payable) + ' ریال</div></div>'
+                + '<div class="form-row"><label>مبلغ فاکتور اصلی</label><div class="money-cell">' + window.Currency.formatNumber(r.invoice_payable) + ' ' + window.Currency.label + '</div></div>'
                 + '</div>'
                 + '<h3>اقلام برگشتی</h3>'
                 + '<div class="table-wrapper"><table class="action-table sr-detail-items">'
                 + '<thead><tr><th>ردیف</th><th>کد</th><th>نام کالا</th><th>تعداد</th><th>قیمت واحد</th><th>تخفیف</th><th>مبلغ</th></tr></thead>'
                 + '<tbody>' + itemsHtml + '</tbody></table></div>'
                 + '<div class="calculation-section form-grid">'
-                + '<div class="form-row"><label>جمع ردیف‌ها</label><div class="money-cell">' + splitNum(r.subtotal) + ' ریال</div></div>'
-                + '<div class="form-row"><label>تخفیف سند</label><div class="money-cell">' + splitNum(r.discount) + ' ریال</div></div>'
-                + '<div class="form-row"><label>مالیات</label><div class="money-cell">' + splitNum(r.tax_amount) + ' ریال</div></div>'
-                + '<div class="form-row"><label>مبلغ برگشتی</label><div class="money-cell strong">' + splitNum(r.payable_amount) + ' ریال</div></div>'
+                + '<div class="form-row"><label>جمع ردیف‌ها</label><div class="money-cell">' + window.Currency.formatNumber(r.subtotal) + ' ' + window.Currency.label + '</div></div>'
+                + '<div class="form-row"><label>تخفیف سند</label><div class="money-cell">' + window.Currency.formatNumber(r.discount) + ' ' + window.Currency.label + '</div></div>'
+                + '<div class="form-row"><label>مالیات</label><div class="money-cell">' + window.Currency.formatNumber(r.tax_amount) + ' ' + window.Currency.label + '</div></div>'
+                + '<div class="form-row"><label>مبلغ برگشتی</label><div class="money-cell strong">' + window.Currency.formatNumber(r.payable_amount) + ' ' + window.Currency.label + '</div></div>'
                 + '</div>'
                 + (r.note ? '<div class="form-row"><label>یادداشت</label><div>' + esc(r.note) + '</div></div>' : '')
                 + '</div>';

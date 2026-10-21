@@ -21,6 +21,7 @@ require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/product_excel_reader.php';
 require_once __DIR__ . '/product_excel_lib.php';
+require_once __DIR__ . '/currency.php';
 
 require_csrf_or_fail();
 
@@ -168,6 +169,28 @@ try {
             respond_error('هیچ رکورد جدیدی برای ثبت وجود ندارد (همه ردیف‌ها تکراری یا نامعتبر هستند).', 422);
         }
         respond_error('هیچ رکورد معتبری در فایل وجود ندارد؛ ثبت انجام نشد.', 422);
+    }
+
+    /* Excel price cells are entered in the currently selected currency.
+ * Convert only monetary fields; never touch stock, quantity or conversion_factor.
+ * Do this AFTER preview and revalidation, immediately before transactional writes. */
+    try {
+        foreach ($result['records'] as &$record) {
+            if (($record['status'] ?? '') !== 'ok') continue;
+            foreach (['purchase_price', 'sale_price'] as $key) {
+                $record['data'][$key] = parseMoneyInput((string) $record['data'][$key]);
+            }
+        }
+        unset($record);
+        foreach ($unitResult['records'] as &$unitRecord) {
+            if (($unitRecord['status'] ?? '') !== 'ok') continue;
+            foreach (['purchase_price', 'sale_price'] as $key) {
+                $unitRecord['data'][$key] = parseMoneyInput((string) $unitRecord['data'][$key]);
+            }
+        }
+        unset($unitRecord);
+    } catch (InvalidArgumentException $e) {
+        respond_error('یکی از قیمت‌های فایل با دقت واحد پولی انتخاب‌شده قابل ذخیره نیست: ' . $e->getMessage(), 422);
     }
 
     $done = product_excel_insert_rows($mysqli, $result['records'], count($unitsSheetRows) === 0, $categoryByName, $importMode);
