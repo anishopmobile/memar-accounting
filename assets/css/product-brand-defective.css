@@ -127,10 +127,10 @@ body.tabler-admin#defective-goods #defRegCard :is(#defSubmit,#defReset) {
 }
 body.tabler-admin#defective-goods #defReportCard #defFilterForm {
     display:flex; flex-direction:row!important; align-items:center;
-    justify-content:flex-start!important; flex-wrap:wrap!important;
+    justify-content:flex-start!important; flex-wrap:nowrap!important;
     gap:8px; width:100%; padding:10px 12px;
     border:1px solid #e6ecf5; border-radius:9px;
-    background:#f8fafd; overflow:visible;
+    background:#f8fafd; overflow-x:auto;
 }
 body.tabler-admin#defective-goods #defFilterForm :is(input[type=text],button,.button-secondary) {
     flex:0 0 auto; max-width:100%; min-width:0;
