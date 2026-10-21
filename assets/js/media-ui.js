@@ -1,0 +1,300 @@
+/* Central media UI. Scoped by editor; never changes quantities, prices or invoices. */
+(function ($) {
+    'use strict';
+    var states = {};
+    var active = null;
+    var selectedInPicker = new Map();
+    var libraryPage = 1;
+    var libraryTerm = '';
+    var libraryUsage = 'all';
+    var modal = null, restoreFocus = null;
+
+    function escapeHtml(v) {
+        return $('<div>').text(v == null ? '' : String(v)).html();
+    }
+    function mediaUrl(id, size) {
+        return 'assets/php/media_file.php?id=' + encodeURIComponent(id) + '&size=' + (size || 'thumb');
+    }
+    function csrf() { return window.APP_CSRF_TOKEN || ''; }
+    function state(name) {
+        if (!states[name]) states[name] = { items: [], original: '[]', loading: false, seq: 0 };
+        return states[name];
+    }
+    function editor(name) { return $('[data-media-editor="' + name + '"]'); }
+    function setItems(name, items, isOriginal) {
+        var st = state(name);
+        st.items = items.map(function (x) {
+            return { id: Number(x.id), url: x.url || mediaUrl(x.id), original_filename: x.original_filename || '' };
+        });
+        if (isOriginal) st.original = JSON.stringify(st.items.map(function (x) { return x.id; }));
+        renderEditor(name);
+    }
+    function renderEditor(name) {
+        var st = state(name), el = editor(name);
+        if (!el.length) return;
+        var ids = st.items.map(function (x) { return x.id; });
+        el.find('input[name="media_ids"]').val(JSON.stringify(ids));
+        var html = '';
+        st.items.forEach(function (item, n) {
+            html += '<div class="media-picked" role="listitem" data-id="' + item.id + '">'
+                + '<img loading="lazy" alt="" src="' + escapeHtml(item.url) + '">'
+                + (n === 0 ? '<small class="media-primary">اصلی</small>' : '')
+                + '<div class="media-picked-controls">'
+                + '<button type="button" class="media-preview" data-id="' + item.id + '" aria-label="مشاهده بزرگ">🔍</button>'
+                + '<button type="button" class="media-left" data-id="' + item.id + '" aria-label="انتقال به اول" ' + (n === 0 ? 'disabled' : '') + '>↑</button>'
+                + '<button type="button" class="media-right" data-id="' + item.id + '" aria-label="انتقال به آخر" ' + (n === st.items.length - 1 ? 'disabled' : '') + '>↓</button>'
+                + '<button type="button" class="media-remove" data-id="' + item.id + '" aria-label="حذف ارتباط">×</button></div></div>';
+        });
+        el.find('.media-selected').html(html || '<p class="media-empty">تصویری انتخاب نشده است.</p>');
+        el.find('.media-editor-message').text(st.loading ? 'در حال خواندن تصاویر قبلی...' : ids.length + ' از ۱۰ تصویر انتخاب شده');
+    }
+    var MediaEditor = {
+        prepare: function (name, productId) {
+            var st = state(name);
+            var token = ++st.seq;
+            st.loading = !!productId;
+            setItems(name, [], true);
+            renderEditor(name);
+            if (!productId) return;
+            $.getJSON('assets/php/media_api.php', {action:'product', product_id:productId})
+                .done(function (res) {
+                    if (token !== st.seq) return;
+                    if (res && res.success) setItems(name, (res.data && res.data.items) || [], true);
+                    else alert((res && res.message) || 'بارگذاری تصاویر محصول ناموفق بود.');
+                }).fail(function () {
+                    if (token === st.seq) alert('امکان دریافت تصاویر قبلی محصول وجود ندارد.');
+                }).always(function () {
+                    if (token === st.seq) { st.loading = false; renderEditor(name); }
+                });
+        },
+        isDirty: function (name) {
+            var st = state(name);
+            return JSON.stringify(st.items.map(function (x) { return x.id; })) !== st.original;
+        },
+        canSave: function (name) { return !state(name).loading; },
+        reset: function (name) { this.prepare(name, 0); }
+    };
+    window.MediaEditor = MediaEditor;
+
+    function ensureModal() {
+        if (modal) return modal;
+        modal = $('<div id="mediaPicker" class="media-picker-overlay" role="dialog" aria-modal="true" aria-label="کتابخانه تصاویر" hidden>'
+            + '<div class="media-picker-panel">'
+            + '<header><h2>کتابخانه تصاویر</h2><button type="button" class="media-picker-close" aria-label="بستن">×</button></header>'
+            + '<div class="media-picker-tools"><input type="search" id="mediaPickerSearch" placeholder="جستجو نام فایل">'
+            + '<select id="mediaPickerUsage"><option value="all">همه تصاویر</option><option value="used">استفاده‌شده</option><option value="unused">بدون استفاده</option></select></div>'
+            + '<div id="mediaPickerGrid" class="media-grid" role="group"></div>'
+            + '<div class="media-pages"><button type="button" id="mediaPrev">قبلی</button><span id="mediaPageText"></span><button type="button" id="mediaNext">بعدی</button></div>'
+            + '<section class="media-dropbox" id="mediaDropArea" tabindex="0">'
+            + '<h3>آپلود تصویر</h3><p>تصاویر را اینجا رها کنید یا انتخاب نمایید (JPEG/PNG/WebP؛ هر فایل حداکثر ۵ مگابایت).</p>'
+            + '<input type="file" id="mediaUploadFiles" multiple accept="image/jpeg,image/png,image/webp">'
+            + '<div id="mediaUploadQueue" aria-live="polite"></div></section>'
+            + '<footer><span id="mediaSelectedCount">۰ تصویر انتخاب شده</span>'
+            + '<button type="button" class="button-secondary media-picker-close">لغو</button>'
+            + '<button type="button" class="button" id="mediaPickerConfirm">تأیید انتخاب</button></footer></div></div>');
+        $(document.body).append(modal);
+        return modal;
+    }
+    var pickerTimer = null;
+    function openPicker(name, focusUpload) {
+        restoreFocus = document.activeElement;
+        active = name;
+        selectedInPicker.clear();
+        libraryPage = 1; libraryTerm = ''; libraryUsage = 'all';
+        ensureModal();
+        $('#mediaPickerSearch').val('');
+        $('#mediaPickerUsage').val('all');
+        modal.prop('hidden', false);
+        $('#mediaPickerConfirm').toggle(!!name);
+        $('#mediaSelectedCount').toggle(!!name);
+        loadPicker();
+        if (focusUpload) $('#mediaUploadFiles').trigger('focus'); else $('#mediaPickerSearch').trigger('focus');
+    }
+    function closePicker() {
+        if (!modal) return;
+        modal.prop('hidden', true);
+        active = null;
+        selectedInPicker.clear();
+        if (restoreFocus && typeof restoreFocus.focus === 'function') restoreFocus.focus();
+    }
+    function loadPicker() {
+        ensureModal();
+        $('#mediaPickerGrid').html('<p>در حال دریافت تصاویر...</p>');
+        $.getJSON('assets/php/media_api.php', {action:'list',search:libraryTerm,page:libraryPage,usage:libraryUsage})
+            .done(function (res) {
+                if (!res || !res.success) { $('#mediaPickerGrid').text(res.message || 'خطا در بارگذاری کتابخانه'); return; }
+                var data = res.data || {}, rows = data.items || [], html = '';
+                rows.forEach(function (x) {
+                    var checked = selectedInPicker.has(Number(x.id));
+                    html += '<button type="button" class="media-tile' + (checked ? ' chosen' : '') + '" data-id="' + Number(x.id) + '"'
+                        + ' data-name="' + escapeHtml(x.original_filename) + '" aria-pressed="' + (checked ? 'true' : 'false') + '">'
+                        + '<img loading="lazy" src="' + escapeHtml(x.url) + '" alt=""><span>' + escapeHtml(x.original_filename) + '</span>'
+                        + '<small>' + Number(x.products_count || 0) + ' محصول</small></button>';
+                });
+                $('#mediaPickerGrid').html(html || '<p>تصویری یافت نشد.</p>');
+                $('#mediaPageText').text('صفحه ' + data.page + ' از ' + data.pages);
+                $('#mediaPrev').prop('disabled', data.page <= 1);
+                $('#mediaNext').prop('disabled', data.page >= data.pages);
+            }).fail(function () { $('#mediaPickerGrid').text('خطا در ارتباط با سرور.'); });
+    }
+    function countSelection() { $('#mediaSelectedCount').text(selectedInPicker.size + ' تصویر انتخاب شده'); }
+    $(document).on('click', '.media-open-library, .media-open-upload', function () {
+        var name = $(this).closest('[data-media-editor]').attr('data-media-editor');
+        openPicker(name, $(this).hasClass('media-open-upload'));
+    });
+    $(document).on('click', '.media-picker-close', closePicker);
+    $(document).on('keydown', function (e) { if (modal && !modal.prop('hidden') && e.key === 'Escape') { e.preventDefault(); closePicker(); } });
+    $(document).on('click', '.media-tile', function () {
+        var id = Number($(this).data('id'));
+        if (selectedInPicker.has(id)) selectedInPicker.delete(id);
+        else selectedInPicker.set(id, {id:id,url:mediaUrl(id),original_filename:$(this).data('name')});
+        $(this).toggleClass('chosen', selectedInPicker.has(id)).attr('aria-pressed', selectedInPicker.has(id) ? 'true' : 'false');
+        countSelection();
+    });
+    $(document).on('click', '#mediaPickerConfirm', function () {
+        if (!active) return;
+        var st = state(active);
+        selectedInPicker.forEach(function (m, id) {
+            if (st.items.length < 10 && !st.items.some(function (x) {return x.id === id;})) st.items.push(m);
+        });
+        renderEditor(active);
+        closePicker();
+    });
+    $(document).on('input', '#mediaPickerSearch', function () {
+        clearTimeout(pickerTimer);
+        var val = $(this).val();
+        pickerTimer = setTimeout(function () { libraryTerm = val; libraryPage = 1; loadPicker(); }, 200);
+    });
+    $(document).on('change', '#mediaPickerUsage', function () { libraryUsage = $(this).val(); libraryPage = 1; loadPicker(); });
+    $(document).on('click', '#mediaPrev', function () { libraryPage = Math.max(1, libraryPage-1); loadPicker(); });
+    $(document).on('click', '#mediaNext', function () { libraryPage++; loadPicker(); });
+
+    function uploadFiles(files) {
+        ensureModal();
+        Array.from(files).slice(0, 10).forEach(function (file) {
+            var line = $('<div class="media-upload-line"><span></span><progress max="100" value="0"></progress><button type="button" class="media-cancel">لغو</button></div>');
+            line.find('span').text(file.name + ' — در انتظار ارسال');
+            $('#mediaUploadQueue').append(line);
+            if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 5*1024*1024) {
+                line.find('span').text(file.name + ' — فرمت یا حجم غیرمجاز');
+                line.find('button').remove();
+                return;
+            }
+            var fd = new FormData();
+            fd.append('action','upload'); fd.append('csrf_token',csrf()); fd.append('file',file);
+            var xhr = $.ajax({
+                url:'assets/php/media_api.php', type:'POST', data:fd, processData:false, contentType:false,
+                xhr:function () {
+                    var request = $.ajaxSettings.xhr();
+                    if (request.upload) request.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) line.find('progress').val(Math.round(e.loaded/e.total*100));
+                    });
+                    return request;
+                },
+                beforeSend:function () {line.find('span').text(file.name + ' — در حال آپلود');}
+            }).done(function (res) {
+                if (!res || !res.success) {
+                    line.find('span').text(file.name + ' — ' + ((res && res.message) || 'ناموفق'));return;
+                }
+                var m = {id:Number(res.data.id),url:res.data.url,original_filename:file.name};
+                if (active) {
+                    var st = state(active);
+                    if (st.items.length < 10 && !st.items.some(function(x) {return x.id === m.id;})) st.items.push(m);
+                    renderEditor(active);
+                }
+                line.find('span').text(file.name + ' — ذخیره موفق در کتابخانه');
+                line.find('progress').val(100);
+                loadPicker();
+            }).fail(function (x) {
+                line.find('span').text(file.name + ' — ' + ((x.responseJSON && x.responseJSON.message) || 'خطای شبکه'));
+            }).always(function () { line.find('button').remove(); });
+            line.find('.media-cancel').on('click',function(){xhr.abort();line.find('span').text(file.name + ' — لغو شد');});
+        });
+    }
+    $(document).on('change','#mediaUploadFiles',function () { uploadFiles(this.files || []); this.value = ''; });
+    $(document).on('dragover','#mediaDropArea',function (e) {e.preventDefault();$(this).addClass('drag-over');});
+    $(document).on('dragleave','#mediaDropArea',function () {$(this).removeClass('drag-over');});
+    $(document).on('drop','#mediaDropArea',function (e) {
+        e.preventDefault();$(this).removeClass('drag-over');
+        uploadFiles(e.originalEvent.dataTransfer.files || []);
+    });
+
+    $(document).on('click','.media-picked .media-remove,.media-picked .media-left,.media-picked .media-right',function () {
+        var name = $(this).closest('[data-media-editor]').attr('data-media-editor');
+        var st = state(name), id = Number($(this).data('id'));
+        var idx = st.items.findIndex(function (x) {return x.id===id;});
+        if (idx < 0) return;
+        if ($(this).hasClass('media-remove')) st.items.splice(idx,1);
+        else {
+            var to = $(this).hasClass('media-left') ? Math.max(0,idx-1) : Math.min(st.items.length-1,idx+1);
+            var item = st.items.splice(idx,1)[0];
+            st.items.splice(to,0,item);
+        }
+        renderEditor(name);
+    });
+    $(document).on('click','.media-preview,.media-thumb',function () {
+        var id = Number($(this).data('id') || $(this).closest('[data-id]').data('id') || 0);
+        if (!id) return;
+        var overlay = $('<div class="media-lightbox" role="dialog" aria-modal="true"><button type="button" aria-label="بستن">×</button><img alt="تصویر بزرگ"></div>');
+        overlay.find('img').attr('src',mediaUrl(id,'original'));
+        overlay.on('click',function () {overlay.remove();});
+        $(document.body).append(overlay);
+    });
+
+    // Full-page library manager shares the same API and picker.
+    if ($('#mediaLibraryPage').length) {
+        var refresh = function () { loadManager(); };
+        function loadManager() {
+            var box = $('#mediaManagerGrid').text('در حال بارگذاری...');
+            $.getJSON('assets/php/media_api.php', {action:'list',page:libraryPage,search:libraryTerm,usage:libraryUsage})
+                .done(function (res) {
+                    if (!res || !res.success) {box.text(res.message || 'خطا');return;}
+                    var data = res.data || {}, html = '';
+                    (data.items || []).forEach(function (m) {
+                        var used = Number(m.products_count || 0)+Number(m.categories_count || 0);
+                        html += '<article class="media-manager-card"><img data-id="' + m.id + '" class="media-thumb" loading="lazy" src="' + escapeHtml(m.url) + '" alt="">'
+                            + '<strong>' + escapeHtml(m.original_filename) + '</strong>'
+                            + '<small>' + m.width + ' × ' + m.height + ' — ' + used + ' مورد استفاده</small>'
+                            + '<button type="button" data-id="' + m.id + '" class="media-manager-delete" ' + (used ? 'disabled title="در حال استفاده"' : '') + '>حذف از کتابخانه</button></article>';
+                    });
+                    box.html(html || '<p>تصویری یافت نشد.</p>');
+                    $('#mediaManagerPageText').text('صفحه ' + data.page + ' از ' + data.pages);
+                    $('#mediaManagerPrev').prop('disabled', data.page<=1);
+                    $('#mediaManagerNext').prop('disabled', data.page>=data.pages);
+                }).fail(function () {box.text('خطای ارتباط با سرور');});
+        }
+        $('#mediaManagerSearch').on('input',function(){libraryTerm=$(this).val();libraryPage=1;refresh();});
+        $('#mediaManagerUsage').on('change',function(){libraryUsage=$(this).val();libraryPage=1;refresh();});
+        $('#mediaManagerPrev').on('click',function(){libraryPage=Math.max(1,libraryPage-1);refresh();});
+        $('#mediaManagerNext').on('click',function(){libraryPage++;refresh();});
+        $('#mediaManagerUpload').on('click',function(){openPicker(null,true);});
+        $(document).on('click','.media-manager-delete',function(){
+            if (!confirm('حذف دائمی این تصویر بدون استفاده؟'))return;
+            $.post('assets/php/media_api.php',{action:'delete',id:$(this).data('id'),csrf_token:csrf()},function(res){
+                if (!res.success)alert(res.message||'حذف ناموفق بود');refresh();
+            },'json').fail(function(){alert('خطای ارتباط');});
+        });
+        refresh();
+    }
+    if ($('#mediaSettingsForm').length) {
+        $.getJSON('assets/php/media_settings.php').done(function(res){
+            if(!res.success)return;
+            var settings=res.data.settings||{};
+            $('#mediaSettingsForm [data-media-setting]').each(function(){
+                $(this).prop('checked', Number(settings[$(this).data('media-setting')])===1);
+            });
+        });
+        $('#mediaSettingsForm').on('submit',function(e){
+            e.preventDefault();
+            var payload={csrf_token:csrf()};
+            $(this).find('[data-media-setting]').each(function(){
+                payload[$(this).data('media-setting')]=$(this).prop('checked')?'1':'0';
+            });
+            $('#mediaSettingsSave').prop('disabled',true);
+            $.post('assets/php/media_settings.php',payload,function(res){
+                $('#mediaSettingsMessage').text(res.message|| (res.success?'ذخیره شد':'خطا'));
+            },'json').fail(function(){$('#mediaSettingsMessage').text('خطای ارتباط با سرور');})
+                .always(function(){$('#mediaSettingsSave').prop('disabled',false);});
+        });
+    }
+})(jQuery);
