@@ -70,3 +70,5 @@ jobs:
           php assets/php/tests/sales_invoice_product_service_test.php
           php assets/php/tests/product_bundling_test.php
           php assets/php/tests/defective_return_test.php
+      - name: Security and financial HTTP smoke tests
+        run: bash assets/php/tests/currency_security_smoke.sh
