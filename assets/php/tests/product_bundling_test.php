@@ -185,7 +185,7 @@ function endpoint_run_child(string $file, array $params, string $method = 'GET')
         . "\$_SERVER['HTTP_ACCEPT'] = 'application/json';\n"
         . "\$p = json_decode((string) file_get_contents(\$argv[1] ?? ''), true);\n"
         . "if (is_array(\$p)) { " . ($method === 'GET' ? '$_GET' : '$_POST') . " = \$p; }\n"
-        . "if (\$_SERVER[\'REQUEST_METHOD\'] === \'POST\') { \$_POST[\'csrf_token\'] = \'ci-bundle-csrf\'; }\n"
+        . "if (\$_SERVER['REQUEST_METHOD'] === 'POST') { \$_POST['csrf_token'] = 'ci-bundle-csrf'; }\n"
         . "include " . var_export($root . '/assets/php/' . $file, true) . ";\n";
     return endpoint_run($code, $params);
 }
