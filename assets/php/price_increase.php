@@ -1,8 +1,13 @@
 <?php
+require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/currency.php';
 
 header('Content-Type: application/json; charset=UTF-8');
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    respond_error('روش درخواست نامعتبر است.', 405);
+}
+require_csrf_or_fail();
 
 /**
  * محاسبه قیمت جدید بر اساس نوع افزایش (درصدی / مبلغی)
