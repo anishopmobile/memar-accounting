@@ -1,0 +1,173 @@
+/* Scoped identity and defective-goods refinements. No shared modal selectors. */
+body.tabler-admin .brand-panel {
+    min-width:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    text-align:center;
+    gap:1px;
+}
+body.tabler-admin .brand-panel .brand-logo {
+    display:block; flex:0 0 auto; width:auto; max-width:95px;
+    height:35px; max-height:35px; object-fit:contain;
+}
+body.tabler-admin .brand-panel.brand-mode-logo_name .brand-logo {
+    height:25px; max-height:25px;
+}
+body.tabler-admin .brand-panel.brand-mode-logo_name .brand-title {
+    font-size:11px; line-height:1.35; white-space:nowrap;
+}
+body.tabler-admin .brand-panel.brand-mode-logo .brand-logo {
+    height:39px; max-height:39px;
+}
+body.tabler-admin .brand-panel.brand-mode-name { align-items:flex-start; }
+@media (max-width:1024px) {
+    body.tabler-admin .brand-panel { align-items:center; }
+    body.tabler-admin .brand-panel.brand-mode-logo_name .brand-title {font-size:12px;}
+}
+body.tabler-admin#settings .brand-settings-section {
+    margin-top:26px; border:1px solid #dce6f2;
+    border-radius:14px; padding:clamp(14px,2vw,23px);
+    background:#fbfdff;
+}
+body.tabler-admin#settings .brand-settings-heading {
+    display:flex; flex-wrap:wrap; align-items:center;
+    justify-content:space-between; gap:20px; margin-bottom:18px;
+}
+body.tabler-admin#settings .brand-settings-heading h2 {
+    margin:0 0 7px; font-size:17px;
+}
+body.tabler-admin#settings .brand-settings-heading p {
+    margin:0; font-size:12px; color:#68788f; line-height:1.8;
+}
+body.tabler-admin#settings .brand-settings-sample {
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    min-width:175px; min-height:65px; padding:9px 13px;
+    border-radius:9px; color:white; background:#182740;
+    font-size:14px;
+}
+body.tabler-admin#settings .brand-settings-sample.stacked { flex-direction:column; }
+body.tabler-admin#settings .brand-settings-sample img {
+    width:auto; max-width:120px; max-height:43px; object-fit:contain;
+}
+body.tabler-admin#settings .brand-settings-sample.stacked img { max-height:32px; }
+body.tabler-admin#settings .brand-settings-sample.stacked strong { font-size:12px; }
+body.tabler-admin#settings .brand-settings-options {
+    display:flex; gap:9px; flex-wrap:wrap; direction:rtl;
+}
+body.tabler-admin#settings .brand-settings-options label {
+    display:flex; gap:8px; align-items:center; cursor:pointer;
+    padding:11px 14px; border:1px solid #dce5f1;
+    border-radius:9px; background:#fff; font-size:12px;
+}
+body.tabler-admin#settings .brand-settings-options input {
+    accent-color:#206bc4; width:17px; height:17px; margin:0;
+}
+body.tabler-admin#settings .brand-settings-upload {
+    margin:17px 0 13px; display:flex; flex-direction:column; gap:7px;
+}
+body.tabler-admin#settings .brand-settings-upload label { font-size:13px; font-weight:600; }
+body.tabler-admin#settings .brand-settings-upload input {
+    display:block; max-width:100%; border:1px solid #dce5f1;
+    background:#fff; padding:10px; border-radius:9px;
+}
+body.tabler-admin#settings .brand-settings-upload small { color:#76849a; font-size:11px; }
+body.tabler-admin#settings #brandSettingsMessage { font-size:12px; }
+@media(max-width:650px) {
+    body.tabler-admin#settings .brand-settings-sample { width:100%; }
+    body.tabler-admin#settings .brand-settings-options { flex-direction:column; }
+}
+/* Dense, consistent defective-goods form + report arrangement. */
+body.tabler-admin#defective-goods .page-body {gap:14px;}
+body.tabler-admin#defective-goods #defRegCard,
+body.tabler-admin#defective-goods #defReportCard {
+    padding:clamp(14px,2vw,22px); border-radius:12px;
+    background:#fff; box-shadow:0 4px 15px rgba(28,52,80,.045);
+}
+body.tabler-admin#defective-goods :is(#defRegCard,#defReportCard) > .page-actions {
+    margin:0 0 14px; padding:0 0 10px;
+    border-bottom:1px solid #e8edf5; gap:10px;
+    justify-content:space-between!important;
+}
+body.tabler-admin#defective-goods .page-actions h2 {
+    font-size:16px; margin:0; font-weight:750; color:#293d59;
+}
+body.tabler-admin#defective-goods #defRegCard .form-grid {
+    display:grid; grid-template-columns:repeat(12,minmax(0,1fr));
+    gap:12px 14px; align-items:end;
+}
+body.tabler-admin#defective-goods #defRegCard .form-row {
+    grid-column:span 3!important; min-width:0; margin:0;
+}
+body.tabler-admin#defective-goods #defRegCard .form-row:has(#defProductDisplay) {
+    grid-column:span 6!important;
+}
+body.tabler-admin#defective-goods #defRegCard .form-row:has(#defReason) {
+    grid-column:span 9!important;
+}
+body.tabler-admin#defective-goods #defRegCard .form-row:has(#defDescription) {
+    grid-column:span 12!important;
+}
+body.tabler-admin#defective-goods #defRegCard .form-row label {
+    margin-bottom:5px; font-size:12px; font-weight:650;
+}
+body.tabler-admin#defective-goods #defRegCard .form-row :is(input,select,textarea) {
+    width:100%; max-width:100%; min-width:0;
+    border-radius:8px; font-size:13px;
+}
+body.tabler-admin#defective-goods #defRegCard #defDateDisplay {
+    width:100%!important; max-width:100%!important;
+}
+body.tabler-admin#defective-goods #defRegCard #defDescription {
+    min-height:68px; max-height:120px; resize:vertical;
+}
+body.tabler-admin#defective-goods #defRegCard .form-actions {
+    margin-top:14px; justify-content:flex-start; gap:8px; padding:0;
+}
+body.tabler-admin#defective-goods #defRegCard :is(#defSubmit,#defReset) {
+    padding:9px 13px; min-height:40px; border-radius:8px;
+}
+body.tabler-admin#defective-goods #defReportCard #defFilterForm {
+    display:flex; flex-direction:row!important; align-items:center;
+    justify-content:flex-start!important; flex-wrap:wrap!important;
+    gap:8px; width:100%; padding:10px 12px;
+    border:1px solid #e6ecf5; border-radius:9px;
+    background:#f8fafd; overflow:visible;
+}
+body.tabler-admin#defective-goods #defFilterForm :is(input[type=text],button,.button-secondary) {
+    flex:0 0 auto; max-width:100%; min-width:0;
+    min-height:39px; height:39px; border-radius:7px;
+    padding:7px 10px; font-size:12px;
+}
+body.tabler-admin#defective-goods #defFilterForm .def-date-input {
+    width:140px!important; max-width:140px;
+}
+body.tabler-admin#defective-goods #defFilterForm > span {
+    white-space:nowrap; font-size:12px; color:#617087;
+}
+body.tabler-admin#defective-goods #defReportCard .value-badge {font-size:12px;}
+body.tabler-admin#defective-goods #defReportCard .action-table th,
+body.tabler-admin#defective-goods #defReportCard .action-table td {
+    padding:10px 9px; font-size:12px;
+}
+body.tabler-admin#defective-goods #defReportCard .action-table th {
+    white-space:nowrap; color:#40536d;
+}
+body.tabler-admin#defective-goods #defReportCard .table-wrapper {
+    border:1px solid #e8edf5; border-radius:8px;
+}
+body.tabler-admin#defective-goods #defReportCard .product-pagination {
+    display:flex; justify-content:space-between; align-items:center;
+    gap:10px; flex-wrap:wrap;
+}
+@media (max-width:1000px) {
+    body.tabler-admin#defective-goods #defRegCard .form-row {grid-column:span 6!important;}
+    body.tabler-admin#defective-goods #defRegCard .form-row:has(#defProductDisplay),
+    body.tabler-admin#defective-goods #defRegCard .form-row:has(#defReason),
+    body.tabler-admin#defective-goods #defRegCard .form-row:has(#defDescription) {
+        grid-column:span 12!important;
+    }
+}
+@media (max-width:600px) {
+    body.tabler-admin#defective-goods #defRegCard .form-row {grid-column:span 12!important;}
+    body.tabler-admin#defective-goods #defRegCard #defProductDisplay + button {white-space:nowrap;}
+    body.tabler-admin#defective-goods #defFilterForm .def-date-input {width:125px!important;}
+}
