@@ -851,6 +851,7 @@ $(function () {
                     + '<textarea class="ca-record-val" data-fid="' + f.id + '" rows="3">' + escAttr(val) + '</textarea></div>';
             } else if (f.field_type === 'text' || f.field_type === 'number' || f.field_type === 'money') {
                 var inputType = f.field_type === 'number' ? 'number' : 'text';
+                if (f.field_type === 'money') req += ' (' + window.Currency.label + ')';
                 html += '<div class="form-row"><label>' + esc(f.label) + req + '</label>'
                     + '<input type="' + inputType + '" class="ca-record-val" data-fid="' + f.id + '" value="' + escAttr(val) + '"'
                     + (f.field_type === 'text' ? ' maxlength="500"' : '') + '></div>';
@@ -936,7 +937,8 @@ function initRecordDatePickers() {
                     var f = null;
                     fields.forEach(function (x) { if (String(x.id) === fid) f = x; });
                     if (!f) return;
-                    if (f.field_type === 'number' || f.field_type === 'money') vals[fid] = (v.value_number != null ? String(v.value_number) : '');
+                    if (f.field_type === 'money') vals[fid] = (v.value_number != null ? window.Currency.fromBase(String(v.value_number)) : '');
+                    else if (f.field_type === 'number') vals[fid] = (v.value_number != null ? String(v.value_number) : '');
                     else if (f.field_type === 'date') vals[fid] = (v.value_date != null ? v.value_date : '');
                     else vals[fid] = (v.value_text != null ? v.value_text : '');
                 });

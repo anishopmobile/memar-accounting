@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/boot.php';
+require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/report_excel_lib.php';
 
@@ -58,8 +60,8 @@ foreach ($rows as $r) {
         'full_name'       => $r['full_name'],
         'phone'           => $r['phone'],
         'address'         => $r['address'],
-        'total_purchases' => number_format((float) $r['total_purchases']),
-        'debt'            => number_format((float) $r['debt']),
+        'total_purchases' => formatMoneyNumber((string) $r['total_purchases']),
+        'debt'            => formatMoneyNumber((string) $r['debt']),
     ];
 }
 

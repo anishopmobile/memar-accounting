@@ -1,0 +1,78 @@
+name: Currency WIP checks
+on:
+  push:
+    branches:
+      - 'feature/currency-toman-irr-wip-*'
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  lint-and-pure-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, bcmath, mysqli
+          coverage: none
+      - name: PHP syntax checks
+        run: |
+          php -l index.php
+          find assets/php pages assets/invoice-pdf/templates -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: JS syntax checks
+        run: |
+          node --check assets/js/currency.js
+          node --check assets/js/currency-settings.js
+          node --check assets/js/main.js
+          node --check assets/js/invoice.js
+          node --check assets/js/bundle.js
+          node --check assets/js/current-affairs.js
+          node --check assets/js/sales-return.js
+      - name: Currency unit tests
+        run: |
+          php assets/php/tests/currency_test.php
+          node assets/js/currency.test.js
+
+  mysql-currency-roundtrip:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP 8.4 and MySQL drivers
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mysqlnd, bcmath, mbstring
+          coverage: none
+      - name: Run isolated MySQL currency persistence check
+        run: php assets/php/tests/currency_mysql_test.php
+      - name: Current affairs database regression (disposable database)
+        run: php assets/php/tests/current_affairs_test.php
+      - name: Invoice, inventory and Excel regression (ephemeral MySQL instance)
+        run: |
+          php assets/php/tests/multi_unit_inventory_test.php
+          php assets/php/tests/sales_return_test.php
+          php assets/php/tests/excel_import_duplicate_test.php
+      - name: Sales invoice and bundle integration
+        run: |
+          php assets/php/tests/sales_invoice_product_service_test.php
+          php assets/php/tests/product_bundling_test.php
+          php assets/php/tests/defective_return_test.php
+      - name: Security and financial HTTP smoke tests
+        run: bash assets/php/tests/currency_security_smoke.sh

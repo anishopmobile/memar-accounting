@@ -92,9 +92,9 @@ $accent = pdf_esc($accent);
                     <?php echo pdf_money_format($it['quantity'] ?? '0'); ?>
                     <?php if (!empty($it['unit_name'])): ?><?php echo ' ' . pdf_esc($it['unit_name']); ?><?php endif; ?>
                 </td>
-                <td class="c5 center"><?php echo pdf_money_format($it['unit_price'] ?? '0'); ?></td>
-                <td class="c6 center"><?php echo pdf_money_format($it['line_total'] ?? '0'); ?></td>
-                <td class="c7 center"><?php echo pdf_money_format($it['discount'] ?? '0'); ?></td>
+                <td class="c5 center"><?php echo pdf_currency_money($it['unit_price'] ?? '0'); ?></td>
+                <td class="c6 center"><?php echo pdf_currency_money($it['line_total'] ?? '0'); ?></td>
+                <td class="c7 center"><?php echo pdf_currency_money($it['discount'] ?? '0'); ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -109,11 +109,11 @@ $accent = pdf_esc($accent);
                 <table class="totals-table" cellpadding="0" cellspacing="0">
                     <tr>
                         <td>تخفیف فاکتور</td>
-                        <td class="money"><?php echo pdf_money_format($inv['discount'] ?? '0'); ?></td>
+                        <td class="money"><?php echo pdf_currency_money($inv['discount'] ?? '0'); ?></td>
                     </tr>
                     <tr class="grand">
                         <td>مبلغ قابل پرداخت</td>
-                        <td class="money strong"><?php echo pdf_money_format($inv['payable_amount'] ?? '0'); ?> ریال</td>
+                        <td class="money strong"><?php echo pdf_currency_money($inv['payable_amount'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td>
                     </tr>
                 </table>
             </td>

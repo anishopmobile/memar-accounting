@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/product_common.php';
 require_once __DIR__ . '/bundle_common.php';
 header('Content-Type: application/json; charset=UTF-8');
@@ -153,7 +154,7 @@ echo json_encode([
     'success' => true,
     'tableBody' => $tableBody,
     'totalProducts' => $summary['total'],
-    'inventoryValue' => number_format($summary['value'], 0),
+    'inventoryValue' => formatMoneyNumber(number_format((float) $summary['value'], 2, '.', '')),
     'filteredTotal' => $total,
     'page' => $page,
     'perPage' => $perPage,

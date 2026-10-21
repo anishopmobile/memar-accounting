@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/currency.php';
 
 /**
  * تولید خودکار کد بعدی کالا (بزرگ‌ترین کد موجود + ۱)
@@ -215,8 +216,8 @@ function buildProductRow(array $p, ?array $units = null): string
     };
     $isBundle = (($p['product_kind'] ?? 'standard') === 'bundle');
     $typeLabel = ($p['type'] === 'service') ? 'خدمت' : ($isBundle ? 'بسته' : 'محصول');
-    $purchaseDisplay = number_format((float) ($p['purchase_price'] ?? 0));
-    $saleDisplay = number_format((float) ($p['sale_price'] ?? 0));
+    $purchaseDisplay = formatMoneyNumber((string) ($p['purchase_price'] ?? 0));
+    $saleDisplay = formatMoneyNumber((string) ($p['sale_price'] ?? 0));
     $unitsJson = $units !== null ? json_encode($units, JSON_UNESCAPED_UNICODE) : '';
 
     /* موجودی بسته مشتق‌شده است (در صورت ارائه از product_list) */

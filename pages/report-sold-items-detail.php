@@ -274,10 +274,10 @@ function invoiceBlockHtml(inv) {
             + (it.barcode ? '<br><small style="color: #888;">بارکد: ' + esc(it.barcode) + '</small>' : '')
             + '</td>'
             + '<td>' + esc(it.unit_name) + '</td>'
-            + '<td>' + numFmt(it.unit_price) + '</td>'
+            + '<td>' + window.Currency.formatNumber(it.unit_price) + '</td>'
             + '<td>' + numFmt(it.quantity) + '</td>'
-            + '<td>' + numFmt(it.discount) + '</td>'
-            + '<td>' + numFmt(it.line_total) + ' ریال</td>'
+            + '<td>' + window.Currency.formatNumber(it.discount) + '</td>'
+            + '<td>' + window.Currency.formatNumber(it.line_total) + ' ' + window.Currency.label + '</td>'
             + '</tr>';
     });
     return '<div class="invoice-report-block" style="border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 15px; overflow: hidden; background: #fff;">'
@@ -288,7 +288,7 @@ function invoiceBlockHtml(inv) {
         + '<span><strong>تاریخ:</strong> ' + esc(inv.invoice_date_shamsi || inv.invoice_date) + '</span>'
         + '<span><strong>نوع:</strong> ' + esc(typeLbl) + '</span>'
         + '<span><strong>وضعیت:</strong> ' + esc(stLbl) + '</span>'
-        + '<span><strong>مبلغ کل:</strong> ' + numFmt(inv.payable_amount) + ' ریال</span>'
+        + '<span><strong>مبلغ کل:</strong> ' + window.Currency.formatNumber(inv.payable_amount) + ' ' + window.Currency.label + '</span>'
         + '</div>'
         + '<span class="toggle-icon" style="transition: transform 0.2s; color: #666;">▼</span>'
         + '</div>'

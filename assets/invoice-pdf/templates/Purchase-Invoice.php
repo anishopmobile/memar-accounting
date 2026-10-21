@@ -164,9 +164,9 @@ $accent = pdf_esc($accent);
                     <?php echo pdf_money_format($it['quantity'] ?? '0'); ?>
                     <?php if (!empty($it['unit_name'])): ?><?php echo ' ' . pdf_esc($it['unit_name']); ?><?php endif; ?>
                 </td>
-                <td class="c5 left"><?php echo pdf_money_format($it['unit_price'] ?? '0'); ?></td>
-                <td class="c6 left"><?php echo pdf_money_format($it['line_total'] ?? '0'); ?></td>
-                <td class="c7 left"><?php echo pdf_money_format($it['discount'] ?? '0'); ?></td>
+                <td class="c5 left"><?php echo pdf_currency_money($it['unit_price'] ?? '0'); ?></td>
+                <td class="c6 left"><?php echo pdf_currency_money($it['line_total'] ?? '0'); ?></td>
+                <td class="c7 left"><?php echo pdf_currency_money($it['discount'] ?? '0'); ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -181,21 +181,21 @@ $accent = pdf_esc($accent);
                 <table class="totals-table" cellpadding="0" cellspacing="0">
                     <tr>
                         <td>مبلغ مشمول مالیات</td>
-                        <td class="money"><?php echo pdf_money_format($taxable); ?></td>
+                        <td class="money"><?php echo pdf_currency_money($taxable); ?></td>
                     </tr>
                     <tr>
                         <td>تخفیف فاکتور</td>
-                        <td class="money"><?php echo pdf_money_format($inv['discount'] ?? '0'); ?></td>
+                        <td class="money"><?php echo pdf_currency_money($inv['discount'] ?? '0'); ?></td>
                     </tr>
                     <?php if ((float) ($inv['tax_amount'] ?? 0) > 0): ?>
                     <tr>
                         <td>مالیات (<?php echo pdf_money_format($inv['tax_rate'] ?? '0'); ?>٪)</td>
-                        <td class="money"><?php echo pdf_money_format($inv['tax_amount']); ?></td>
+                        <td class="money"><?php echo pdf_currency_money($inv['tax_amount']); ?></td>
                     </tr>
                     <?php endif; ?>
                     <tr class="grand">
                         <td>مبلغ قابل پرداخت</td>
-                        <td class="money strong"><?php echo pdf_money_format($inv['payable_amount'] ?? '0'); ?> ریال</td>
+                        <td class="money strong"><?php echo pdf_currency_money($inv['payable_amount'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td>
                     </tr>
                 </table>
             </td>

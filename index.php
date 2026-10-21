@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/assets/php/boot.php'; // session_start + توابع CSRF قبل از هر خروجی
+require_once __DIR__ . '/assets/php/currency.php';
 $pages = [
     'dashboard' => 'داشبورد',
     'factors' => 'فاکتورها',
@@ -41,6 +42,9 @@ if (!array_key_exists($page, $pages)) {
     <link rel="stylesheet" href="assets/css/kamadatepicker.css">
     <script src="assets/js/jquery.min.js"></script>
     <script src="assets/js/kamadatepicker.js"></script>
+    <script>window.APP_CURRENCY = <?php echo json_encode(getCurrentCurrency(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;</script>
+    <script src="assets/js/currency.js" defer></script>
+    <script src="assets/js/currency-settings.js" defer></script>
     <script src="assets/js/main.js" defer></script>
     <script src="assets/js/invoice.js" defer></script>
     <script src="assets/js/bundle.js" defer></script>

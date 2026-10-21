@@ -71,8 +71,8 @@ if ($result) {
                             <td><?php echo htmlspecialchars($cat, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo $r['type'] === 'service' ? 'خدمت' : 'محصول'; ?></td>
                             <td><?php echo htmlspecialchars($r['unit_name'], ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td><?php echo number_format((float) $r['purchase_price']); ?></td>
-                            <td><?php echo number_format((float) $r['sale_price']); ?></td>
+                            <td><?php echo formatMoneyNumber((string) $r['purchase_price']); ?></td>
+                            <td><?php echo formatMoneyNumber((string) $r['sale_price']); ?></td>
                             <td><?php echo rtrim(rtrim(number_format((float) $r['unit_stock'], 2, '.', ''), '0'), '.'); ?></td>
                         </tr>
                     <?php endforeach; ?>

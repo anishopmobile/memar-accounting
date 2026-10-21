@@ -1,5 +1,7 @@
 <?php
+require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/product_common.php';
+require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/bundle_common.php';
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -9,6 +11,11 @@ if ($action === 'next_code') {
     echo json_encode(['success' => true, 'code' => nextProductCode($mysqli)]);
     exit;
 }
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    respond_error('روش درخواست نامعتبر است.', 405);
+}
+require_csrf_or_fail();
 
 if ($action === 'delete') {
     $product_id = trim($_POST['product_id'] ?? '');
@@ -122,8 +129,8 @@ function product_action_normalize_units($raw): array
             'name'              => $name,
             'conversion_factor' => $factor,
             'is_base'           => (!empty($u['is_base']) || $u['is_base'] === '1' || $u['is_base'] === 1 || $u['is_base'] === true) ? 1 : 0,
-            'purchase_price'    => ($purchase === '') ? '0' : sprintf('%.2F', (float) $purchase),
-            'sale_price'        => ($sale === '') ? '0' : sprintf('%.2F', (float) $sale),
+            'purchase_price'    => parseMoneyInput($purchase === '' ? '0' : $purchase),
+            'sale_price'        => parseMoneyInput($sale === '' ? '0' : $sale),
             'barcode'           => $barcode,
             'sort_order'        => (int) ($u['sort_order'] ?? $idx),
         ];
@@ -317,7 +324,12 @@ if ($type !== 'product' && $type !== 'service') {
 
 /* ---- نرمال‌سازی و اعتبارسنجی واحدهای اندازه‌گیری ---- */
 $unitsRaw = $_POST['units'] ?? null;
-$normUnits = product_action_normalize_units($unitsRaw);
+try {
+    $normUnits = product_action_normalize_units($unitsRaw);
+} catch (InvalidArgumentException $e) {
+    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    exit;
+}
 if (!$normUnits['ok']) {
     echo json_encode(['success' => false, 'message' => $normUnits['message']]);
     exit;
@@ -331,6 +343,13 @@ if ($purchase_price === '') {
 }
 if ($sale_price === '') {
     $sale_price = 0;
+}
+try {
+    $purchase_price = parseMoneyInput((string) $purchase_price);
+    $sale_price = parseMoneyInput((string) $sale_price);
+} catch (InvalidArgumentException $e) {
+    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    exit;
 }
 if ($stock === '') {
     $stock = 0;

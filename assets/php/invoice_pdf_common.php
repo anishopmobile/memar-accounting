@@ -9,6 +9,7 @@
  */
 
 declare(strict_types=1);
+require_once __DIR__ . '/currency.php';
 
 /** Escape امن HTML برای خروجی داخل قالب‌های PDF */
 function pdf_esc($value): string
@@ -158,6 +159,12 @@ function pdf_money_format($amount): string
     return $neg . $formatted;
 }
 
+/** Currency-specific PDF money display; quantities and percentages stay unchanged. */
+function pdf_currency_money($amount): string
+{
+    return formatMoneyNumber((string) ($amount ?? '0'));
+}
+
 /** تبدیل عدد به حروف فارسی — هم‌ارز منطق موجود در assets/js/invoice.js */
 function pdf_number_to_words(int $num): string
 {
@@ -213,22 +220,32 @@ function pdf_number_to_words(int $num): string
 
     return $words;
 }
-/** مبلغ به حروف + واحد ریال (بر اساس مقدار معتبر ذخیره‌شده payable_amount) */
+/**
+ * Convert the full displayed monetary amount to Persian words, including
+ * an exact fractional part and sign (the DB stores TOMAN up to 2 decimals).
+ */
 function pdf_amount_in_words($amount): string
 {
-    $s = (string) ($amount ?? '0');
-    if (str_starts_with($s, '-')) {
-        $s = substr($s, 1);
+    $shown = convertFromBaseCurrency((string) ($amount ?? '0'));
+    $negative = str_starts_with($shown, '-');
+    if ($negative) {
+        $shown = substr($shown, 1);
     }
-    $intPart = explode('.', $s, 2)[0];
-    $intPart = trim($intPart);
-    // حذف جداکننده‌های هزارگان (","، "٬")؛ مبدل باید مقدار عددی خام دریافت کند
-    $intPart = str_replace(',', '', $intPart);
-    $intPart = str_replace('٬', '', $intPart);
-    $intPart = $intPart === '' ? '0' : $intPart;
-    return pdf_number_to_words((int) $intPart) . ' ریال';
+    $parts = explode('.', $shown, 2);
+    $whole = $parts[0] === '' ? '0' : $parts[0];
+    $words = pdf_number_to_words((int) $whole);
+    $fractionDigits = $parts[1] ?? '';
+    if ($fractionDigits !== '') {
+        $fraction = (int) $fractionDigits;
+        $denominators = [1 => 'دهم', 2 => 'صدم'];
+        $denominator = $denominators[strlen($fractionDigits)] ?? null;
+        if ($denominator === null) {
+            throw new InvalidArgumentException('دقت مبلغ برای تبدیل به حروف پشتیبانی نمی‌شود.');
+        }
+        $words .= ' و ' . pdf_number_to_words($fraction) . ' ' . $denominator;
+    }
+    return ($negative ? 'منفی ' : '') . $words . ' ' . getCurrencyLabel();
 }
-
 /** برچسب فارسی نوع پرداخت */
 function pdf_payment_type_label($type): string
 {

@@ -1,7 +1,13 @@
 <?php
+require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/currency.php';
 
 header('Content-Type: application/json; charset=UTF-8');
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    respond_error('روش درخواست نامعتبر است.', 405);
+}
+require_csrf_or_fail();
 
 /**
  * محاسبه قیمت جدید بر اساس نوع افزایش (درصدی / مبلغی)
@@ -40,6 +46,14 @@ if (!in_array($increaseType, $allowedIncreaseTypes, true)) {
 if ($increaseValueRaw === '' || !is_numeric($increaseValueRaw) || (float) $increaseValueRaw <= 0) {
     echo json_encode(['success' => false, 'message' => 'میزان افزایش باید یک عدد مثبت باشد.']);
     exit;
+}
+if ($increaseType === 'amount') {
+    try {
+        $increaseValueRaw = parseMoneyInput($increaseValueRaw);
+    } catch (InvalidArgumentException $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        exit;
+    }
 }
 $increaseValue = (float) $increaseValueRaw;
 

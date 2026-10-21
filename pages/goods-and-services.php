@@ -21,7 +21,7 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
                 <?php echo buildCategoryFilterOptionsHtml($mysqli); ?>
             </select>
             <span>ارزش موجودی:</span>
-            <span class="value-badge"><span id="inventoryValue"><?php echo number_format($summary['value'], 0); ?></span> ریال</span>
+            <span class="value-badge"><span id="inventoryValue"><?php echo formatMoneyNumber(number_format((float) $summary['value'], 2, '.', '')); ?></span> <?php echo htmlspecialchars(getCurrencyLabel(), ENT_QUOTES, 'UTF-8'); ?></span>
             <input type="search" id="productSearch" placeholder="جستجو...">
             <label class="page-size-label">تعداد در صفحه:
                 <select id="productPageSize">
@@ -75,6 +75,7 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
             <button class="modal-close" id="closeProductModal" type="button">×</button>
         </div>
         <form id="productForm" method="post" action="assets/php/product_action.php">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
             <input type="hidden" name="product_id" id="productId" value="">
             <input type="hidden" name="code" id="productCodeHidden" value="">
             <div class="form-grid">
@@ -142,6 +143,7 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
             <button class="modal-close" id="closePriceIncreaseModal" type="button">×</button>
         </div>
         <form id="priceIncreaseForm" method="post" action="assets/php/price_increase.php">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
             <div class="form-grid">
                 <div class="form-row" style="grid-column: span 2;">
                     <label>محدوده</label>

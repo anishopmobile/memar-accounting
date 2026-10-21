@@ -20,15 +20,8 @@ $(function () {
     function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
     /* نمایش مبلغ ریالی به‌صورت عدد صحیح با جداکننده هزارگان (بدون اعشار) — فقط لایه نمایش */
-    function fmtRial(n) {
-        if (n === null || n === undefined || n === '') return '0';
-        var neg = '';
-        var s = String(n).trim();
-        if (s.charAt(0) === '-') { neg = '-'; s = s.slice(1); }
-        s = s.replace(/,/g, '').split('.')[0];
-        if (!/^\d+$/.test(s)) s = '0';
-        return neg + s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    }
+    function fmtRial(n) { return window.Currency.formatNumber(n == null || n === '' ? '0' : String(n)); }
+    function showBase(n) { return window.Currency.fromBase(n == null || n === '' ? '0' : String(n)); }
     function pad2(n) { return (n < 10 ? '0' : '') + n; }
     function todayISO() { var d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
     function uuid() {
@@ -67,7 +60,7 @@ $(function () {
         var out = parts.join(' و ');
         return neg ? 'منفی ' + out : out;
     }
-    function amountToWords(n) { var s = numToWords(Math.floor(n)); return s ? s + ' ریال' : ''; }
+    function amountToWords(n) { var s = numToWords(Math.floor(n)); return s ? s + ' ' + window.Currency.label : ''; }
 
     /* ---------- تبدیل تاریخ جلالی ↔ میلادی (سازگار با jdf.php پروژه) ---------- */
     var INV_GDM = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
@@ -156,7 +149,7 @@ $(function () {
                 + '<td>' + esc(r.invoice_date_shamsi) + '</td>'
                 + '<td>' + typeLbl + '</td>'
                 + '<td>' + stLbl + '</td>'
-                + '<td>' + fmtRial(r.payable_amount) + ' ریال</td>'
+                + '<td>' + fmtRial(r.payable_amount) + ' ' + window.Currency.label + '</td>'
                 + '<td class="invoice-actions">'
                 + '<button class="button-secondary small invoice-edit" data-id="' + r.id + '" type="button">مشاهده/ویرایش</button> '
                 + (isPro ? '<button class="button-secondary small invoice-convert" data-id="' + r.id + '" type="button">تبدیل به قطعی</button> ' : '')
@@ -318,7 +311,7 @@ $(function () {
             + '</div>'
             + '<div class="calculation-section form-grid">'
             + '<div class="form-row"><label>جمع ردیف‌ها</label><div id="invSubtotal" class="money-cell">0</div></div>'
-            + '<div class="form-row"><label>تخفیف فاکتور</label><input id="invDiscount" type="number" min="0" step="1" value="' + escAttr(data ? data.discount : '0') + '"></div>'
+            + '<div class="form-row"><label>تخفیف فاکتور</label><input id="invDiscount" type="number" min="0" step="1" value="' + escAttr(data ? showBase(data.discount) : '0') + '"></div>'
             + '<div class="form-row"><label>مبلغ مشمول مالیات</label><div id="invTaxable" class="money-cell">0</div></div>'
             + '<div class="form-row"><label>مالیات</label><div id="invTax" class="money-cell">0</div></div>'
             + '<div class="form-row"><label>مبلغ قابل پرداخت</label><div id="invPayable" class="money-cell strong">0</div></div>'
@@ -371,7 +364,7 @@ $(function () {
         var opts = '';
         if (units.length) {
             units.forEach(function (u) {
-                var up = isSales ? (Number(u.sale_price) || 0) : (Number(u.purchase_price) || 0);
+                var up = showBase(isSales ? (u.sale_price || '0') : (u.purchase_price || '0'));
                 var sel = (isEditPick && String(u.id) === String(selUnitId)) ? ' selected' : '';
                 opts += '<option value="' + u.id + '" data-price="' + up + '"' + sel + '>' + esc(u.name) + '</option>';
             });
@@ -381,9 +374,9 @@ $(function () {
         var tr = '<tr data-pid="' + escAttr(pid) + '">'
             + '<td>' + esc((pcode ? pcode + ' — ' : '') + (name || '')) + '</td>'
             + '<td><select class="ii-unit">' + opts + '</select></td>'
-            + '<td><input type="number" class="ii-price" min="0" step="1" value="' + escAttr(price) + '"></td>'
+            + '<td><input type="number" class="ii-price" min="0" step="1" value="' + escAttr(showBase(price)) + '"></td>'
             + '<td><input type="number" class="ii-qty" min="0" step="1" value="' + escAttr(qty) + '"></td>'
-            + '<td><input type="number" class="ii-disc" min="0" step="1" value="' + escAttr(disc || 0) + '"></td>'
+            + '<td><input type="number" class="ii-disc" min="0" step="1" value="' + escAttr(showBase(disc || '0')) + '"></td>'
             + '<td class="ii-line">0</td>'
             + '<td><button type="button" class="button-secondary small ii-remove">حذف</button></td>'
             + '</tr>';
@@ -399,7 +392,7 @@ $(function () {
             var disc = parseFloat($('.ii-disc', this).val()) || 0;
             var line = price * qty - disc * qty; // تخفیف هر واحد × تعداد
             if (line < 0) line = 0;
-            $('.ii-line', this).text(splitNum(Math.round(line)) + ' ریال');
+            $('.ii-line', this).text(splitNum(Math.round(line)) + ' ' + window.Currency.label);
             subtotal += line;
         });
         var invDisc = parseFloat($('#invDiscount').val()) || 0;
@@ -407,10 +400,10 @@ $(function () {
         var taxable = subtotal - invDisc;
         var tax = taxEnabled ? Math.round(taxable * taxRate / 100) : 0;
         var payable = taxable + tax;
-        $('#invSubtotal').text(splitNum(Math.round(subtotal)) + ' ریال');
-        $('#invTaxable').text(splitNum(Math.round(taxable)) + ' ریال');
-        $('#invTax').text(splitNum(Math.round(tax)) + ' ریال');
-        $('#invPayable').text(splitNum(Math.round(payable)) + ' ریال');
+        $('#invSubtotal').text(splitNum(Math.round(subtotal)) + ' ' + window.Currency.label);
+        $('#invTaxable').text(splitNum(Math.round(taxable)) + ' ' + window.Currency.label);
+        $('#invTax').text(splitNum(Math.round(tax)) + ' ' + window.Currency.label);
+        $('#invPayable').text(splitNum(Math.round(payable)) + ' ' + window.Currency.label);
         $('#invWords').text(amountToWords(payable));
     }
 
@@ -481,7 +474,7 @@ $(function () {
                     + '<td>' + esc(p.barcode) + '</td>'
                     + '<td>' + esc(p.name) + '</td>'
                     + '<td>' + esc(p.unit) + '</td>'
-                    + '<td>' + splitNum(price) + '</td>'
+                    + '<td>' + window.Currency.formatNumber(price) + '</td>'
                     + '<td>' + splitNum(Number(p.stock).toString()) + '</td>'
                     + '<td><button type="button" class="button-secondary small product-pick" data-id="' + escAttr(p.id) + '" data-code="' + escAttr(p.code) + '" data-barcode="' + escAttr(p.barcode) + '" data-name="' + escAttr(p.name) + '" data-price="' + escAttr(price) + '" data-unit="' + escAttr(p.unit) + '" data-units="' + escAttr(unitsJson) + '">انتخاب</button></td>'
                     + '</tr>';
@@ -569,7 +562,7 @@ $(function () {
                     + '<td>' + esc(p.barcode) + '</td>'
                     + '<td>' + esc(p.name) + '</td>'
                     + '<td>' + esc(p.unit) + '</td>'
-                    + '<td>' + splitNum(price) + '</td>'
+                    + '<td>' + window.Currency.formatNumber(price) + '</td>'
                     + '<td>' + splitNum(Number(p.stock).toString()) + '</td>'
                     + '<td><button type="button" class="button-secondary small service-pick" data-id="' + escAttr(p.id) + '" data-code="' + escAttr(p.code) + '" data-barcode="' + escAttr(p.barcode) + '" data-name="' + escAttr(p.name) + '" data-price="' + escAttr(price) + '" data-unit="' + escAttr(p.unit) + '" data-units="' + escAttr(unitsJson) + '">انتخاب</button></td>'
                     + '</tr>';

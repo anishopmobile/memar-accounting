@@ -142,6 +142,12 @@ $createTaxSettings = "CREATE TABLE IF NOT EXISTS tax_settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
 $mysqli->query($createTaxSettings);
+$mysqli->query("CREATE TABLE IF NOT EXISTS currency_settings (
+    id INT PRIMARY KEY,
+    currency_code VARCHAR(12) NOT NULL DEFAULT 'TOMAN',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+$mysqli->query("INSERT IGNORE INTO currency_settings (id, currency_code) VALUES (1, 'TOMAN')");
 
 $createDbBackupSettings = "CREATE TABLE IF NOT EXISTS db_backup_settings (
     id INT PRIMARY KEY,

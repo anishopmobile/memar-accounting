@@ -760,14 +760,17 @@ $(function() {
 
     function escAttr(s) { return $('<div>').text(s == null ? '' : String(s)).html(); }
     function formatPriceInput(val) {
-        if (!val) return '';
-        var clean = val.toString().replace(/,/g, '').replace(/[^\d.]/g, '');
-        var integerPart = clean.split('.')[0];
-        return integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        if (val === null || val === undefined || val === '') return '';
+        var clean = String(val).replace(/,/g, '').replace(/[^\d.]/g, '');
+        var parts = clean.split('.');
+        return parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (parts.length > 1 ? '.' + parts[1] : '');
     }
     function unformatPrice(val) {
-        if (!val) return '';
-        return val.toString().replace(/,/g, '').split('.')[0];
+        if (val === null || val === undefined || val === '') return '';
+        return String(val).replace(/,/g, '');
+    }
+    function productDisplayMoney(val) {
+        return window.Currency.fromBase(val === null || val === undefined || val === '' ? '0' : String(val));
     }
     function formatPriceField($el) {
         var normalized = String($el.val() || '')
@@ -902,16 +905,16 @@ $(function() {
             $('#productCategory').val(data.category_id || '');
             $('#productType').val(data.type || 'product');
             $('#productUnit').val(data.unit || 'عدد');
-            $('#productPurchasePrice').val(formatPriceInput(data.purchase_price));
-            $('#productSalePrice').val(formatPriceInput(data.sale_price));
+            $('#productPurchasePrice').val(formatPriceInput(productDisplayMoney(data.purchase_price)));
+            $('#productSalePrice').val(formatPriceInput(productDisplayMoney(data.sale_price)));
             $('#productStock').val(data.stock);
             $('#productMinStock').val(data.min_stock);
             $('#productDescription').val(data.description);
             units = (data.units || []).map(function (u) {
                 u = u || {};
                 var nu = $.extend({}, u);
-                nu.purchase_price = unformatPrice(u.purchase_price == null ? '' : u.purchase_price);
-                nu.sale_price = unformatPrice(u.sale_price == null ? '' : u.sale_price);
+                nu.purchase_price = productDisplayMoney(u.purchase_price);
+                nu.sale_price = productDisplayMoney(u.sale_price);
                 return nu;
             });
             productsUnitsOriginalJson = JSON.stringify(units);
@@ -921,8 +924,8 @@ $(function() {
                 category_id: data.category_id || '',
                 type: data.type || 'product',
                 unit: data.unit || 'عدد',
-                purchase_price: unformatPrice((data.purchase_price === null || data.purchase_price === undefined) ? '' : data.purchase_price),
-                sale_price: unformatPrice((data.sale_price === null || data.sale_price === undefined) ? '' : data.sale_price),
+                purchase_price: productDisplayMoney(data.purchase_price),
+                sale_price: productDisplayMoney(data.sale_price),
                 stock: (data.stock === null || data.stock === undefined) ? '' : String(data.stock),
                 min_stock: (data.min_stock === null || data.min_stock === undefined) ? '' : String(data.min_stock),
                 description: data.description || ''
@@ -1054,7 +1057,7 @@ $(function() {
         if (!confirm(msg)) {
             return;
         }
-        $.post('assets/php/product_action.php', { action: 'delete', product_id: id }, function(response) {
+        $.post('assets/php/product_action.php', { action: 'delete', product_id: id, csrf_token: $('#productCsrfToken').val() || '' }, function(response) {
             if (response.success) {
                 refreshProducts();
             } else {
@@ -1293,6 +1296,7 @@ $(function() {
         $btn.prop('disabled', true).text('در حال اعمال...');
 
         $.post('assets/php/price_increase.php', {
+            csrf_token: $('#productCsrfToken').val() || '',
             scope: scope,
             price_type: priceType,
             increase_type: increaseType,
@@ -2796,7 +2800,7 @@ $(function () {
     }
 
     function phFormatMoney(n) {
-        return phFormatNumber(n) + ' ریال';
+        return window.Currency.format(n);
     }
 
     function phEsc(value) {
@@ -2828,7 +2832,7 @@ $(function () {
         var qtys = [];
         $.each(periods, function (i, p) {
             labels.push(p.from_shamsi_short || p.from_shamsi || '');
-            prices.push(parseFloat(p.price) || 0);
+            prices.push(parseFloat(window.Currency.fromBase(p.price)) || 0);
             qtys.push(parseFloat(p.qty) || 0);
         });
         var canvas = document.getElementById('productHistoryChartCanvas');
@@ -2852,7 +2856,7 @@ type: 'bar',
                     },
                     {
                         type: 'line',
-                        label: 'قیمت فروش (ریال)',
+                        label: 'قیمت فروش (' + window.Currency.label + ')',
                         data: prices,
                         borderColor: '#1769e0',
                         backgroundColor: 'rgba(23, 105, 224, 0.12)',
@@ -2894,7 +2898,7 @@ plugins: {
                                 if (context.datasetIndex === 0) {
                                     return context.dataset.label + ': ' + phFormatNumber(context.parsed.y);
                                 }
-                                return 'قیمت فروش: ' + phFormatMoney(context.parsed.y);
+                                return 'قیمت فروش: ' + phFormatNumber(context.parsed.y) + ' ' + window.Currency.label;
                             }
                         }
                     }
@@ -2922,7 +2926,7 @@ plugins: {
                         grid: { drawOnChartArea: false },
                         title: {
                             display: true,
-                            text: 'قیمت (ریال)',
+                            text: 'قیمت (' + window.Currency.label + ')',
                             font: { family: 'Tahoma, sans-serif', size: 11 },
                             color: '#64748b'
                         },
