@@ -65,6 +65,7 @@ if (!array_key_exists($page, $pages)) {
     <link rel="stylesheet" href="assets/vendor/hcg-searchable-select/hcg-select.css">
     <link rel="stylesheet" href="assets/css/hcg-select-integration.css">
     <?php if (in_array($page, ['goods-and-services','product-categories','media-library','settings','factors','purchase-invoice','sales-return','defective-goods','report-inventory','report-sold-items-detail','dashboard'], true)): ?>
+    <link rel="stylesheet" href="assets/vendor/dropzone/dropzone.min.css">
     <link rel="stylesheet" href="assets/css/media-library.css">
     <?php endif; ?>
     <script src="assets/js/jquery.min.js"></script>
@@ -77,6 +78,7 @@ if (!array_key_exists($page, $pages)) {
     <script src="assets/js/currency-settings.js" defer></script>
     <script src="assets/js/main.js" defer></script>
     <?php if (in_array($page, ['goods-and-services','product-categories','media-library','settings','factors','purchase-invoice','sales-return','defective-goods','report-inventory','report-sold-items-detail','dashboard'], true)): ?>
+    <script src="assets/vendor/dropzone/dropzone.min.js" defer></script>
     <script src="assets/js/media-ui.js" defer></script>
     <?php endif; ?>
     <script src="assets/js/brand-settings.js" defer></script>
