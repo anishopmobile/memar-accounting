@@ -13,8 +13,10 @@
  *  - product modal data source returns only product-type + stock > 0 items
  *  - service search returns only service-type items (regardless of stock)
  *  - backend rejects zero-stock products on sales invoice create/edit
- *  - services remain sellable with stock 0
- *  - services never change product inventory
+ *  - final sales decrement both product and service inventory
+ *  - service stock cannot become negative (rollback)
+ *  - proforma is stock-neutral; conversion/edit/delete preserve stock
+ *  - editing/deleting legacy service sales without movements avoids phantom stock
  *  - purchase invoices, existing search behavior, calculations stay intact
  */
 
@@ -168,7 +170,8 @@ $zero2 = t_make_product($mysqli, 'T-SIP-Z2', 'کالای تستی بدون مو�
 $dup   = t_make_product($mysqli, 'T-SIP-DUP', 'کالای تستی تکراری', 'product', 10);
 $stk   = t_make_product($mysqli, 'T-SIP-STK', 'کالای تستی دارای موجودی', 'product', 3);
 $stk5  = t_make_product($mysqli, 'T-SIP-5', 'کالای تستی پانصدی', 'product', 5);
-$svc   = t_make_product($mysqli, 'T-SIP-SVC', 'خدمت تستی فاکتور', 'service', 0);
+$svc   = t_make_product($mysqli, 'T-SIP-SVC', 'خدمت تستی فاکتور', 'service', 1000);
+$svc0  = t_make_product($mysqli, 'T-SIP-SV0', 'خدمت بدون موجودی', 'service', 0);
 $customer = t_make_customer($mysqli, 'تست مشتری فروش کالا-خدمت');
 $supplier = t_make_supplier($mysqli, 'تست تامین فروش کالا-خدمت');
 
@@ -181,8 +184,8 @@ $r = validateSalesProductAvailability($mysqli, 'sales_invoice', [t_item($zero['i
 t_check('validate: sales + zero-stock product rejected', !$r['ok'], $r['message'] ?? '');
 $r = validateSalesProductAvailability($mysqli, 'sales_invoice', [t_item($stk['id'], 1)]);
 t_check('validate: sales + in-stock product accepted', $r['ok'], $r['message'] ?? '');
-$r = validateSalesProductAvailability($mysqli, 'sales_invoice', [t_item($svc['id'], 1)]);
-t_check('validate: sales + service with stock 0 accepted', $r['ok'], $r['message'] ?? '');
+$r = validateSalesProductAvailability($mysqli, 'sales_invoice', [t_item($svc0['id'], 1)]);
+t_check('validate: service validation deferred to locked stock-change', $r['ok'], $r['message'] ?? '');
 $r = validateSalesProductAvailability($mysqli, 'purchase_invoice', [t_item($zero['id'], 1)]);
 t_check('validate: purchase + zero-stock product unaffected', $r['ok'], $r['message'] ?? '');
 
@@ -198,16 +201,22 @@ $invStk = $r['invoice_id'] ?? 0;
 $after = t_stock($mysqli, $stk['id']);
 t_check('product inventory decreased on sale (3 -> 2)', $after === '2.00' && $before === '3.00', "before=$before after=$after");
 
-$r = createInvoice($mysqli, t_invoice_input('sales_invoice', $customer, [t_item($svc['id'], 1)]));
-t_check('sales invoice with service (stock 0) created', $r['ok'], $r['message'] ?? '');
-$invSvc = $r['invoice_id'] ?? 0;
-t_check('service stock remains 0 after sale', t_stock($mysqli, $svc['id']) === '0.00');
+$r = createInvoice($mysqli, t_invoice_input('sales_invoice', $customer, [t_item($svc0['id'], 1)]));
+t_check('sales invoice rejects service without stock', !$r['ok'], $r['message'] ?? '');
+t_check('zero-stock service is not made negative', t_stock($mysqli, $svc0['id']) === '0.00');
+
+$r = createInvoice($mysqli, t_invoice_input('sales_invoice', $customer, [t_item($svc['id'], 4)]));
+t_check('sales invoice with service (qty 4) created', $r['ok'], $r['message'] ?? '');
+$invSvc = (int) ($r['invoice_id'] ?? 0);
+t_check('service stock decreases 1000 -> 996', t_stock($mysqli, $svc['id']) === '996.00');
+$serviceMovement = $mysqli->query("SELECT direction, quantity FROM stock_movements WHERE invoice_id = $invSvc AND product_id = {$svc['id']} AND type = 'sale'")->fetch_assoc();
+t_check('service stock movement logs an outflow of 4', ($serviceMovement['direction'] ?? '') === 'out' && (string) ($serviceMovement['quantity'] ?? '') === '4.00');
 
 $before5 = t_stock($mysqli, $stk5['id']);
 $r = createInvoice($mysqli, t_invoice_input('sales_invoice', $customer, [t_item($stk5['id'], 1), t_item($svc['id'], 1)]));
 t_check('sales invoice with product + service created', $r['ok'], $r['message'] ?? '');
 t_check('product stock decreased (5 -> 4)', t_stock($mysqli, $stk5['id']) === '4.00' && $before5 === '5.00');
-t_check('service stock untouched in mixed invoice', t_stock($mysqli, $svc['id']) === '0.00');
+t_check('service stock decreases in mixed invoice (996 -> 995)', t_stock($mysqli, $svc['id']) === '995.00');
 
 echo "\n== 3) createInvoice: calculations preserved ==\n";
 $r = createInvoice($mysqli, t_invoice_input('sales_invoice', $customer, [t_item($stk5['id'], 2, '25000'), t_item($svc['id'], 1, '100000')]));
@@ -217,6 +226,7 @@ $subtotal = (float) ($full['subtotal'] ?? 0);
 t_check('subtotal = 25000*2 + 100000*1', $subtotal === 150000.0, "subtotal=$subtotal");
 t_check('payable = subtotal (tax 0)', (float) ($full['payable_amount'] ?? 0) === 150000.0, 'payable=' . ($full['payable_amount'] ?? ''));
 t_check('line_total stored correctly for service row', (float) ($full['items'][1]['line_total'] ?? 0) === 100000.0);
+t_check('service stock decreases in priced mixed invoice (995 -> 994)', t_stock($mysqli, $svc['id']) === '994.00');
 
 echo "\n== 4) createInvoice: purchase unaffected ==\n";
 $r = createInvoice($mysqli, t_invoice_input('purchase_invoice', $supplier, [t_item($zero2['id'], 2)]));
@@ -233,11 +243,21 @@ $r = editInvoice($mysqli, $invStk, t_invoice_input('sales_invoice', $customer, [
 t_check('edit(sales) adding zero-stock product rejected', !$r['ok'], $r['message'] ?? '');
 t_check('stock not mutated by rejected edit (product still 2.00)', t_stock($mysqli, $stk['id']) === '2.00');
 
+$r = editInvoice($mysqli, $invSvc, t_invoice_input('sales_invoice', $customer, [t_item($svc['id'], 6)]));
+t_check('edit(sales) service qty 4 -> 6 accepted', $r['ok'], $r['message'] ?? '');
+t_check('service edit deducts only delta 2 (994 -> 992)', t_stock($mysqli, $svc['id']) === '992.00');
+$r = editInvoice($mysqli, $invSvc, t_invoice_input('sales_invoice', $customer, [t_item($svc['id'], 6)]));
+t_check('edit(sales) same service quantity accepted', $r['ok'], $r['message'] ?? '');
+t_check('service stock unchanged for identical edit', t_stock($mysqli, $svc['id']) === '992.00');
 $r = editInvoice($mysqli, $invSvc, t_invoice_input('sales_invoice', $customer, [t_item($svc['id'], 2)]));
-t_check('edit(sales) service qty 1 -> 2 accepted', $r['ok'], $r['message'] ?? '');
-t_check('service stock still 0 after edit', t_stock($mysqli, $svc['id']) === '0.00');
+t_check('edit(sales) service qty 6 -> 2 accepted', $r['ok'], $r['message'] ?? '');
+t_check('service stock credited delta 4 (992 -> 996)', t_stock($mysqli, $svc['id']) === '996.00');
+$serviceEdits = $mysqli->query("SELECT direction, quantity FROM stock_movements WHERE invoice_id = $invSvc AND product_id = {$svc['id']} AND type = 'sale_edit' ORDER BY id")->fetch_all(MYSQLI_ASSOC);
+t_check('service edit audit: out 2, in 4; no duplicate on unchanged edit',
+    count($serviceEdits) === 2 && $serviceEdits[0]['direction'] === 'out' && (string) $serviceEdits[0]['quantity'] === '2.00'
+    && $serviceEdits[1]['direction'] === 'in' && (string) $serviceEdits[1]['quantity'] === '4.00');
 
-echo "\n== 7) deleteInvoice: sales service does not reverse inventory ==\n";
+echo "\n== 7) deleteInvoice: sales restores service and product inventory ==\n";
 $beforeDel = t_stock($mysqli, $stk5['id']);
 $r = createInvoice($mysqli, t_invoice_input('sales_invoice', $customer, [t_item($stk5['id'], 1), t_item($svc['id'], 1)]));
 $invDel = (int) ($r['invoice_id'] ?? 0);
@@ -246,7 +266,7 @@ t_check('product stock decreased by the sale (before-1)', t_stock($mysqli, $stk5
 $r = deleteInvoice($mysqli, $invDel);
 t_check('deleteInvoice executed', $r['ok'], $r['message'] ?? '');
 t_check('product stock restored after delete', t_stock($mysqli, $stk5['id']) === $beforeDel);
-t_check('service stock untouched by delete', t_stock($mysqli, $svc['id']) === '0.00');
+t_check('service stock restored by delete', t_stock($mysqli, $svc['id']) === '996.00');
 
 echo "\n== 8) convertInvoice: sales proforma -> final ==\n";
 $beforePro = t_stock($mysqli, $stk5['id']);
@@ -254,10 +274,32 @@ $r = createInvoice($mysqli, t_invoice_input('sales_proforma', $customer, [t_item
 $invPro = (int) ($r['invoice_id'] ?? 0);
 t_check('sales proforma (product + service) created', $r['ok'] && $invPro > 0, $r['message'] ?? '');
 t_check('proforma creation does not change product stock', t_stock($mysqli, $stk5['id']) === $beforePro);
+t_check('proforma creation does not change service stock', t_stock($mysqli, $svc['id']) === '996.00');
 $r = convertInvoice($mysqli, $invPro);
 t_check('convertInvoice executed', $r['ok'], $r['message'] ?? '');
 t_check('product stock decreased on convert (before-1)', t_stock($mysqli, $stk5['id']) === (string) ((float) $beforePro - 1.0) . '.00');
-t_check('service stock untouched by convert', t_stock($mysqli, $svc['id']) === '0.00');
+t_check('service stock decreases upon conversion (996 -> 995)', t_stock($mysqli, $svc['id']) === '995.00');
+
+echo "\n== 8.1) rollback on insufficient service stock ==\n";
+$beforeFailedProduct = t_stock($mysqli, $stk['id']);
+$beforeFailedService = t_stock($mysqli, $svc['id']);
+$r = createInvoice($mysqli, t_invoice_input('sales_invoice', $customer, [
+    t_item($stk['id'], 1), t_item($svc['id'], 3000)
+]));
+t_check('insufficient service quantity rejects whole invoice', !$r['ok'], $r['message'] ?? '');
+t_check('rejected invoice rolls back product and service stock',
+    t_stock($mysqli, $stk['id']) === $beforeFailedProduct && t_stock($mysqli, $svc['id']) === $beforeFailedService);
+
+echo "\n== 8.2) legacy service invoices without prior movements ==\n";
+$legacy = createInvoice($mysqli, t_invoice_input('sales_proforma', $customer, [t_item($svc['id'], 5)]));
+$legacyId = (int) ($legacy['invoice_id'] ?? 0);
+t_check('legacy fixture created as stock-neutral proforma', $legacy['ok'] && $legacyId > 0, $legacy['message'] ?? '');
+$mysqli->query("UPDATE invoices SET type = 'sales_invoice' WHERE id = $legacyId");
+$legacyStock = t_stock($mysqli, $svc['id']);
+$r = editInvoice($mysqli, $legacyId, t_invoice_input('sales_invoice', $customer, [t_item($svc['id'], 5)]));
+t_check('legacy invoice edit accepted without stock backfill', $r['ok'] && t_stock($mysqli, $svc['id']) === $legacyStock, $r['message'] ?? '');
+$r = deleteInvoice($mysqli, $legacyId);
+t_check('deleting legacy invoice does not credit stock never deducted', $r['ok'] && t_stock($mysqli, $svc['id']) === $legacyStock, $r['message'] ?? '');
 
 echo "\n== 9) invoice_products.php search endpoint ==\n";
 $res = endpoint_search(['search' => '']);
@@ -280,7 +322,7 @@ t_check('product modal: search reveals in-stock product', in_array($stk['code'],
 
 $res = endpoint_search(['search' => '', 'type' => 'service']);
 $codes = endpoint_codes($res['data'] ?? []);
-t_check('service modal (type=service) includes service with stock 0', in_array($svc['code'], $codes, true));
+t_check('service modal (type=service) includes service with stock 0', in_array($svc0['code'], $codes, true));
 t_check('service modal (type=service) excludes products', !in_array($stk['code'], $codes, true) && !in_array($zero['code'], $codes, true));
 $res = endpoint_search(['search' => 'T-SIP-ZERO', 'type' => 'service']);
 $codes = endpoint_codes($res['data'] ?? []);
