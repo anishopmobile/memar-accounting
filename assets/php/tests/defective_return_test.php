@@ -108,7 +108,7 @@ function t_dg_run_file(string $target, string $runner, string $outFile, array $g
     @unlink($runner);
     file_put_contents($runner, $code);
     @unlink($outFile);
-    shell_exec('php -d extension=mysqli ' . escapeshellarg($runner) . ' > ' . escapeshellarg($outFile) . ' 2>&1');
+    shell_exec((extension_loaded('mysqli') ? 'php ' : 'php -d extension=mysqli ') . escapeshellarg($runner) . ' > ' . escapeshellarg($outFile) . ' 2>&1');
     $raw = (string) file_get_contents($outFile);
     $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw);
     $json = json_decode($raw, true);
@@ -264,8 +264,8 @@ t_write_worker($defIdC, '2', $wB);
 
 $specA = [0 => ['file', 'NUL', 'r'], 1 => ['file', $oA, 'w'], 2 => ['file', 'NUL', 'w']];
 $specB = [0 => ['file', 'NUL', 'r'], 1 => ['file', $oB, 'w'], 2 => ['file', 'NUL', 'w']];
-$pA = proc_open('php -d extension=mysqli ' . escapeshellarg($wA), $specA, $pipesA);
-$pB = proc_open('php -d extension=mysqli ' . escapeshellarg($wB), $specB, $pipesB);
+$pA = proc_open((extension_loaded('mysqli') ? 'php ' : 'php -d extension=mysqli ') . escapeshellarg($wA), $specA, $pipesA);
+$pB = proc_open((extension_loaded('mysqli') ? 'php ' : 'php -d extension=mysqli ') . escapeshellarg($wB), $specB, $pipesB);
 if (is_resource($pA)) { proc_close($pA); }
 if (is_resource($pB)) { proc_close($pB); }
 
