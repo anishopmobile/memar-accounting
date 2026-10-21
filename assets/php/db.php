@@ -120,6 +120,15 @@ $createStoreSettings = "CREATE TABLE IF NOT EXISTS store_settings (
 
 $mysqli->query($createStoreSettings);
 
+/* Independent UI identity; invoice/store logo and financial schema stay intact. */
+$mysqli->query("CREATE TABLE IF NOT EXISTS app_brand_settings (
+    id INT PRIMARY KEY,
+    display_mode ENUM('name','logo','logo_name') NOT NULL DEFAULT 'name',
+    logo_path VARCHAR(255) DEFAULT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+
 $createInvoiceSettings = "CREATE TABLE IF NOT EXISTS invoice_settings (
     id INT PRIMARY KEY,
     unofficial_invoice_desc TEXT DEFAULT NULL,
