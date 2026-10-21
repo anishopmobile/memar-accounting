@@ -4,8 +4,10 @@
 
 <div class="card" id="invoiceListView">
     <div class="page-actions">
+        <div class="toolbar-actions">
         <a href="#" class="button invoice-new" data-type="sales_invoice">+ فاکتور فروش جدید</a>
         <a href="#" class="button-secondary invoice-new" data-type="sales_proforma">+ پیش فاکتور فروش</a>
+                </div>
         <div class="filter-panel">
             <input type="search" id="invoiceSearch" placeholder="جستجو (شماره/مشتری)...">
             <select id="invoiceStatusFilter">
