@@ -54,6 +54,7 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
         if (width <= 1024 && id === 'dashboard') {
           await page.locator('#sidebarOpen').click();
           assert.equal(await page.locator('body.sidebar-open').count(), 1, 'drawer opened');
+          await page.locator('#sidebarClose').waitFor({state:'visible', timeout:3000});
           assert.equal(await page.locator('#sidebarClose').isVisible(), true, 'drawer close visible');
           await page.keyboard.press('Escape');
           assert.equal(await page.locator('body.sidebar-open').count(), 0, 'Escape closes drawer');
