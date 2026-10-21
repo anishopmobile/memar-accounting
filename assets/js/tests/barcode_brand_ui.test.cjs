@@ -11,6 +11,14 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
     await context.addCookies([cookie]);
     const page = await context.newPage();
     await page.goto(base+'/index.php?page=goods-and-services');
+    assert.equal(await page.locator('#productCount').count(),0,'product count removed from toolbar');
+    const toolbar = await page.locator('#productCategoryFilter').evaluate(el=>({
+      width:el.getBoundingClientRect().width, max:getComputedStyle(el).maxWidth
+    }));
+    assert.ok(toolbar.width<=201,'category filter must not exceed 200px: '+JSON.stringify(toolbar));
+    assert.equal(await page.locator('#goods-and-services .filter-panel > :last-child').getAttribute('class'),
+      'inventory-value-last','inventory worth should be last');
+    assert.equal(await page.locator('#inventoryValue').count(),1,'inventory worth remains');
     const row = page.locator('tr.product-row[data-barcode="CI128ABC123"]').first();
     await row.waitFor({state:'visible',timeout:12000});
     const id = await row.getAttribute('data-id');
