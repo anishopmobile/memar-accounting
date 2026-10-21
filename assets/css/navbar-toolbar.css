@@ -1,0 +1,152 @@
+/* Tabler RTL: desktop top navigation and compact right-aligned toolbars.
+   Loaded after the compatibility stylesheet; no new runtime dependencies. */
+@media (min-width: 1025px) {
+  body.tabler-admin .app-shell {
+    display: flex; flex-direction: column; align-items: stretch;
+    width: 100%; min-height: 100vh;
+  }
+  body.tabler-admin .sidebar {
+    position: sticky; top: 0; z-index: 1050;
+    width: 100%; height: auto; min-height: 0; overflow: visible;
+    display: flex; flex-flow: row wrap; justify-content: flex-start;
+    align-items: center; gap: 8px 12px;
+    padding: 9px clamp(14px,2vw,32px) 10px;
+    border: 0; border-bottom: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 3px 12px rgba(18,37,62,.15);
+  }
+  body.tabler-admin .app-sidebar-heading {
+    order: 0; flex: 0 0 auto; align-items: center;
+  }
+  body.tabler-admin .brand-panel {
+    padding: 3px 6px; border: 0; align-items: flex-start; gap: 0;
+  }
+  body.tabler-admin .brand-title { font-size: 19px; line-height: 1.4; }
+  body.tabler-admin .brand-subtitle { margin: 0; font-size: 11px; }
+  body.tabler-admin .sidebar > .user-chip {
+    order: 1; width: auto; max-width: 210px; margin: 0;
+    margin-inline-start: auto; border-color: rgba(255,255,255,.12);
+  }
+  body.tabler-admin .sidebar > .logout-form {
+    order: 2; width: auto; flex: 0 0 auto;
+  }
+  body.tabler-admin .sidebar > .logout-form .logout-button {
+    width: auto; min-height: 36px; padding: 6px 15px;
+  }
+  body.tabler-admin .sidebar > .main-nav {
+    order: 3; flex: 0 0 100%; width: 100%;
+    display: flex; flex-direction: row; align-items: center;
+    justify-content: flex-start; flex-wrap: wrap; gap: 4px 6px;
+    padding-block-start: 7px;
+    border-top: 1px solid rgba(255,255,255,.10);
+  }
+  body.tabler-admin .main-nav .nav-dropdown {
+    position: relative; width: auto; flex: 0 0 auto;
+  }
+  body.tabler-admin .main-nav .nav-link {
+    display: inline-flex; width: auto; min-height: 37px;
+    gap: 6px; padding: 4px 9px; border-radius: 8px;
+    white-space: nowrap; font-size: 12px;
+  }
+  body.tabler-admin .main-nav .nav-icon {
+    flex: 0 0 25px; width: 25px; min-width: 25px;
+    height: 25px; border-radius: 7px; font-size: 13px;
+  }
+  body.tabler-admin .main-nav .nav-text { flex: 0 0 auto; font-size: 12px; }
+  body.tabler-admin .nav-dropdown-toggle .nav-caret { margin: 0 3px 0 0; }
+  body.tabler-admin .main-nav .nav-dropdown-menu,
+  body.tabler-admin .main-nav .nav-dropdown.open .nav-dropdown-menu {
+    position: absolute; top: calc(100% + 5px);
+    right: 0; left: auto; inset-inline-start: 0; inset-inline-end: auto;
+    width: max-content; min-width: 205px; max-width: min(310px,90vw);
+    padding: 6px; margin: 0; background: #fff;
+    border: 1px solid #dce5f0; border-radius: 10px;
+    box-shadow: 0 12px 34px rgba(15,35,63,.20); z-index: 1300;
+  }
+  body.tabler-admin .main-nav .nav-dropdown-menu { display: none; }
+  body.tabler-admin .main-nav .nav-dropdown.open .nav-dropdown-menu { display: flex; }
+  body.tabler-admin .main-nav .nav-sub-link {
+    display: block; color: #34435a; font-size: 13px;
+    white-space: normal; text-align: right;
+  }
+  body.tabler-admin .main-nav .nav-sub-link:hover {
+    color: #206bc4; background: #ebf3fe;
+  }
+  body.tabler-admin .main-nav .nav-sub-link.active {
+    color: #fff; background: #206bc4;
+  }
+  body.tabler-admin .main-content {
+    flex: 1 1 auto; width: 100%; max-width: 100%;
+    min-width: 0; padding: 20px clamp(14px,2vw,32px);
+  }
+}
+/* Exactly one action row + one filter row when they do not fit side-by-side.
+   Both strips scroll horizontally on small screens instead of creating 3+ rows. */
+body.tabler-admin .page-actions {
+  display: flex; flex-direction: row !important; justify-content: flex-start !important;
+  align-items: center; flex-wrap: nowrap !important; gap: 8px;
+  width: 100%; min-width: 0; max-width: 100%;
+  margin-block-end: 14px; padding: 3px 1px 5px;
+  direction: rtl; text-align: right; overflow-x: auto;
+  overscroll-behavior-x: contain; scrollbar-width: thin;
+}
+body.tabler-admin .page-actions:has(> .toolbar-actions) {
+  flex-wrap: wrap !important; overflow: visible; row-gap: 8px;
+}
+body.tabler-admin .page-actions > .toolbar-actions {
+  display: flex; flex-direction: row; align-items: center;
+  justify-content: flex-start; flex: 0 1 auto; flex-wrap: nowrap;
+  max-width: 100%; min-width: 0; gap: 8px; overflow-x: auto;
+  scrollbar-width: thin; direction: rtl; padding: 2px 1px;
+}
+body.tabler-admin .page-actions > .filter-panel {
+  flex: 1 1 320px; min-width: 0; max-width: 100%; margin: 0;
+}
+body.tabler-admin .filter-panel {
+  direction: rtl !important; display: flex; flex-direction: row !important;
+  align-items: center; justify-content: flex-start !important;
+  flex-wrap: nowrap !important; order: initial !important;
+  gap: 8px !important; min-width: 0; max-width: 100%;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: thin; padding: 2px 1px 5px; text-align: right;
+}
+body.tabler-admin .filter-panel > :not(input[type="hidden"]),
+body.tabler-admin .toolbar-actions > * {
+  flex-shrink: 0; margin-block: 0;
+}
+body.tabler-admin .filter-panel :is(select,input[type="search"],input[type="text"],input[type="number"],input[type="date"]) {
+  width: auto; min-width: 125px; max-width: 255px;
+  height: 40px; padding: 7px 11px;
+  border-radius: 8px; flex: 0 0 auto; font-size: 13px;
+}
+body.tabler-admin .filter-panel > input[type="search"] {
+  width: clamp(170px,18vw,245px); min-width: 170px;
+}
+body.tabler-admin .filter-panel :is(.value-badge,.page-size-label) {
+  white-space: nowrap; min-width: 0;
+}
+body.tabler-admin .filter-panel .page-size-label select {
+  width: auto; min-width: 76px; padding-inline: 8px;
+}
+body.tabler-admin .page-actions :is(.button,.button-secondary,.button-danger),
+body.tabler-admin .filter-panel :is(.button,.button-secondary,.button-danger) {
+  min-height: 40px; padding: 8px 12px;
+  border-radius: 8px; font-size: 13px;
+  white-space: nowrap; justify-content: center;
+}
+body.tabler-admin .page-actions > :is(h2,h3) {
+  margin: 0; white-space: nowrap;
+}
+body.tabler-admin #defFilterForm,
+body.tabler-admin .tx-filter-panel,
+body.tabler-admin #caRecordFilters {
+  width: 100%; max-width: 100%; margin-bottom: 12px;
+}
+@media (max-width: 1024px) {
+  body.tabler-admin .page-actions:has(> .toolbar-actions) {
+    flex-direction: column !important; align-items: flex-start;
+  }
+  body.tabler-admin .page-actions > .toolbar-actions,
+  body.tabler-admin .page-actions > .filter-panel {
+    flex: 0 0 auto; width: 100%; max-width: 100%; align-self: stretch;
+  }
+}
