@@ -16,7 +16,7 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
   const browser = await chromium.launch({ headless: true });
   let checked = 0;
   try {
-    for (const [width,height] of [[1440,900],[390,844],[768,1024]]) {
+    for (const [width,height] of [[1440,900],[1280,800],[1024,768],[768,1024],[390,844],[360,800]]) {
       const context = await browser.newContext({ viewport: {width,height}, locale:'fa-IR' });
       await context.addCookies([{
         name:'PHPSESSID', value:cookie, domain:'127.0.0.1', path:'/',
@@ -45,6 +45,17 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
             id + ' full-width navbar');
           assert.ok(contentBox.width >= width * .92,
             id + ' wide content area');
+          if (id === 'dashboard') {
+            const item = page.locator('.nav-dropdown').filter({
+              has: page.locator('.nav-sub-link[href="?page=purchase-invoice"]')
+            });
+            await item.locator('.nav-dropdown-toggle').click();
+            assert.equal(await item.locator('.nav-dropdown-menu').isVisible(), true,
+              'top navbar dropdown must open without hiding submenu');
+            await item.locator('.nav-dropdown-toggle').click();
+            assert.equal(await item.locator('.nav-dropdown-menu').isVisible(), false,
+              'top navbar dropdown must close');
+          }
         }
         const bars = await page.locator('.page-actions:visible').evaluateAll(items =>
           items.map(el => ({
@@ -54,6 +65,15 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
         for (const bar of bars) {
           assert.equal(bar.direction, 'rtl', id + ' toolbar direction');
           assert.ok(bar.height < 150, id + ' toolbar maximum two rows');
+        }
+        const actionRows = await page.locator('.page-actions:visible > .toolbar-actions')
+          .evaluateAll(items => items.map(el => ({
+            height: el.getBoundingClientRect().height,
+            direction: getComputedStyle(el).direction
+          })));
+        for (const group of actionRows) {
+          assert.ok(group.height < 60, id + ' actions must stay in one horizontal row');
+          assert.equal(group.direction, 'rtl', id + ' actions group right-to-left');
         }
         const filters = await page.locator('.filter-panel:visible').evaluateAll(items =>
           items.map(el => ({
