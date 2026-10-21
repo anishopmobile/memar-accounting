@@ -1939,7 +1939,7 @@ $('#productImportSubmit').on('click', function() {
             return;
         }
         showBackupMsg(msg, 'در حال ذخیره...');
-        $.post('assets/php/db_backup.php', { action: 'save_dir', backup_dir: dir }, function(response) {
+        $.post('assets/php/db_backup.php', { action: 'save_dir', backup_dir: dir, csrf_token: window.APP_CSRF_TOKEN }, function(response) {
             if (response.success) {
                 showBackupMsg(msg, response.message || 'آدرس پوشه پشتیبان ذخیره شد.', 'var(--accent)');
                 loadDbBackup();
@@ -1959,7 +1959,7 @@ $('#productImportSubmit').on('click', function() {
             return;
         }
         showBackupMsg(msg, 'در حال تهیه نسخه پشتیبان...');
-        $.post('assets/php/db_backup.php', { action: 'backup' }, function(response) {
+        $.post('assets/php/db_backup.php', { action: 'backup', csrf_token: window.APP_CSRF_TOKEN }, function(response) {
             if (response.success) {
                 var filename = (response.data && response.data.filename) ? response.data.filename : '';
                 var location = (response.data && response.data.path) ? ' (' + response.data.path + ')' : '';
@@ -1980,7 +1980,7 @@ $('#productImportSubmit').on('click', function() {
             return;
         }
         showBackupMsg(msg, 'در حال تهیه نسخه پشتیبان از تمام فایل‌ها...');
-        $.post('assets/php/db_backup.php', { action: 'backup_files' }, function(response) {
+        $.post('assets/php/db_backup.php', { action: 'backup_files', csrf_token: window.APP_CSRF_TOKEN }, function(response) {
             if (response.success) {
                 var location = (response.data && response.data.path) ? ' (' + response.data.path + ')' : '';
                 showBackupMsg(msg, 'پشتیبان‌گیری از تمام فایل‌ها با موفقیت انجام شد' + location, 'var(--accent)');
@@ -2017,6 +2017,7 @@ $('#productImportSubmit').on('click', function() {
         msg.text('در حال بازیابی...');
         var fd = new FormData();
         fd.append('action', 'restore');
+        fd.append('csrf_token', window.APP_CSRF_TOKEN);
         fd.append('backup_file', fileInput.files[0]);
         $.ajax({
             url: 'assets/php/db_backup.php',
@@ -2038,6 +2039,40 @@ $('#productImportSubmit').on('click', function() {
         }).fail(function() {
             msg.css('color', 'var(--danger)').text('خطا در ارتباط با سرور.');
         });
+    });
+
+
+    $('#createFullBackup').on('click', function() {
+        var $msg = $('.backup-message');
+        if (!$('#backupDirInput').val().trim()) {
+            showBackupMsg($msg, 'ابتدا آدرس ذخیره پشتیبان را تنظیم کنید.', 'var(--danger)');return;
+        }
+        $('#createFullBackup').prop('disabled',true);
+        showBackupMsg($msg, 'در حال ایجاد پشتیبان کامل شامل SQL و تصاویر...');
+        $.post('assets/php/db_backup.php',{
+            action:'backup_full',csrf_token:window.APP_CSRF_TOKEN
+        },function(res){
+            showBackupMsg($msg,res.message+(res.success && res.data ? ' — '+res.data.path : ''),
+                res.success?'var(--accent)':'var(--danger)');
+        },'json').fail(function(){showBackupMsg($msg,'پشتیبان کامل با خطا مواجه شد.','var(--danger)');})
+          .always(function(){$('#createFullBackup').prop('disabled',false);});
+    });
+    $('#restoreFullBackup').on('click',function(){
+        var file=$('#restoreFullFile')[0].files[0];
+        if(!file){alert('فایل ZIP پشتیبان کامل انتخاب نشده است.');return;}
+        if(!confirm('بازیابی کامل، دیتابیس فعلی را جایگزین می‌کند. قبل از ادامه از نسخه فعلی پشتیبان بگیرید. ادامه می‌دهید؟'))return;
+        var fd=new FormData();
+        fd.append('action','restore_full');
+        fd.append('csrf_token',window.APP_CSRF_TOKEN);
+        fd.append('backup_file',file);
+        $('#restoreFullBackup').prop('disabled',true);
+        $('#restoreFullMessage').text('در حال اعتبارسنجی و بازیابی بسته کامل...');
+        $.ajax({url:'assets/php/db_backup.php',type:'POST',data:fd,contentType:false,
+            processData:false,dataType:'json'
+        }).done(function(res){$('#restoreFullMessage').text(res.message || (res.success?'بازیابی شد':'خطا'));
+            if(res.success)location.reload();
+        }).fail(function(x){$('#restoreFullMessage').text((x.responseJSON&&x.responseJSON.message)||'خطای سرور');})
+          .always(function(){$('#restoreFullBackup').prop('disabled',false);});
     });
 
     loadTaxSettings();
