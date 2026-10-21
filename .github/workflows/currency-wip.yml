@@ -3,6 +3,10 @@ on:
   push:
     branches:
       - 'feature/currency-toman-irr-wip-*'
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:

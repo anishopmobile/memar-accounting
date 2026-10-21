@@ -150,7 +150,7 @@
                     <div id="currencyPreview" class="money-cell" aria-live="polite">۱۰٬۰۰۰ تومان</div>
                 </div>
             </div>
-            <p class="setting-note">این قابلیت هنوز روی تمام فرم‌ها و درگاه پرداخت یکپارچه نشده است؛ تا تکمیل تست‌های یکپارچه، فقط روی نسخه آزمایشی تغییر بدهید.</p>
+            <p class="setting-note">این تنظیم فقط در حسابداری اعمال می‌شود. بخش پرداخت و درگاه بانکی همیشه با واحد ریال کار می‌کنند.</p>
             <div class="form-actions">
                 <button type="submit" class="button" id="currencySave">ذخیره واحد پولی</button>
                 <span id="currencySaveMessage" class="settings-save-message" role="status" aria-live="polite"></span>

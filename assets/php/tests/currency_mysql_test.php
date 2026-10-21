@@ -38,7 +38,7 @@ try {
     $check($row['purchase_price'] === '2500.50', 'stored TOMAN purchase price unchanged');
     $check(formatMoney($row['sale_price'], 'IRR') === '100,000 ریال', 'IRR display is exact');
     $check(pdf_amount_in_words('0.01') === 'صفر و یک دهم ریال', 'PDF amount words preserve IRR tenths');
-    $check(pdf_amount_in_words('-100') === 'منفی هزار ریال', 'PDF amount words preserve minus sign in IRR');
+    $check(pdf_amount_in_words('-100') === 'منفی یک هزار ریال', 'PDF amount words preserve minus sign in IRR');
     $check(parseMoneyInput('100000', 'IRR') === '10000', 'IRR input roundtrips without multiplying existing rows');
 
     $check($mysqli->query("UPDATE currency_settings SET currency_code = 'TOMAN' WHERE id = 1") !== false, 'switch preference back to TOMAN');

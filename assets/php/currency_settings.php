@@ -1,5 +1,5 @@
 <?php
-/** Owner-protected currency configuration endpoint. WIP: not wired into UI. */
+/** Owner-protected currency configuration endpoint for accounting only; Payment stays IRR. */
 declare(strict_types=1);
 require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/currency.php';

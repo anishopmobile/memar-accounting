@@ -1,29 +1,44 @@
-# Currency integration: TOMAN/IRR for accounting only (2026-10-21)
+# Accounting Currency: TOMAN / IRR — Release Verification (2026-10-21)
 
-## Scope explicitly confirmed by project owner
-The existing **Payment** module and its ZarinPal integration MUST remain entirely in **IRR / ریال** regardless of the accounting display currency chosen in Settings.
+## Boundaries (project owner requirement)
+- Accounting product, invoice, inventory, return and report amounts remain **TOMAN in storage**.
+- The accounting display/input preference is **TOMAN or IRR**. Exactly **10 IRR = 1 TOMAN**.
+- Preference changes MUST NOT rewrite historical money, stock or quantities.
+- **Payment forms, payment transactions, public pay page, stored IRR amounts and the existing banking integration are out of scope and MUST remain unchanged.** The owner verified Payment displays IRR while accounting displays TOMAN. No currency conversion from accounting settings may be applied to the payment domain.
 
-**Do not** convert payment-form input, payment-form display, public `pay.php`, transaction displays, payment reports, historical payment rows, SMS amounts or ZarinPal request/verification amounts according to the accounting TOMAN/IRR setting. Payment is out of scope for this feature. The previous attempt to make payment forms track the accounting currency was reverted in the subsequent checkpoint; no change to the payment domain should be implied by current currency settings.
+## Owner-confirmed manual acceptance
+The owner confirmed 10 scenarios passed:
+1. Currency tab after Tax is visible.
+2. IRR choice persists after page reload.
+3. Product priced 10,000 TOMAN displays as 100,000 IRR.
+4. Invoice PDF money and Persian amount-in-words agree with the selected unit.
+5. Enter product at 100,000 IRR; switching back shows 10,000 TOMAN.
+6. A purchase invoice entered in IRR retains value on switch to TOMAN.
+7. Editing an old invoice without changing prices does not change saved money.
+8. A sales return keeps correct money and inventory counts in both units.
+9. Product/inventory Excel exports convert prices while stock counts remain unchanged.
+10. Current-affairs money field and report totals round-trip between units.
 
-## Accounting rules
-- Accounting/inventory/invoice monetary records use TOMAN as their database base unit.
-- Accounting display/form input may use either TOMAN or IRR (10 IRR = 1 TOMAN).
-- Existing monetary rows must not be rewritten when the preference changes.
-- Quantities, percentages, stock, unit-conversion factors and transaction identifiers are not money; do not multiply them.
-- A separate payment module has its own legacy IRR storage. Do NOT apply accounting conversions to payment data.
+Separately confirmed: the Payment section uses IRR when accounting uses TOMAN.
 
-## Manual checks reported successful by owner
-1. New Currency settings tab visible after Tax.
-2. IRR preference persists after reload.
-3. A product of 10,000 TOMAN displays as 100,000 IRR.
-4. An invoice PDF displays selected currency and correct amount in words.
-5. Product entry of 100,000 IRR roundtrips as 10,000 TOMAN.
+## Automated CI release gates
+Runs on feature pushes and on main, with MySQL 8 isolated service:
+- PHP syntax checks and JavaScript syntax checks.
+- Pure PHP/JavaScript currency math: grouping, digit normalization, negatives, precision, overflow/rejection.
+- Exact accounting preference DB read/write and monetary-row stability.
+- PDF Persian money words: integers, fractional amounts and negative signs.
+- Current affairs: full regression with IRR/TOMAN filters, aggregates and Excel export.
+- Multi-unit inventory, sales returns, product Excel import, sales invoice CRUD/proforma, bundles/snapshots and defective returns.
+- Auth/CSRF HTTP smoke tests for critical accounting writes and exports, including owner-only currency settings and exact IRR input converted to stored TOMAN.
+- No Payment code is changed by this feature; this invariant should be re-checked against main before merging.
 
-## Automated checks
-The currency CI workflow syntax-checks project PHP and core JS, runs PHP/JS standalone currency tests, and tests currency preference and accounting monetary-row integrity against an isolated MySQL container. These are not substitutes for end-to-end accounting regression tests and mPDF rendering.
+## Security hardening undertaken during final review
+- Enforced login plus CSRF for product writes and bulk price mutations.
+- Enforced login plus CSRF for tax and invoice settings writes.
+- Enforced login on product listing and accounting Excel exports.
+- Kept currency setting owner-only, validating unit allowlist and CSRF.
 
-## Remaining work
-- Verify untouched payment module still displays IRR in every mode and runs its own existing tests; do not change gateway contract.
-- Test full accounting CRUD, bundle inventory, returns, decimal precision, Excel import/export, current-affairs custom money fields, and all rendered mPDF templates on test data.
-- Audit settings permissions and the entire accounting monetary surface before merging to main.
-- Do not merge/deploy this feature until regressions are resolved.
+## Release operations
+- Take and independently verify a recoverable database and code backup before production rollout.
+- Ensure CI for the final merge commit and deploy is green, then smoke-test the 10 owner scenarios and the Payment-IRR boundary on the destination environment.
+- This automated suite does not replace all browser, gateway-sandbox or mPDF visual checks. No live bank transaction test was made or needed for these accounting-only changes.
