@@ -137,6 +137,9 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
     assert.equal(invalid.status(),422,'brand-mode allowlist');
 
     async function saveMode(mode, upload) {
+      // The prior save performs a full page reload. Wait for deferred
+      // brand-settings.js to bind again before submitting another option.
+      await page.waitForLoadState('networkidle');
       await page.locator('#brandSettingsForm input[name="display_mode"][value="'+mode+'"]').check();
       if (upload) {
         await page.locator('#brandLogoImage').setInputFiles({
@@ -150,12 +153,13 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
       // Success intentionally reloads the page and can release the response body
       // before Playwright can read it; verify persisted state via GET instead.
       assert.equal(resp.status(),200,'brand save HTTP result');
-      // The UI reloads automatically on success. Wait for the new server-side
-      // brand mode; forcing a second reload races with the first navigation.
+      // Read persistence independently from the browser navigation: this
+      // distinguishes a failed save from a delayed automatic page reload.
+      const state = await (await page.request.get(base+'/assets/php/app_brand_settings.php')).json();
+      assert.equal(state.data.display_mode,mode,'saved app branding state');
       await page.waitForFunction(mode => !!document.querySelector('.brand-panel.brand-mode-'+mode),
         mode, {timeout:15000});
-      const state = await (await page.request.get(base+'/assets/php/app_brand_settings.php')).json();
-      assert.equal(state.data.display_mode,mode);
+      await page.waitForLoadState('networkidle');
       return state.data;
     }
     const stacked = await saveMode('logo_name',true);
