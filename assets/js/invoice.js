@@ -332,7 +332,7 @@ $(function () {
         if (data && data.payment_status) $('#invPaymentStatus').val(data.payment_status);
         if (data && data.items) {
             data.items.forEach(function (it) {
-                addItemRow(it.product_id, it.product_name, it.unit_price, it.quantity, it.discount, it.product_code, it.units || [], it.unit_id);
+                addItemRow(it.product_id, it.product_name, it.unit_price, it.quantity, it.discount, it.product_code, it.units || [], it.unit_id, it.media_id);
             });
         }
         recalcs();
@@ -358,7 +358,13 @@ $(function () {
         });
     }
 
-    function addItemRow(pid, name, price, qty, disc, pcode, units, selUnitId) {
+    function invoiceImageHtml(id) {
+        if (id === undefined || id === null || id === '') return '';
+        var n = Number(id) || 0;
+        var src = n ? 'assets/php/media_file.php?id=' + n + '&size=thumb' : 'assets/img/product-placeholder.svg';
+        return '<img loading="lazy" data-id="' + n + '" class="media-thumb" width="40" height="40" src="' + src + '" alt="" style="vertical-align:middle;margin-left:6px">';
+    }
+    function addItemRow(pid, name, price, qty, disc, pcode, units, selUnitId, mediaId) {
         units = units || [];
         var isEditPick = (selUnitId !== undefined && selUnitId !== null && selUnitId !== '');
         var opts = '';
@@ -372,7 +378,7 @@ $(function () {
             opts = '<option value="">' + esc('عدد') + '</option>';
         }
         var tr = '<tr data-pid="' + escAttr(pid) + '">'
-            + '<td>' + esc((pcode ? pcode + ' — ' : '') + (name || '')) + '</td>'
+            + '<td>' + invoiceImageHtml(mediaId) + esc((pcode ? pcode + ' — ' : '') + (name || '')) + '</td>'
             + '<td><select class="ii-unit">' + opts + '</select></td>'
             + '<td><input type="number" class="ii-price" min="0" step="1" value="' + escAttr(showBase(price)) + '"></td>'
             + '<td><input type="number" class="ii-qty" min="0" step="1" value="' + escAttr(qty) + '"></td>'
@@ -453,7 +459,7 @@ $(function () {
         $('#invoiceProductSearch').val('').focus();
     }
     function loadProducts(q) {
-        var url = 'assets/php/invoice_products.php?search=' + encodeURIComponent(q || '');
+        var url = 'assets/php/invoice_products.php?media_section=' + (isSales ? 'sales' : 'purchase') + '&search=' + encodeURIComponent(q || '');
         if (isSales) {
             url += '&in_stock=1'; // فاکتور فروش: فقط کالاهای «محصول» با موجودی فعلی > 0 (+ بسته‌های دارای موجودی مشتق‌شده)
         } else {
@@ -472,7 +478,7 @@ $(function () {
                 html += '<tr>'
                     + '<td>' + esc(p.code) + '</td>'
                     + '<td>' + esc(p.barcode) + '</td>'
-                    + '<td>' + esc(p.name) + '</td>'
+                    + '<td>' + invoiceImageHtml(p.media_id) + esc(p.name) + '</td>'
                     + '<td>' + esc(p.unit) + '</td>'
                     + '<td>' + window.Currency.formatNumber(price) + '</td>'
                     + '<td>' + splitNum(Number(p.stock).toString()) + '</td>'
@@ -527,7 +533,7 @@ $(function () {
 
         // If not found, add as new row
         if (!found) {
-            addItemRow(p.id, p.name, p.price, 1, 0, p.code, units, firstId);
+            addItemRow(p.id, p.name, p.price, 1, 0, p.code, units, firstId, p.mediaId === '' ? undefined : p.mediaId);
         }
         // Modal stays open so user can add multiple products
 		const searchInput = document.getElementById('invoiceProductSearch');
@@ -547,7 +553,7 @@ $(function () {
         $('#invoiceServiceSearch').val('').focus();
     }
     function loadServices(q) {
-        $.getJSON('assets/php/invoice_products.php?type=service&search=' + encodeURIComponent(q || '')).done(function (res) {
+        $.getJSON('assets/php/invoice_products.php?media_section=sales&type=service&search=' + encodeURIComponent(q || '')).done(function (res) {
             var rows = res.data || [];
             var html = '';
             if (!rows.length) html = '<tr><td colspan="7" class="empty-state">خدمتی یافت نشد.</td></tr>';
