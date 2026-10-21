@@ -41,6 +41,13 @@ node assets/js/tests/admin_ui.test.cjs || {
   tail -80 "$log"
   exit 1
 }
+# Authentication layout tests use the same disposable MySQL schema.
+# Explicitly exercise both feature-flag states without changing production settings.
+php -r 'require "assets/php/db.php"; $mysqli->query("UPDATE auth_settings SET login_captcha_enabled=0 WHERE id=1");'
+UI_TEST_CAPTCHA=0 node assets/js/tests/login_ui.test.cjs
+php -r 'require "assets/php/db.php"; $mysqli->query("UPDATE auth_settings SET login_captcha_enabled=1 WHERE id=1");'
+UI_TEST_CAPTCHA=1 node assets/js/tests/login_ui.test.cjs
+php -r 'require "assets/php/db.php"; $mysqli->query("UPDATE auth_settings SET login_captcha_enabled=0 WHERE id=1");'
 if grep -qiE 'PHP Fatal error|PHP Warning|PHP Parse error' "$log"; then
   echo "--- Captured PHP errors ---"
   grep -iE 'PHP Fatal error|PHP Warning|PHP Parse error' "$log" | head -30
