@@ -19,6 +19,7 @@
  */
 
 require_once __DIR__ . '/invoice_common.php';
+require_once __DIR__ . '/media_common.php';
 
 define('PRODUCT_KIND_STANDARD', 'standard');
 define('PRODUCT_KIND_BUNDLE', 'bundle');
@@ -800,6 +801,9 @@ function bundleSaveProduct(mysqli $mysqli, array $in): array
             $stmt->close();
         }
 
+        if (isset($in['media_ids']) && is_string($in['media_ids'])) {
+            media_sync_product($mysqli, $productId, $in['media_ids']);
+        }
         $mysqli->commit();
     } catch (Exception $e) {
         $mysqli->rollback();
