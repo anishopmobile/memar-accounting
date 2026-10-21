@@ -120,6 +120,9 @@ function media_decode_ids($raw): array
     if (!is_string($raw)) {
         throw new InvalidArgumentException('فهرست تصاویر نامعتبر است.');
     }
+    if (!str_starts_with(ltrim($raw), '[')) {
+        throw new InvalidArgumentException('فهرست تصاویر باید آرایه باشد.');
+    }
     $ids = json_decode($raw, true);
     if (!is_array($ids) || count($ids) > 10 || array_values($ids) !== $ids) {
         throw new InvalidArgumentException('حداکثر ۱۰ تصویر برای هر کالا مجاز است.');
