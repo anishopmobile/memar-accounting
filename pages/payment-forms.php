@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../assets/php/db.php';
 require_once __DIR__ . '/../assets/php/payment/payment_loader.php';
+require_once __DIR__ . '/../assets/php/payment/payment_currency.php';
 
 $repo = (new PaymentService($mysqli))->forms();
 $forms = $repo->all();
@@ -73,12 +74,12 @@ $fieldTypes = PaymentFieldTypes::ALL;
             </select>
         </div>
 
-        <div class="form-row amount-fixed"><label>مبلغ ثابت (ریال)</label><input type="text" id="pfFixedAmount" inputmode="numeric"></div>
-        <div class="form-row amount-custom"><label>کمترین مبلغ (ریال)</label><input type="text" id="pfMinAmount" inputmode="numeric"></div>
-        <div class="form-row amount-custom"><label>بیشترین مبلغ (ریال)</label><input type="text" id="pfMaxAmount" inputmode="numeric"></div>
+        <div class="form-row amount-fixed"><label>مبلغ ثابت (<?php echo htmlspecialchars(getCurrencyLabel(), ENT_QUOTES, 'UTF-8'); ?>)</label><input type="text" id="pfFixedAmount" inputmode="numeric"></div>
+        <div class="form-row amount-custom"><label>کمترین مبلغ (<?php echo htmlspecialchars(getCurrencyLabel(), ENT_QUOTES, 'UTF-8'); ?>)</label><input type="text" id="pfMinAmount" inputmode="numeric"></div>
+        <div class="form-row amount-custom"><label>بیشترین مبلغ (<?php echo htmlspecialchars(getCurrencyLabel(), ENT_QUOTES, 'UTF-8'); ?>)</label><input type="text" id="pfMaxAmount" inputmode="numeric"></div>
 
         <div class="form-row amount-selectable" style="grid-column: span 2;">
-            <label>گزینه‌های مبلغ (ریال) — هر گزینه در یک خط</label>
+            <label>گزینه‌های مبلغ (<?php echo htmlspecialchars(getCurrencyLabel(), ENT_QUOTES, 'UTF-8'); ?>) — هر گزینه در یک خط</label>
             <textarea id="pfAmountOptions" rows="3" placeholder="100000&#10;200000&#10;500000"></textarea>
         </div>
 

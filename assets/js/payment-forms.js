@@ -107,6 +107,7 @@ $(function () {
             expires_at: $('#pfExpiresAt').val(),
             is_active: $('#pfIsActive').is(':checked') ? '1' : '',
             csrf_token: csrf,
+            currency_code: window.APP_CURRENCY || 'TOMAN',
             field_key: [], field_label: [], field_type: [], field_required: [],
             field_options: [],
             amount_options: $('#pfAmountOptions').val().split(/\r?\n/).filter(function (s) { return s.trim() !== ''; })

@@ -19,6 +19,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../boot.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/payment_loader.php';
+require_once __DIR__ . '/payment_currency.php';
 
 $svc = new PaymentService($mysqli);
 $action = (string) ($_POST['action'] ?? $_GET['action'] ?? '');
@@ -45,9 +46,9 @@ function paymentFormToArray(PaymentForm $f): array
         'slug' => $f->slug,
         'description' => $f->description,
         'amount_mode' => $f->amountMode,
-        'fixed_amount' => $f->fixedAmount,
-        'min_amount' => $f->minAmount,
-        'max_amount' => $f->maxAmount,
+        'fixed_amount' => PaymentDisplayCurrency::fromRial($f->fixedAmount),
+        'min_amount' => PaymentDisplayCurrency::fromRial($f->minAmount),
+        'max_amount' => PaymentDisplayCurrency::fromRial($f->maxAmount),
         'purpose' => $f->purpose,
         'is_active' => $f->isActive,
         'expires_at' => $f->expiresAt,
@@ -58,7 +59,7 @@ function paymentFormToArray(PaymentForm $f): array
         'notify_admin' => $f->notifyAdmin,
         'theme' => $f->theme,
         'fields' => $fields,
-        'amount_options' => $f->amountOptions,
+        'amount_options' => array_map(static fn(int $v): string => PaymentDisplayCurrency::fromRial($v), $f->amountOptions),
         'public_url' => 'pay.php?slug=' . rawurlencode($f->slug),
     ];
 }
@@ -87,7 +88,25 @@ if ($action === 'create' || $action === 'update') {
         respond_error('فرم پرداخت یافت نشد.');
     }
 
-    $form = PaymentFormParser::buildFromPost($_POST, $existing);
+    if ((string) ($_POST['currency_code'] ?? '') !== PaymentDisplayCurrency::code()) {
+        respond_error('واحد پولی سایت تغییر کرده است. صفحه فرم پرداخت را تازه‌سازی کنید.', 409);
+    }
+    // Admin editor uses the site's unit; payment domain and gateway remain IRR.
+    $input = $_POST;
+    try {
+        foreach (['fixed_amount', 'min_amount', 'max_amount'] as $key) {
+            $input[$key] = (string) PaymentDisplayCurrency::toRial((string) ($input[$key] ?? '0'));
+        }
+        if (isset($input['amount_options']) && is_array($input['amount_options'])) {
+            foreach ($input['amount_options'] as &$amount) {
+                $amount = (string) PaymentDisplayCurrency::toRial((string) $amount);
+            }
+            unset($amount);
+        }
+    } catch (InvalidArgumentException $e) {
+        respond_error($e->getMessage(), 422);
+    }
+    $form = PaymentFormParser::buildFromPost($input, $existing);
 
     if ($form->title === '') {
         respond_error('عنوان فرم اجباری است.');
@@ -122,7 +141,7 @@ if ($action === 'create' || $action === 'update') {
         respond_error('بیشترین مبلغ نمی‌تواند کمتر از کمترین مبلغ باشد.');
     }
     $fields = PaymentFormParser::buildFieldsFromPost($_POST);
-    $amounts = PaymentFormParser::buildAmountsFromPost($_POST);
+    $amounts = PaymentFormParser::buildAmountsFromPost($input);
     if ($form->isSelectable() && $amounts === []) {
         respond_error('برای فرم انتخابی حداقل یک گزینه مبلغ وارد کنید.');
     }

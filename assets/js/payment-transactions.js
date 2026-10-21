@@ -32,7 +32,7 @@ $(function () {
                 $('#statFailed').text(s.total_failed || 0);
                 $('#statPending').text(s.total_pending || 0);
                 $('#statToday').text(s.paid_today || 0);
-                $('#statRevenue').text(numberToShort(s.total_revenue || 0) + ' ریال');
+                $('#statRevenue').text(s.total_revenue_display || window.Currency.format('0'));
             });
     }
 

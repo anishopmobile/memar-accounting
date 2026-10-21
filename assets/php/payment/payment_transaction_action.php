@@ -11,6 +11,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../boot.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/payment_loader.php';
+require_once __DIR__ . '/payment_currency.php';
 
 $svc = new PaymentService($mysqli);
 $action = (string) ($_GET['action'] ?? '');
@@ -37,7 +38,7 @@ function paymentTransactionToArray(PaymentTransaction $t, array $formNames): arr
         'form_id' => $t->formId,
         'form_name' => $formNames[$t->formId] ?? '—',
         'amount' => $t->amount,
-        'amount_display' => number_format($t->amount) . ' ریال',
+        'amount_display' => PaymentDisplayCurrency::formatRial($t->amount),
         'status' => $t->status,
         'status_label' => PaymentStateMachine::label($t->status),
         'customer_name' => $t->customerName,
@@ -70,7 +71,7 @@ if ($action === 'dashboard') {
     }
 
     respond_json(true, '', [
-        'stats' => $stats,
+        'stats' => $stats + ['total_revenue_display' => PaymentDisplayCurrency::formatRial((int) ($stats['total_revenue'] ?? 0))],
         'forms' => $formOptions,
         'recent' => $recentItems,
     ]);
@@ -86,8 +87,8 @@ if ($action === 'list') {
         'form_id' => (int) ($_GET['form_id'] ?? 0),
         'date_from' => $_GET['date_from'] ?? '',
         'date_to' => $_GET['date_to'] ?? '',
-        'amount_min' => (int) ($_GET['amount_min'] ?? 0),
-        'amount_max' => (int) ($_GET['amount_max'] ?? 0),
+        'amount_min' => 0,
+        'amount_max' => 0,
         'mobile' => $_GET['mobile'] ?? '',
         'reference' => $_GET['reference'] ?? '',
         'sort' => $_GET['sort'] ?? 'date',
@@ -97,6 +98,13 @@ if ($action === 'list') {
         $opts[$k] = trim((string) $opts[$k]);
     }
 
+    try {
+        foreach (['amount_min', 'amount_max'] as $moneyFilter) {
+            $opts[$moneyFilter] = PaymentDisplayCurrency::toRial((string) ($_GET[$moneyFilter] ?? '0'));
+        }
+    } catch (InvalidArgumentException $e) {
+        respond_error($e->getMessage(), 422);
+    }
     $result = $svc->transactions()->search($opts);
     $formNames = [];
     $res = $mysqli->query('SELECT id, title FROM payment_forms');
@@ -153,7 +161,7 @@ function paymentTransactionDetail(PaymentTransaction $t, array $formNames): arra
         'form_id' => $t->formId,
         'form_name' => $formNames[$t->formId] ?? '—',
         'amount' => $t->amount,
-        'amount_display' => number_format($t->amount) . ' ریال',
+        'amount_display' => PaymentDisplayCurrency::formatRial($t->amount),
         'currency' => $t->currency,
         'status' => $t->status,
         'status_label' => PaymentStateMachine::label($t->status),
