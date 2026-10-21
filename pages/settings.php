@@ -61,6 +61,35 @@
                 <span class="settings-save-message" aria-live="polite"></span>
             </div>
         </form>
+        <section class="brand-settings-section" aria-labelledby="brandSettingsTitle">
+            <div class="brand-settings-heading">
+                <div>
+                    <h2 id="brandSettingsTitle">نمایش عنوان نرم‌افزار در منوی بالا</h2>
+                    <p>عنوان نرم‌افزار ثابت است: <strong>حسابداری معمار</strong>. می‌توانید نحوه نمایش عنوان و لوگوی اختصاصی پنل را انتخاب کنید.</p>
+                </div>
+                <div class="brand-settings-sample" id="brandSettingsSample" aria-label="پیش‌نمایش نوار عنوان">
+                    <img id="brandSettingsPreview" alt="پیش‌نمایش لوگوی پنل" hidden>
+                    <strong id="brandSettingsPreviewName">حسابداری معمار</strong>
+                </div>
+            </div>
+            <form id="brandSettingsForm" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                <div class="brand-settings-options" role="group" aria-label="حالت نمایش عنوان">
+                    <label><input type="radio" name="display_mode" value="name" checked> فقط نام نرم‌افزار</label>
+                    <label><input type="radio" name="display_mode" value="logo"> فقط لوگو</label>
+                    <label><input type="radio" name="display_mode" value="logo_name"> لوگو بالا و نام نرم‌افزار زیر آن</label>
+                </div>
+                <div class="brand-settings-upload">
+                    <label for="brandLogoImage">لوگوی پنل مدیریت (PNG، JPG، WebP؛ حداکثر ۲ مگابایت)</label>
+                    <input type="file" id="brandLogoImage" name="brand_logo" accept="image/png,image/jpeg,image/webp">
+                    <small>این لوگو مستقل از لوگوی فروشگاه در فاکتورهاست و آن را تغییر نمی‌دهد.</small>
+                </div>
+                <div class="form-actions">
+                    <button class="button" type="submit" id="brandSettingsSave">ذخیره نمایش نوار بالا</button>
+                    <span id="brandSettingsMessage" role="status" aria-live="polite"></span>
+                </div>
+            </form>
+        </section>
     </div>
     <div id="invoice-settings" class="settings-section" style="display:none;">
         <form id="invoiceSettingsForm">
