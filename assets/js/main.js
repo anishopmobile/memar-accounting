@@ -2782,7 +2782,7 @@ $(function () {
     function barcodePrintUrl(mode) {
         var id = String($('#barcodePrintProductId').text() || '').trim();
         var qty = Number($('#barcodePrintQty').val());
-        if (!/^\\d+$/.test(id) || !Number.isSafeInteger(qty) || qty < 1 || qty > BARCODE_PRINT_MAX_QTY) {
+        if (!/^[0-9]+$/.test(id) || !Number.isSafeInteger(qty) || qty < 1 || qty > BARCODE_PRINT_MAX_QTY) {
             return '';
         }
         return 'assets/php/product_barcode_print.php?id=' + encodeURIComponent(id)
