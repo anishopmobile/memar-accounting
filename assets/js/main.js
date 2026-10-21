@@ -1057,7 +1057,7 @@ $(function() {
         if (!confirm(msg)) {
             return;
         }
-        $.post('assets/php/product_action.php', { action: 'delete', product_id: id }, function(response) {
+        $.post('assets/php/product_action.php', { action: 'delete', product_id: id, csrf_token: $('#productCsrfToken').val() || '' }, function(response) {
             if (response.success) {
                 refreshProducts();
             } else {
@@ -1296,6 +1296,7 @@ $(function() {
         $btn.prop('disabled', true).text('در حال اعمال...');
 
         $.post('assets/php/price_increase.php', {
+            csrf_token: $('#productCsrfToken').val() || '',
             scope: scope,
             price_type: priceType,
             increase_type: increaseType,
