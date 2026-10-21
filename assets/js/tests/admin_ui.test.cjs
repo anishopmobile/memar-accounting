@@ -38,6 +38,32 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
         } else {
           assert.ok(await page.locator('.about-page h1').count() > 0, 'about page content');
         }
+        if (width > 1024) {
+          const navBox = await page.locator('#appSidebar').boundingBox();
+          const contentBox = await page.locator('.main-content').boundingBox();
+          assert.ok(navBox.width >= width * .95 && navBox.height < 240,
+            id + ' full-width navbar');
+          assert.ok(contentBox.width >= width * .92,
+            id + ' wide content area');
+        }
+        const bars = await page.locator('.page-actions:visible').evaluateAll(items =>
+          items.map(el => ({
+            height: el.getBoundingClientRect().height,
+            direction: getComputedStyle(el).direction
+          })));
+        for (const bar of bars) {
+          assert.equal(bar.direction, 'rtl', id + ' toolbar direction');
+          assert.ok(bar.height < 150, id + ' toolbar maximum two rows');
+        }
+        const filters = await page.locator('.filter-panel:visible').evaluateAll(items =>
+          items.map(el => ({
+            direction: getComputedStyle(el).direction,
+            wrap: getComputedStyle(el).flexWrap
+          })));
+        for (const filter of filters) {
+          assert.equal(filter.direction, 'rtl', id + ' filter RTL');
+          assert.equal(filter.wrap, 'nowrap', id + ' filter one row');
+        }
         const overflow = await page.evaluate(() => ({
           doc: document.documentElement.scrollWidth,
           win: document.documentElement.clientWidth
