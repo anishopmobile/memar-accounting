@@ -28,7 +28,9 @@ if ($result) {
 ?>
 <div class="card">
     <div class="page-actions">
+        <div class="toolbar-actions">
         <a href="assets/php/report_supplier_debt_export.php" class="button-secondary" id="exportSupplierDebtBtn">خروجی اکسل</a>
+                </div>
         <div class="filter-panel">
             <input type="search" id="supplierDebtSearch" placeholder="جستجو بر اساس نام شرکت یا نام تامین‌کننده...">
         </div>
