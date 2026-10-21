@@ -964,7 +964,6 @@ $(function() {
         }, function(response) {
             if (response && response.success) {
                 $('#products-list tbody').html(response.tableBody);
-                $('#productCount').text(response.totalProducts);
                 $('#inventoryValue').text(response.inventoryValue);
                 renderProductPagination(response);
             }
@@ -2714,6 +2713,7 @@ $(function () {
         var barcode = $('#barcodePrintValue').text();
         if (!id || !barcode) { return; }
         $('#barcodePrintArea').html(renderBarcodeLabels(id, barcode, qty));
+        syncBarcodeDownload();
     }
 
     function openBarcodePrintModal($row) {
@@ -2729,6 +2729,7 @@ $(function () {
         var qty = barcodePrintDefaultQty(stock);
         $('#barcodePrintQty').val(qty);
         $('#barcodePrintArea').html(renderBarcodeLabels(id, barcode, qty));
+        syncBarcodeDownload();
         $('#barcodePrintModal').addClass('open');
         $('body').addClass('modal-open');
     }
@@ -2778,9 +2779,38 @@ $(function () {
         refreshBarcodePrintLabels();
     });
 
+    function barcodePrintUrl(mode) {
+        var id = String($('#barcodePrintProductId').text() || '').trim();
+        var qty = Number($('#barcodePrintQty').val());
+        if (!/^\\d+$/.test(id) || !Number.isSafeInteger(qty) || qty < 1 || qty > BARCODE_PRINT_MAX_QTY) {
+            return '';
+        }
+        return 'assets/php/product_barcode_print.php?id=' + encodeURIComponent(id)
+            + '&qty=' + qty + '&mode=' + encodeURIComponent(mode);
+    }
+
+    function syncBarcodeDownload() {
+        var url = barcodePrintUrl('download');
+        $('#downloadBarcodePdfBtn').attr('href', url || '#')
+            .attr('aria-disabled', url ? 'false' : 'true');
+    }
+
     $('#printBarcodeBtn').on('click', function () {
         refreshBarcodePrintLabels();
-        window.print();
+        var url = barcodePrintUrl('print');
+        if (!url) { alert('شناسه کالا یا تعداد برچسب نامعتبر است.'); return; }
+        // A clean document contains only labels: the admin/modal layout cannot
+        // cause empty leading sheets. Open synchronously from the user click.
+        window.open(url, '_blank', 'noopener,noreferrer');
+    });
+
+    $('#downloadBarcodePdfBtn').on('click', function (event) {
+        refreshBarcodePrintLabels();
+        syncBarcodeDownload();
+        if (!barcodePrintUrl('download')) {
+            event.preventDefault();
+            alert('شناسه کالا یا تعداد برچسب نامعتبر است.');
+        }
     });
 
     $('#closeBarcodePrintModal, #cancelBarcodePrintModal, #barcodePrintModal .modal-backdrop').on('click', function () {
