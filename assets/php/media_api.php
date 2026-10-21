@@ -153,6 +153,10 @@ try {
         @chmod($originalAbs, 0600);
         @chmod($thumbAbs, 0600);
         $fileSize = (int)filesize($originalAbs);
+        if ($fileSize < 1 || $fileSize > 10 * 1024 * 1024) {
+            @unlink($originalAbs); @unlink($thumbAbs);
+            throw new RuntimeException('حجم تصویر پس از پردازش بیش از حد مجاز است.');
+        }
         $filename = basename(str_replace('\\', '/', (string)($file['name'] ?? 'image')));
         $filename = mb_substr($filename, 0, 250);
         $userId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
@@ -161,7 +165,7 @@ try {
                 'INSERT INTO media(original_filename,stored_filename,original_path,thumbnail_path,mime_type,
                 file_size,width,height,sha256,uploaded_by) VALUES (?,?,?,?,?,?,?,?,?,?)'
             );
-            $stmt->bind_param('sssssiissi', $filename, $name, $original, $thumb, $mime,
+            $stmt->bind_param('sssssiiisi', $filename, $name, $original, $thumb, $mime,
                 $fileSize, $w, $h, $hash, $userId);
             $stmt->execute();
             $id = (int)$stmt->insert_id;
