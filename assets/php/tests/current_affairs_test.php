@@ -384,7 +384,7 @@ foreach (($listAll['totals'] ?? []) as $tt) {
     if ((int) $tt['field_id'] === $idLAmount) { $totalAmount = $tt['value']; }
     if ((int) $tt['field_id'] === $idLNumber) { $totalNumber = $tt['value']; }
 }
-t_check('amount total 1,200', $totalAmount === '1,200', (string) $totalAmount);
+t_check('amount total 1,200', $totalAmount === '1,200 ' . getCurrencyLabel(), (string) $totalAmount);
 t_check('number total 120', $totalNumber === '120', (string) $totalNumber);
 t_check('page 1 of 2 (10 rows)', count($listAll['rows'] ?? []) === 10 && $listAll['total_pages'] === 2);
 t_check('range start/end', ($listAll['range_start'] ?? 0) === 1 && ($listAll['range_end'] ?? 0) === 10);
@@ -398,7 +398,7 @@ $totalAmountPage2 = null;
 foreach (($listPage2['totals'] ?? []) as $tt) {
     if ((int) $tt['field_id'] === $idLAmount) { $totalAmountPage2 = $tt['value']; }
 }
-t_check('totals on page 2 still cover all 15 records', $totalAmountPage2 === '1,200', (string) $totalAmountPage2);
+t_check('totals on page 2 still cover all 15 records', $totalAmountPage2 === '1,200 ' . getCurrencyLabel(), (string) $totalAmountPage2);
 
 /* search */
 $searchSookht = ca_records_result($mysqli, ['category_id' => $catL, 'search' => 'سوخت', 'per_page' => 50]);
@@ -413,7 +413,7 @@ $filterAmount = ca_records_result($mysqli, ['category_id' => $catL, 'filters' =>
 t_check('amount filter 50..100 → 6 records', $filterAmount['ok'] && $filterAmount['total'] === 6);
 $ta = null;
 foreach (($filterAmount['totals'] ?? []) as $tt) { if ((int) $tt['field_id'] === $idLAmount) { $ta = $tt['value']; } }
-t_check('amount filter totals = 450', $ta === '450', (string) $ta);
+t_check('amount filter totals = 450', $ta === '450 ' . getCurrencyLabel(), (string) $ta);
 
 /* text contains filter */
 $filterText = ca_records_result($mysqli, ['category_id' => $catL, 'filters' => [(string) $idLLabel => ['value' => 'قلم']], 'per_page' => 50]);
@@ -533,12 +533,12 @@ $mCatL = ca_monthly_report($mysqli, ['category_id' => $catL, 'year' => 1405, 'mo
 t_check('monthly catL page1 → 10 rows of 15', $mCatL['ok'] && $mCatL['total'] === 15 && count($mCatL['rows']) === 10 && $mCatL['total_pages'] === 2);
 $mCatLAmount = null;
 foreach (($mCatL['totals'] ?? []) as $tt) { if ((int) $tt['field_id'] === $idLAmount) { $mCatLAmount = $tt['value']; } }
-t_check('monthly totals (whole month) on page1 = 1,200', $mCatLAmount === '1,200', (string) $mCatLAmount);
+t_check('monthly totals (whole month) on page1 = 1,200', $mCatLAmount === '1,200 ' . getCurrencyLabel(), (string) $mCatLAmount);
 $mCatLp2 = ca_monthly_report($mysqli, ['category_id' => $catL, 'year' => 1405, 'month' => 4, 'per_page' => 10, 'page' => 2]);
 t_check('monthly page2 → 5 rows', $mCatLp2['ok'] && count($mCatLp2['rows']) === 5);
 $mCatLAmountP2 = null;
 foreach (($mCatLp2['totals'] ?? []) as $tt) { if ((int) $tt['field_id'] === $idLAmount) { $mCatLAmountP2 = $tt['value']; } }
-t_check('monthly totals on page2 still = 1,200', $mCatLAmountP2 === '1,200', (string) $mCatLAmountP2);
+t_check('monthly totals on page2 still = 1,200', $mCatLAmountP2 === '1,200 ' . getCurrencyLabel(), (string) $mCatLAmountP2);
 
 /* deactivated reporting date blocks monthly reporting */
 ca_field_set_active($mysqli, $idNewRep, true);            /* ensure an active date exists for designation */
@@ -556,8 +556,8 @@ t_check('category export has all 15 rows', count($expL['rows'] ?? []) === 15);
 t_check('category export has base columns', isset($expL['columns']['row']) && isset($expL['columns']['_id']) && isset($expL['columns']['_created']));
 $nameAmount = (string) ($lAmount['data']['name'] ?? '');
 t_check('category export includes money column', $expL['ok'] && isset($expL['columns'][$nameAmount]));
-t_check('money column label mentions ریال', isset($expL['columns'][$nameAmount])
-    && str_contains((string) $expL['columns'][$nameAmount], 'ریال'));
+t_check('money column label mentions selected currency', isset($expL['columns'][$nameAmount])
+    && str_contains((string) $expL['columns'][$nameAmount], getCurrencyLabel()));
 t_check('money column is numeric-keyed', in_array($nameAmount, $expL['number_keys'] ?? [], true));
 t_check('money cell exported as raw number', ($expL['rows'][0][$nameAmount] ?? '') === '10', (string) ($expL['rows'][0][$nameAmount] ?? ''));
 
@@ -632,7 +632,39 @@ $badLegacy2 = t_record($mysqli, $idRecLegacy, $legacyCat, [(string) $idLegacy =>
 t_check('editing to a non-existent option still rejected', !$badLegacy2['ok']);
 
 /* ============================================================
- * 8) Teardown + summary
+ * 8) Currency boundary regression — IRR view, base TOMAN persistence.
+ * The payment module is intentionally excluded from these checks.
+ * ========================================================== */
+$currencyChange = $mysqli->query("UPDATE currency_settings SET currency_code = 'IRR' WHERE id = 1");
+getCurrentCurrency($mysqli); // refresh the request-local cached setting
+t_check('current affairs currency switch persisted', $currencyChange !== false && getCurrentCurrency() === 'IRR');
+$irRows = ca_records_result($mysqli, ['category_id' => $catL, 'page' => 1, 'per_page' => 10]);
+$irTotal = null;
+foreach (($irRows['totals'] ?? []) as $tt) {
+    if ((int) $tt['field_id'] === $idLAmount) { $irTotal = $tt['value']; }
+}
+t_check('current affairs totals converted for IRR display', $irTotal === '12,000 ریال', (string) $irTotal);
+$irFilter = ca_records_result($mysqli, [
+    'category_id' => $catL, 'per_page' => 50,
+    'filters' => [(string) $idLAmount => ['from' => '100', 'to' => '200']],
+]);
+t_check('current affairs IRR numeric filter converted to TOMAN at SQL boundary',
+    $irFilter['ok'] && $irFilter['total'] === 2, (string) ($irFilter['total'] ?? '-'));
+$irExport = ca_export_category($mysqli, ['category_id' => $catL]);
+t_check('current affairs money export label becomes IRR',
+    str_contains((string) ($irExport['columns'][$nameAmount] ?? ''), 'ریال'));
+t_check('current affairs Excel money numeric value becomes IRR',
+    ($irExport['rows'][0][$nameAmount] ?? '') === '100',
+    (string) ($irExport['rows'][0][$nameAmount] ?? ''));
+$oneMoney = ca_cell_render(['field_type' => 'money'], ['value_number' => '10.00']);
+t_check('current affairs cell displays IRR but edits remain stored base',
+    ($oneMoney['d'] ?? '') === '100 ریال' && ($oneMoney['v'] ?? '') === '10');
+$moneyInput = ca_validate_field_value(['field_type' => 'money', 'label' => 'آزمایش', 'is_required' => 1], '100');
+t_check('current affairs IRR input converted to TOMAN exactly',
+    ($moneyInput['ok'] ?? false) && ($moneyInput['number'] ?? '') === '10');
+
+/* ============================================================
+ * 9) Teardown + summary
  * ========================================================== */
 @unlink(__DIR__ . '/../db_ca_patch.php');
 $mysqli->query('DROP DATABASE IF EXISTS memar_accounting_ca_test');
