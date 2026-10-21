@@ -226,10 +226,18 @@
                 <button class="button-secondary" type="button" id="saveBackupDir">ذخیره آدرس</button>
                 <button class="button" type="button" id="createBackup">تهیه نسخه پشتیبان</button>
                 <button class="button-secondary" type="button" id="createFilesBackup">🗂️ تهیه نسخه پشتیبان از تمام فایل‌ها</button>
+                <button class="button" type="button" id="createFullBackup">پشتیبان کامل حسابداری و تصاویر (ZIP)</button>
                 <span class="backup-message" aria-live="polite"></span>
             </div>
         </div>
 
+        <div class="card panel" style="margin-top:14px">
+          <h3>بازیابی کامل دیتابیس و کتابخانه تصاویر</h3>
+          <p class="setting-note">فقط فایل ZIP تولیدشده توسط پشتیبان کامل سیستم؛ پیش از جایگزینی داده‌ها، اعتبارسنجی فایل‌ها انجام می‌شود.</p>
+          <input type="file" accept=".zip,application/zip" id="restoreFullFile">
+          <button type="button" class="button" id="restoreFullBackup">بازیابی پشتیبان کامل</button>
+          <span id="restoreFullMessage" role="status" aria-live="polite"></span>
+        </div>
         <h2 style="margin-top: 28px;">بازیابی نسخه پشتیبان</h2>
         <div class="card panel" style="margin-top: 12px;">
             <div class="form-row">
