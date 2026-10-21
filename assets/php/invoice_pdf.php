@@ -51,6 +51,7 @@ $view = [
     'css' => $css,
     'inv' => $data['invoice'],
     'items' => $data['items'],
+    'media_enabled' => $data['media_enabled'] ?? false,
     'customer' => $data['customer'],
     'store' => $data['store'],
     'settings' => $data['settings'],
