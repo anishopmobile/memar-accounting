@@ -67,6 +67,7 @@ if (!array_key_exists($page, $pages)) {
     <script src="assets/js/currency.js" defer></script>
     <script src="assets/js/currency-settings.js" defer></script>
     <script src="assets/js/main.js" defer></script>
+    <script src="assets/js/brand-settings.js" defer></script>
     <script src="assets/js/layout.js" defer></script>
     <script src="assets/js/invoice.js" defer></script>
     <script src="assets/js/bundle.js" defer></script>
