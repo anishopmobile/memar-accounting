@@ -22,6 +22,7 @@
 require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/jdf.php';
+require_once __DIR__ . '/media_common.php';
 
 $date_from = trim((string) ($_GET['date_from'] ?? ''));
 $date_to   = trim((string) ($_GET['date_to'] ?? ''));
