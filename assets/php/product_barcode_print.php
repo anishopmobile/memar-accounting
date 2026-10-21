@@ -103,6 +103,75 @@ if ($mode === 'print') {
     exit;
 }
 
+/**
+ * Draw barcode PDF labels directly with mPDF vector primitives.
+ *
+ * The previous PDF passed a full HTML page containing a base64 SVG img to
+ * WriteHTML(). That path may silently render empty content in mPDF despite
+ * returning a valid PDF. Drawing the original Code128 bits into the PDF
+ * canvas makes each label visible and keeps bars razor-sharp when printed.
+ * Browser print mode above still uses the existing SVG/HTML document.
+ */
+function barcode_print_draw_pdf(\Mpdf\Mpdf $pdf, int $productId, string $barcode, int $qty): void
+{
+    $bits = product_barcode_code128_bits($barcode); // Existing Code128-B encoder.
+    $quietZone = 10; // Code128 quiet zone: at least 10 modules on each side.
+    $totalModules = strlen($bits) + 2 * $quietZone;
+    $labelWidth = 190.0 / 3.0; // A4 - 2 x 10mm margins.
+    $moduleMm = min(0.32, 57.0 / $totalModules);
+    $drawWidth = $totalModules * $moduleMm;
+    $barHeight = 20.0;
+    $rowsPerPage = 6;
+    $columns = 3;
+    $labelsPerPage = $rowsPerPage * $columns;
+    $pdf->SetAutoPageBreak(false);
+
+    for ($labelNo = 0; $labelNo < $qty; $labelNo++) {
+        if ($labelNo % $labelsPerPage === 0) {
+            $pdf->AddPage();
+            $pdf->SetFillColor(0, 0, 0);
+            $pdf->SetTextColor(0, 0, 0);
+        }
+
+        $cell = $labelNo % $labelsPerPage;
+        $column = $cell % $columns;
+        $row = intdiv($cell, $columns);
+        $cellX = 10.0 + $column * $labelWidth;
+        $cellY = 13.0 + $row * 42.0;
+
+        // Center the full symbol, including the 10-module silent margins.
+        $barX = $cellX + ($labelWidth - $drawWidth) / 2.0 + $quietZone * $moduleMm;
+        $barY = $cellY + 3.0;
+        $length = strlen($bits);
+
+        // Draw continuous black runs, not thousands of individual modules.
+        for ($offset = 0; $offset < $length;) {
+            if ($bits[$offset] === '0') {
+                $offset++;
+                continue;
+            }
+            $runStart = $offset;
+            while ($offset < $length && $bits[$offset] === '1') {
+                $offset++;
+            }
+            $pdf->Rect(
+                $barX + $runStart * $moduleMm,
+                $barY,
+                ($offset - $runStart) * $moduleMm,
+                $barHeight,
+                'F'
+            );
+        }
+
+        $pdf->SetFont('dejavusans', '', 9);
+        $pdf->SetXY($cellX, $cellY + 24.0);
+        $pdf->Cell($labelWidth, 5.0, 'Product ID: ' . $productId, 0, 0, 'C');
+        $pdf->SetFont('dejavusans', '', strlen($barcode) > 24 ? 6 : 9);
+        $pdf->SetXY($cellX, $cellY + 29.0);
+        $pdf->Cell($labelWidth, 5.0, $barcode, 0, 0, 'C');
+    }
+}
+
 require_once __DIR__ . '/../../vendor/autoload.php'; // Existing mPDF installation
 $oldErrorReporting = error_reporting(error_reporting() & ~E_DEPRECATED);
 try {
@@ -116,7 +185,7 @@ try {
         'default_font' => 'dejavusans',
     ]);
     $mpdf->SetTitle('Barcode ' . $id);
-    $mpdf->WriteHTML(barcode_print_html($id, (string) $product['name'], $barcode, $qty, $svg, true));
+    barcode_print_draw_pdf($mpdf, $id, $barcode, $qty);
     $filename = 'barcode-' . $id . '-' . $qty . '.pdf';
     header('Cache-Control: no-store');
     $mpdf->Output($filename, \Mpdf\Output\Destination::DOWNLOAD);
