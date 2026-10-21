@@ -42,6 +42,7 @@ if (!array_key_exists($page, $pages)) {
     <link rel="stylesheet" href="assets/css/style.css">
     <link rel="stylesheet" href="assets/css/kamadatepicker.css">
     <link rel="stylesheet" href="assets/css/tabler-integration.css">
+    <link rel="stylesheet" href="assets/css/navbar-toolbar.css">
     <script src="assets/js/jquery.min.js"></script>
     <script src="assets/js/kamadatepicker.js"></script>
     <script>window.APP_CURRENCY = <?php echo json_encode(getCurrentCurrency(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;</script>
