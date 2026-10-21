@@ -40,6 +40,7 @@ node assets/js/tests/admin_ui.test.cjs || {
   exit 1
 }
 if grep -qiE 'PHP Fatal error|PHP Warning|PHP Parse error' "$log"; then
-  tail -100 "$log"
+  echo "--- Captured PHP errors ---"
+  grep -iE 'PHP Fatal error|PHP Warning|PHP Parse error' "$log" | head -30
   exit 1
 fi
