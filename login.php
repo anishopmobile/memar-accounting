@@ -53,13 +53,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light">
-    <title>ورود | کوشا حساب</title>
+    <title>ورود | حسابداری معمار</title>
+    <link rel="stylesheet" href="assets/vendor/tabler/tabler.rtl.min.css">
     <link rel="stylesheet" href="assets/css/fontawesome.css">
     <link rel="stylesheet" href="assets/css/style.css">
     <link rel="stylesheet" href="assets/css/login.css">
+    <link rel="stylesheet" href="assets/css/login-tabler.css">
     <?php if ($captchaEnabled): ?><?php echo $captcha->styles(); ?><?php endif; ?>
 </head>
-<body class="login-page">
+<body class="login-page tabler-auth">
     <div class="login-background" aria-hidden="true">
         <span class="login-orb login-orb-one"></span>
         <span class="login-orb login-orb-two"></span>
@@ -67,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <main class="login-layout">
-        <section class="login-card" aria-labelledby="login-title">
+        <section class="login-card card" aria-labelledby="login-title">
             <div class="login-brand">
                 <div class="login-brand-mark" aria-hidden="true">
                     <span class="login-brand-mark-inner">
@@ -75,8 +77,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </span>
                 </div>
                 <div>
-                    <div class="login-brand-name">کوشا حساب</div>
-                    <div class="login-brand-caption">حسابداری ساده و دقیق</div>
+                    <div class="login-brand-name">حسابداری معمار</div>
+                    <div class="login-brand-caption">مدیریت حرفه‌ای حساب‌ها و فروش</div>
+                    <small class="login-brand-en" lang="en" dir="ltr">Memar Accounting</small>
                 </div>
             </div>
 
@@ -110,6 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <span class="login-input-icon" aria-hidden="true"><i class="fas fa-user"></i></span>
                         <input
                             id="username"
+                            class="form-control"
                             name="username"
                             type="text"
                             value="<?php echo htmlspecialchars((string) ($_POST['username'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
@@ -129,6 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <span class="login-input-icon" aria-hidden="true"><i class="fas fa-lock"></i></span>
                         <input
                             id="password"
+                            class="form-control"
                             name="password"
                             type="password"
                             autocomplete="current-password"
@@ -150,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 <?php endif; ?>
 
-                <button class="login-submit" type="submit">
+                <button class="login-submit btn btn-primary" type="submit">
                     <span>ورود به پنل</span>
                     <i class="fas fa-arrow-left" aria-hidden="true"></i>
                 </button>
