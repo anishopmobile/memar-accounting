@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/product_common.php';
 require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/bundle_common.php';
@@ -10,6 +11,11 @@ if ($action === 'next_code') {
     echo json_encode(['success' => true, 'code' => nextProductCode($mysqli)]);
     exit;
 }
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    respond_error('روش درخواست نامعتبر است.', 405);
+}
+require_csrf_or_fail();
 
 if ($action === 'delete') {
     $product_id = trim($_POST['product_id'] ?? '');
