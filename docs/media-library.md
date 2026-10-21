@@ -10,7 +10,7 @@ render the currently selected product image, not a historical snapshot.
   ZIP (for full backup/restore), existing mPDF dependencies.
 - MySQL/MariaDB using InnoDB and existing product tables.
 - A **private writable directory outside the public document root** is used for
-  originals and thumbnails. Default path: `dirname(project_root)/memar_media`.
+  originals and thumbnails. Default path: `dirname($_SERVER['DOCUMENT_ROOT'])/memar_media` (outside the server's served document root).
   Set `MEMAR_MEDIA_STORAGE` to an absolute private directory if the web server
   cannot write to the default. Restrict owner-only permissions and deny serving
   that path directly in your web server.
