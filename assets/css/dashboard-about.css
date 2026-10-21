@@ -1,0 +1,211 @@
+/* Scoped refinements: compact dashboard and redesigned About page (RTL). */
+body.tabler-admin#dashboard .quick-actions,
+body.tabler-admin#dashboard .metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+body.tabler-admin#dashboard .quick-action-card {
+  display: flex; gap: 10px; align-items: center; min-width: 0;
+  min-height: 90px; padding: 13px 12px;
+  box-shadow: 0 2px 10px rgba(25,52,83,.05);
+  border-radius: 11px;
+}
+body.tabler-admin#dashboard .quick-action-icon {
+  flex: 0 0 39px; width: 39px; height: 39px;
+  font-size: 18px; border-radius: 10px;
+}
+body.tabler-admin#dashboard .quick-action-text {
+  min-width: 0;
+}
+body.tabler-admin#dashboard .quick-action-text h3 {
+  margin: 0 0 2px; font-size: clamp(12px, 1vw, 14px);
+  line-height: 1.65; font-weight: 700;
+}
+body.tabler-admin#dashboard .quick-action-text p {
+  font-size: 11px; line-height: 1.7; margin: 0;
+}
+body.tabler-admin#dashboard .metric-card-new {
+  min-width: 0; min-height: 135px; padding: 15px 16px;
+  border-radius: 11px;
+}
+body.tabler-admin#dashboard .metric-header {
+  margin-bottom: 9px; gap: 7px;
+}
+body.tabler-admin#dashboard .metric-header h3 {
+  font-size: 13px; line-height: 1.65; margin: 0;
+}
+body.tabler-admin#dashboard .metric-icon {
+  width: 38px; height: 38px; flex: 0 0 38px;
+  font-size: 17px; border-radius: 10px;
+}
+body.tabler-admin#dashboard .metric-value-large {
+  font-size: clamp(16px, 1.65vw, 23px);
+  font-weight: 750; line-height: 1.55; text-align: right;
+  margin: 0; overflow-wrap: anywhere;
+}
+body.tabler-admin#dashboard .metric-unpaid-amount {
+  position: static; margin-top: 8px; padding: 5px 9px;
+  font-size: 11px; line-height: 1.65;
+  max-width: 100%; overflow-wrap: anywhere;
+}
+body.tabler-admin#dashboard .dashboard-insights {
+  display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr);
+  gap: 14px; width: 100%; min-width: 0; align-items: stretch;
+}
+body.tabler-admin#dashboard .dashboard-insights > .panel {
+  min-width: 0; padding: 0;
+  border-radius: 12px; overflow: hidden;
+}
+body.tabler-admin#dashboard .dashboard-insights > .panel h2,
+body.tabler-admin#dashboard .dashboard-low-stock-row > .panel h2 {
+  font-size: 15px; padding: 15px 18px;
+  margin: 0; border-bottom: 1px solid #e9edf5;
+}
+body.tabler-admin#dashboard .dashboard-chart-canvas {
+  position: relative; width: 100%; height: 250px;
+  min-height: 0; padding: 8px 12px 12px;
+}
+body.tabler-admin#dashboard .dashboard-insights .action-table {
+  min-width: 560px;
+  font-size: 12px;
+}
+body.tabler-admin#dashboard .dashboard-insights .action-table th,
+body.tabler-admin#dashboard .dashboard-insights .action-table td {
+  padding: 9px 8px;
+  white-space: nowrap;
+}
+body.tabler-admin#dashboard .dashboard-low-stock-row {
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  gap: 0; width: 100%; min-width: 0;
+}
+body.tabler-admin#dashboard .dashboard-low-stock-row > .panel {
+  min-width: 0; padding: 0; border-radius: 12px; overflow: hidden;
+}
+body.tabler-admin#dashboard .dashboard-low-stock-row .action-table {
+  min-width: 0; width: 100%;
+}
+@media (max-width: 1024px) {
+  body.tabler-admin#dashboard .quick-actions,
+  body.tabler-admin#dashboard .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  body.tabler-admin#dashboard .dashboard-insights {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  body.tabler-admin#dashboard .quick-actions,
+  body.tabler-admin#dashboard .metrics-grid {
+    grid-template-columns: minmax(0,1fr);
+    gap: 9px;
+  }
+  body.tabler-admin#dashboard .quick-action-card { min-height: 66px; padding: 10px 12px; }
+  body.tabler-admin#dashboard .metric-card-new { min-height: 0; padding: 12px 15px; }
+  body.tabler-admin#dashboard .dashboard-chart-canvas { height: 215px; }
+}
+body.tabler-admin#about-us .main-content .page-header {
+  display: flex;
+}
+body.tabler-admin#about-us .about-page {
+  display: block; width: 100%; min-height: 0;
+  padding: 0; margin: 0 auto; max-width: 1180px;
+}
+body.tabler-admin#about-us .about-card {
+  width: 100%; max-width: none; padding: 0; margin: 0;
+  border: 1px solid #e2eaf3; border-radius: 16px;
+  overflow: hidden; background: #fff;
+  box-shadow: 0 12px 32px rgba(22,43,70,.065);
+}
+body.tabler-admin#about-us .about-header {
+  display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
+  gap: 24px; padding: clamp(22px,4vw,43px);
+  background: linear-gradient(125deg,#152c4c,#244c7d);
+  text-align: right;
+}
+body.tabler-admin#about-us .about-brand-emblem {
+  width: 86px; height: 86px; flex: 0 0 86px;
+  border-radius: 22px; display: grid; place-items: center;
+  background: rgba(255,255,255,.11); border: 1px solid rgba(255,255,255,.26);
+  color: #fff; font-size: 37px;
+}
+body.tabler-admin#about-us .about-header-copy { flex: 1; min-width: 0; color: white; }
+body.tabler-admin#about-us .about-eyebrow {
+  font-size: 12px; color: #b9d9ff; letter-spacing: .02em;
+}
+body.tabler-admin#about-us .about-header h1 {
+  margin: 4px 0 6px; padding: 0; color: white;
+  font-size: clamp(23px,2.5vw,34px); font-weight: 800;
+}
+body.tabler-admin#about-us .about-header p {
+  color: #dbebff; font-size: 13px; line-height: 1.9;
+}
+body.tabler-admin#about-us .about-version {
+  display: inline-flex; gap: 7px; align-items: center;
+  margin-top: 13px; padding: 5px 12px; font-size: 12px;
+  color: #e9f4ff; background: rgba(255,255,255,.11);
+  border-radius: 999px; border: 1px solid rgba(255,255,255,.15);
+}
+body.tabler-admin#about-us .about-content-grid {
+  display: grid; grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 22px; padding: clamp(18px,2.7vw,30px);
+}
+body.tabler-admin#about-us .about-detail-panel {
+  min-width: 0; padding: 24px; margin: 0;
+  border: 1px solid #e3eaf4; border-radius: 13px;
+  background: #fcfdff;
+}
+body.tabler-admin#about-us .about-detail-panel h2 {
+  margin: 0 0 19px; color: #24354c; font-size: 17px;
+  display: flex; gap: 10px; align-items: center;
+}
+body.tabler-admin#about-us .about-detail-panel h2 i { color: #206bc4; }
+body.tabler-admin#about-us .about-feature-list {
+  display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px;
+}
+body.tabler-admin#about-us .about-feature-list > div {
+  min-height: 58px; display: flex; align-items: center; gap: 9px;
+  padding: 10px; background: #f1f6fd; border-radius: 10px;
+  color: #36445c; font-size: 13px;
+}
+body.tabler-admin#about-us .about-feature-list i { color: #206bc4; flex-shrink: 0; }
+body.tabler-admin#about-us .about-contact-list { display: grid; gap: 12px; margin: 0; }
+body.tabler-admin#about-us .about-contact-list > div {
+  display: grid; grid-template-columns: 105px minmax(0,1fr);
+  gap: 10px; align-items: baseline; padding-bottom: 10px;
+  border-bottom: 1px solid #e9eef5;
+}
+body.tabler-admin#about-us .about-contact-list dt { font-size: 12px; color: #728095; }
+body.tabler-admin#about-us .about-contact-list dd {
+  margin: 0; font-size: 13px; min-width: 0; overflow-wrap: anywhere;
+}
+body.tabler-admin#about-us .about-contact-list a {
+  display: inline-flex; color: #206bc4; align-items: center; gap: 6px;
+  text-decoration: none; direction: ltr;
+}
+body.tabler-admin#about-us .about-contact-actions {
+  display: flex; flex-wrap: wrap; gap: 9px; margin-top: 21px;
+}
+body.tabler-admin#about-us .about-contact-actions :is(.button,.button-secondary) {
+  padding: 8px 12px; border-radius: 8px; font-size: 12px; white-space: nowrap;
+}
+body.tabler-admin#about-us .about-footer {
+  border-top: 1px solid #e8edf5; margin: 0; padding: 16px 22px;
+  text-align: center; font-size: 12px; color: #718198;
+}
+@media (max-width: 850px) {
+  body.tabler-admin#about-us .about-content-grid { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 560px) {
+  body.tabler-admin#about-us .about-header {
+    flex-direction: column; align-items: flex-start; gap: 14px;
+  }
+  body.tabler-admin#about-us .about-brand-emblem {
+    width: 64px; height: 64px; flex-basis: 64px; font-size: 27px;
+  }
+  body.tabler-admin#about-us .about-content-grid { gap: 12px; padding: 12px; }
+  body.tabler-admin#about-us .about-detail-panel { padding: 17px; }
+  body.tabler-admin#about-us .about-feature-list { grid-template-columns: minmax(0,1fr); }
+  body.tabler-admin#about-us .about-contact-list > div { grid-template-columns: 85px minmax(0,1fr); }
+}
