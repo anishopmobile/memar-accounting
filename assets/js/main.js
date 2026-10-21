@@ -547,12 +547,26 @@ $(function() {
         return $item.length ? String($item.data('code')) : '';
     }
 
+    function loadCategoryMedia(categoryId) {
+        if (!$('#categoryMediaId').length) return;
+        $('#saveCategoryButton').prop('disabled', true);
+        $.getJSON('assets/php/media_api.php', {action:'category',category_id:categoryId}).done(function(res) {
+            if (!res || !res.success) { alert('خطا در دریافت تصویر دسته‌بندی'); return; }
+            var id = Number((res.data || {}).media_id) || 0;
+            $('#categoryMediaId').val(id).data('original', String(id));
+            $('#categoryMediaPreview').attr('src', id ? 'assets/php/media_file.php?id=' + id + '&size=thumb' : 'assets/img/product-placeholder.svg');
+        }).fail(function(){ alert('خطای دریافت تصویر دسته‌بندی'); })
+          .always(function(){ $('#saveCategoryButton').prop('disabled', false); });
+    }
+
     function resetCategoryForm() {
         $('#categoryForm')[0].reset();
         $('#categoryMode').val('add-root');
         $('#categoryId').val('');
         $('#categoryCode').val('');
         $('#categoryCodeHidden').val('');
+        $('#categoryMediaId').val('0').data('original','0');
+        $('#categoryMediaPreview').attr('src','assets/img/product-placeholder.svg');
         $('#categoryName').prop('disabled', true);
         $('#categoryParent').prop('disabled', true).val('');
     }
@@ -646,6 +660,7 @@ $(function() {
         resetCategoryForm();
         $('#categoryMode').val('edit');
         $('#categoryId').val(selectedCategoryId);
+        loadCategoryMedia(selectedCategoryId);
         $('#categoryCode').val(selectedCategoryData.code);
         $('#categoryCodeHidden').val(selectedCategoryData.code);
         $('#categoryName').prop('disabled', false).val(selectedCategoryData.name).focus();
@@ -682,7 +697,7 @@ $(function() {
         if (!confirm('آیا از حذف این دسته‌بندی مطمئن هستید؟')) {
             return;
         }
-        $.post('assets/php/category_action.php', {mode: 'delete', category_id: categoryIdToDelete}, function(response) {
+        $.post('assets/php/category_action.php', {mode: 'delete', category_id: categoryIdToDelete, csrf_token:window.APP_CSRF_TOKEN}, function(response) {
             if (response.success) {
                 refreshCategories();
             } else {
@@ -703,7 +718,8 @@ $(function() {
         }
         var formData = {
             mode: 'delete',
-            category_id: selectedCategoryId
+            category_id: selectedCategoryId,
+            csrf_token: window.APP_CSRF_TOKEN
         };
         $.post('assets/php/category_action.php', formData, function(response) {
             if (response.success) {
@@ -734,7 +750,8 @@ $(function() {
             category_id: $('#categoryId').val(),
             code: $('#categoryCodeHidden').val(),
             name: $('#categoryName').val(),
-            parent_id: $('#categoryParent').prop('disabled') ? '' : $('#categoryParent').val()
+            parent_id: $('#categoryParent').prop('disabled') ? '' : $('#categoryParent').val(),
+            csrf_token: window.APP_CSRF_TOKEN
         };
         if (formData.mode !== 'delete' && formData.name.trim() === '') {
             alert('نام گروه نمی‌تواند خالی باشد.');
@@ -742,6 +759,18 @@ $(function() {
         }
         $.post('assets/php/category_action.php', formData, function(response) {
             if (response.success) {
+                var imageId = $('#categoryMediaId').length ? String($('#categoryMediaId').val() || '0') : '0';
+                var previousImageId = $('#categoryMediaId').length ? String($('#categoryMediaId').data('original') || '0') : '0';
+                var categoryId = response.category ? response.category.id : '';
+                if (categoryId && imageId !== previousImageId) {
+                    $.post('assets/php/media_api.php', {
+                        action:'category_set',category_id:categoryId,media_id:imageId,
+                        csrf_token:window.APP_CSRF_TOKEN
+                    }, function(mediaResponse){
+                        if(!mediaResponse || !mediaResponse.success) alert(mediaResponse.message || 'دسته ذخیره شد اما ثبت تصویر ناموفق بود.');
+                        refreshCategories();
+                    },'json').fail(function(){alert('دسته ذخیره شد؛ ثبت تصویر با خطای ارتباط مواجه شد.');});
+                }
                 $('#categoryModal').removeClass('open');
                 $('body').removeClass('modal-open');
                 resetCategoryForm();
