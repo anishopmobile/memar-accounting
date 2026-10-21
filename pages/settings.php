@@ -61,6 +61,34 @@
                 <span class="settings-save-message" aria-live="polite"></span>
             </div>
         </form>
+        <section class="media-settings-section" aria-labelledby="mediaSettingsTitle">
+            <h2 id="mediaSettingsTitle">تنظیمات نمایش تصاویر محصولات</h2>
+            <p class="setting-note">نمایش در محیط حسابداری و چاپ PDF کاملاً مستقل است. تصاویر چاپ به‌صورت پیش‌فرض غیرفعال‌اند تا قالب چاپ قبلی تغییر نکند.</p>
+            <form id="mediaSettingsForm">
+                <h3>نمایش تصاویر در محیط مدیریت</h3>
+                <div class="media-settings-grid">
+                    <label><input type="checkbox" data-media-setting="products_list"><span>نمایش تصویر در جدول کالاها و خدمات</span></label>
+                    <label><input type="checkbox" data-media-setting="sales_ui"><span>تصویر در انتخاب و اقلام فاکتور و پیش‌فاکتور فروش</span></label>
+                    <label><input type="checkbox" data-media-setting="purchase_ui"><span>تصویر در انتخاب و اقلام فاکتور و پیش‌فاکتور خرید</span></label>
+                    <label><input type="checkbox" data-media-setting="sales_returns_ui"><span>تصویر در اقلام برگشت از فروش</span></label>
+                    <label><input type="checkbox" data-media-setting="defective_ui"><span>تصویر هنگام انتخاب کالای معیوب</span></label>
+                    <label><input type="checkbox" data-media-setting="reports_ui"><span>تصویر در گزارش‌های منتخب انبار و فروش</span></label>
+                    <label><input type="checkbox" data-media-setting="category_images"><span>فعال‌سازی تصاویر دسته‌بندی‌ها</span></label>
+                </div>
+                <h3 style="margin-top:18px">نمایش تصاویر در چاپ PDF</h3>
+                <div class="media-settings-grid">
+                    <label><input type="checkbox" data-media-setting="pdf_sales"><span>تصاویر PDF فاکتور فروش</span></label>
+                    <label><input type="checkbox" data-media-setting="pdf_sales_proforma"><span>تصاویر PDF پیش‌فاکتور فروش</span></label>
+                    <label><input type="checkbox" data-media-setting="pdf_purchase"><span>تصاویر PDF فاکتور خرید</span></label>
+                    <label><input type="checkbox" data-media-setting="pdf_purchase_proforma"><span>تصاویر PDF پیش‌فاکتور خرید</span></label>
+                    <label><input type="checkbox" data-media-setting="pdf_sales_return"><span>تصاویر PDF برگشت از فروش</span></label>
+                </div>
+                <div class="form-actions" style="margin-top:16px">
+                    <button class="button" type="submit" id="mediaSettingsSave">ذخیره تنظیمات تصاویر</button>
+                    <span id="mediaSettingsMessage" role="status" aria-live="polite"></span>
+                </div>
+            </form>
+        </section>
         <section class="brand-settings-section" aria-labelledby="brandSettingsTitle">
             <div class="brand-settings-heading">
                 <div>
