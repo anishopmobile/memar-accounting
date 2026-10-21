@@ -150,3 +150,111 @@ body.tabler-admin #caRecordFilters {
     flex: 0 0 auto; width: 100%; max-width: 100%; align-self: stretch;
   }
 }
+
+/* One horizontal desktop header (brand, routes, account and logout). */
+@media (min-width: 1025px) {
+  body.tabler-admin .sidebar {
+    display: flex; flex-direction: row; flex-wrap: nowrap;
+    justify-content: flex-start; align-items: center;
+    gap: clamp(5px, .6vw, 12px); min-height: 60px;
+    padding: 8px clamp(9px,1.2vw,22px);
+  }
+  body.tabler-admin .app-sidebar-heading {
+    order: 0; flex: 0 0 auto; min-width: 0;
+  }
+  body.tabler-admin .brand-panel {
+    padding: 1px 5px; white-space: nowrap;
+  }
+  body.tabler-admin .brand-title { font-size: clamp(14px,1.12vw,18px); }
+  body.tabler-admin .brand-subtitle { display: none; }
+  body.tabler-admin .sidebar > .main-nav {
+    order: 1; display: flex; flex: 1 1 auto;
+    flex-direction: row; flex-wrap: nowrap;
+    align-items: center; justify-content: flex-start;
+    min-width: 0; width: auto;
+    padding: 0; margin: 0; border: none; gap: 2px;
+  }
+  body.tabler-admin .main-nav > * { flex: 0 0 auto; }
+  body.tabler-admin .main-nav .nav-link {
+    padding: 5px clamp(4px,.6vw,10px);
+    min-height: 37px; gap: 5px;
+    font-size: clamp(11px,.83vw,12px);
+  }
+  body.tabler-admin .main-nav .nav-text { font-size: inherit; }
+  body.tabler-admin .main-nav .nav-icon {
+    flex: 0 0 23px; width: 23px;
+    min-width: 23px; height: 23px; font-size: 12px;
+  }
+  body.tabler-admin .sidebar > .user-chip {
+    order: 2; flex: 0 0 auto; max-width: 180px;
+    margin: 0; padding: 5px 6px;
+  }
+  body.tabler-admin .sidebar > .logout-form { order: 3; }
+  body.tabler-admin .sidebar > .logout-form .logout-button {
+    padding: 6px 11px; min-height: 35px; font-size: 12px;
+  }
+  body.tabler-admin .main-nav .nav-dropdown-menu,
+  body.tabler-admin .main-nav .nav-dropdown.open .nav-dropdown-menu {
+    max-height: min(69dvh,530px);
+    overflow-y: auto;
+  }
+}
+@media (min-width: 1025px) and (max-width: 1440px) {
+  body.tabler-admin .main-nav .nav-icon { display: none; }
+  body.tabler-admin .sidebar > .user-chip .user-chip-name { display: none; }
+  body.tabler-admin .sidebar > .user-chip {
+    justify-content: center; max-width: 42px;
+  }
+  body.tabler-admin .main-nav .nav-link { gap: 3px; }
+}
+@media (min-width: 1025px) and (max-width: 1160px) {
+  body.tabler-admin .sidebar { gap: 4px; padding-inline: 8px; }
+  body.tabler-admin .brand-title { font-size: 13px; }
+  body.tabler-admin .main-nav .nav-link { padding-inline: 3px; font-size: 11px; }
+}
+/* Settings includes a native disclosure for payment management; keyboard accessible. */
+body.tabler-admin .nav-subgroup {
+  width: 100%; min-width: 0;
+  border-top: 1px solid #e9edf5; padding-top: 4px;
+}
+body.tabler-admin .nav-subgroup > summary {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 9px; padding: 9px 12px; cursor: pointer;
+  color: #34435a; border-radius: 8px; font-size: 13px;
+  font-weight: 650; list-style: none;
+}
+body.tabler-admin .nav-subgroup > summary::-webkit-details-marker { display: none; }
+body.tabler-admin .nav-subgroup > summary:hover,
+body.tabler-admin .nav-subgroup > summary.active {
+  background: #eff5fc; color: #206bc4;
+}
+body.tabler-admin .nav-subgroup > summary i {
+  font-size: 11px; transition: transform .16s ease;
+}
+body.tabler-admin .nav-subgroup[open] > summary i { transform: rotate(180deg); }
+body.tabler-admin .nav-subgroup-links {
+  display: flex; flex-direction: column;
+  padding: 3px 9px 4px 0; margin-inline-start: 9px;
+  border-inline-start: 1px solid #dfe8f5;
+}
+body.tabler-admin .nav-subgroup-links .nav-sub-link {
+  display: block; padding: 8px 10px; font-size: 12px;
+}
+@media (max-width: 1024px) {
+  body.tabler-admin .nav-subgroup { border-color: rgba(255,255,255,.14); }
+  body.tabler-admin .nav-subgroup > summary {
+    color: #c7d6ed;
+  }
+  body.tabler-admin .nav-subgroup > summary:hover,
+  body.tabler-admin .nav-subgroup > summary.active {
+    color: #fff; background: rgba(112,164,238,.17);
+  }
+  body.tabler-admin .nav-subgroup-links {
+    border-color: rgba(255,255,255,.15);
+  }
+  body.tabler-admin .nav-subgroup-links .nav-sub-link { color: #c2cce1; }
+  body.tabler-admin .nav-subgroup-links .nav-sub-link:hover,
+  body.tabler-admin .nav-subgroup-links .nav-sub-link.active {
+    color: #fff; background: #304967;
+  }
+}
