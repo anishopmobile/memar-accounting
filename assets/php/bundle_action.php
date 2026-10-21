@@ -12,6 +12,7 @@ require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/invoice_common.php';
 require_once __DIR__ . '/bundle_common.php';
+require_once __DIR__ . '/currency.php';
 
 $action = trim((string) ($_GET['action'] ?? ($_POST['action'] ?? '')));
 
@@ -66,6 +67,16 @@ $in = [
     'components'     => $componentsRaw,
 ];
 
+/* The bundle editor sends selected display currency, while component prices stay base. */
+try {
+    foreach (['purchase_price', 'sale_price'] as $key) {
+        if ($in[$key] !== '') {
+            $in[$key] = parseMoneyInput($in[$key]);
+        }
+    }
+} catch (InvalidArgumentException $e) {
+    respond_error($e->getMessage(), 422);
+}
 $result = bundleSaveProduct($mysqli, $in);
 if ($result['ok']) {
     $data = [

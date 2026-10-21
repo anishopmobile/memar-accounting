@@ -760,14 +760,17 @@ $(function() {
 
     function escAttr(s) { return $('<div>').text(s == null ? '' : String(s)).html(); }
     function formatPriceInput(val) {
-        if (!val) return '';
-        var clean = val.toString().replace(/,/g, '').replace(/[^\d.]/g, '');
-        var integerPart = clean.split('.')[0];
-        return integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        if (val === null || val === undefined || val === '') return '';
+        var clean = String(val).replace(/,/g, '').replace(/[^\d.]/g, '');
+        var parts = clean.split('.');
+        return parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (parts.length > 1 ? '.' + parts[1] : '');
     }
     function unformatPrice(val) {
-        if (!val) return '';
-        return val.toString().replace(/,/g, '').split('.')[0];
+        if (val === null || val === undefined || val === '') return '';
+        return String(val).replace(/,/g, '');
+    }
+    function productDisplayMoney(val) {
+        return window.Currency.fromBase(val === null || val === undefined || val === '' ? '0' : String(val));
     }
     function formatPriceField($el) {
         var normalized = String($el.val() || '')
@@ -902,16 +905,16 @@ $(function() {
             $('#productCategory').val(data.category_id || '');
             $('#productType').val(data.type || 'product');
             $('#productUnit').val(data.unit || 'عدد');
-            $('#productPurchasePrice').val(formatPriceInput(data.purchase_price));
-            $('#productSalePrice').val(formatPriceInput(data.sale_price));
+            $('#productPurchasePrice').val(formatPriceInput(productDisplayMoney(data.purchase_price)));
+            $('#productSalePrice').val(formatPriceInput(productDisplayMoney(data.sale_price)));
             $('#productStock').val(data.stock);
             $('#productMinStock').val(data.min_stock);
             $('#productDescription').val(data.description);
             units = (data.units || []).map(function (u) {
                 u = u || {};
                 var nu = $.extend({}, u);
-                nu.purchase_price = unformatPrice(u.purchase_price == null ? '' : u.purchase_price);
-                nu.sale_price = unformatPrice(u.sale_price == null ? '' : u.sale_price);
+                nu.purchase_price = productDisplayMoney(u.purchase_price);
+                nu.sale_price = productDisplayMoney(u.sale_price);
                 return nu;
             });
             productsUnitsOriginalJson = JSON.stringify(units);
@@ -921,8 +924,8 @@ $(function() {
                 category_id: data.category_id || '',
                 type: data.type || 'product',
                 unit: data.unit || 'عدد',
-                purchase_price: unformatPrice((data.purchase_price === null || data.purchase_price === undefined) ? '' : data.purchase_price),
-                sale_price: unformatPrice((data.sale_price === null || data.sale_price === undefined) ? '' : data.sale_price),
+                purchase_price: productDisplayMoney(data.purchase_price),
+                sale_price: productDisplayMoney(data.sale_price),
                 stock: (data.stock === null || data.stock === undefined) ? '' : String(data.stock),
                 min_stock: (data.min_stock === null || data.min_stock === undefined) ? '' : String(data.min_stock),
                 description: data.description || ''

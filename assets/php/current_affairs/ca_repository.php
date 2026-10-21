@@ -963,6 +963,12 @@ function ca_build_record_query_parts(mysqli $m, int $categoryId, string $search,
             } elseif ($type === 'number' || $type === 'money') {
                 $from = trim((string) ($spec['from'] ?? ''));
                 $to = trim((string) ($spec['to'] ?? ''));
+                if ($type === 'money' && $from !== '') {
+                    try { $from = parseMoneyInput($from, null, 18); } catch (InvalidArgumentException $e) { $from = ''; }
+                }
+                if ($type === 'money' && $to !== '') {
+                    try { $to = parseMoneyInput($to, null, 18); } catch (InvalidArgumentException $e) { $to = ''; }
+                }
                 if ($from !== '' && preg_match('/^-?\\d+(\\.\\d{1,2})?$/', $from)) {
                     $where[] = $alias . '.value_number >= CAST(? AS DECIMAL(20,2))';
                     $types .= 's';
@@ -1221,14 +1227,14 @@ function ca_records_result(mysqli $m, array $opts): array
 
     /* ---- totals over the ENTIRE filtered set (not just the page) ---- */
     $totals = [];
-    $totalsSql = 'SELECT v.field_id AS fid, f.label AS flabel, COALESCE(SUM(v.value_number), 0) AS s '
+    $totalsSql = 'SELECT v.field_id AS fid, f.label AS flabel, f.field_type AS ftype, COALESCE(SUM(v.value_number), 0) AS s '
         . 'FROM current_affairs_records r ' . $parts['joins']
         . ' JOIN current_affairs_values v ON v.record_id = r.id '
         . ' JOIN current_affairs_fields f ON f.id = v.field_id '
         . $parts['where']
         . ' AND f.category_id = ? AND f.include_in_totals = 1 '
         . ' AND f.field_type IN (\'number\',\'money\') AND v.value_number IS NOT NULL '
-        . ' GROUP BY v.field_id, f.label ORDER BY f.sort_order ASC, f.id ASC';
+        . ' GROUP BY v.field_id, f.label, f.field_type ORDER BY f.sort_order ASC, f.id ASC';
     $stmt = $m->prepare($totalsSql);
     if ($stmt !== null) {
         $totalsParams = $params;
@@ -1242,7 +1248,7 @@ function ca_records_result(mysqli $m, array $opts): array
                 $totals[] = [
                     'field_id' => (int) $row['fid'],
                     'label' => (string) $row['flabel'],
-                    'value' => ca_format_number($row['s']),
+                    'value' => (string) $row['ftype'] === 'money' ? ca_format_money($row['s']) : ca_format_number($row['s']),
                 ];
             }
             $res->free();
@@ -1549,7 +1555,7 @@ function ca_export_category(mysqli $m, array $opts): array
         $name = (string) $f['name'];
         $label = (string) $f['label'];
         if ((string) $f['field_type'] === 'money') {
-            $label .= ' (ریال)';
+            $label .= ' (' . getCurrencyLabel() . ')';
         }
         $columns[$name] = $label;
         if (ca_type_is_numeric((string) $f['field_type'])) {
@@ -1620,7 +1626,10 @@ function ca_export_value(array $f, ?array $v): string
     if ($v === null) {
         return '';
     }
-    if ($type === 'number' || $type === 'money') {
+    if ($type === 'money') {
+        return $v['value_number'] !== null ? convertFromBaseCurrency((string) $v['value_number']) : '';
+    }
+    if ($type === 'number') {
         return $v['value_number'] !== null ? ca_strip_decimals((string) $v['value_number']) : '';
     }
     if ($type === 'date') {
@@ -1669,7 +1678,7 @@ function ca_export_all(mysqli $m): array
             $colByFieldName[$name] = true;
             $label = (string) $f['label'];
             if ((string) $f['field_type'] === 'money') {
-                $label .= ' (ریال)';
+                $label .= ' (' . getCurrencyLabel() . ')';
             }
             $columns[$name] = $label;
             if (ca_type_is_numeric((string) $f['field_type'])) {

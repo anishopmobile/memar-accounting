@@ -10,6 +10,7 @@
  * invoice, inventory and accounting systems.
  */
 declare(strict_types=1);
+require_once __DIR__ . '/../currency.php';
 
 /* ---------------- Field type metadata ---------------- */
 
@@ -192,7 +193,7 @@ function ca_format_number($v): string
 /** Format a money value (same as number + ریال suffix, project convention). */
 function ca_format_money($v): string
 {
-    return ca_format_number($v) . ' ریال';
+    return formatMoney((string) ($v ?? '0'));
 }
 
 /* ---------------- Value validation ---------------- */
@@ -238,8 +239,15 @@ function ca_validate_field_value(array $field, $raw): array
             }
             return ['ok' => true, 'text' => $value, 'number' => null, 'date' => null];
 
-        case 'number':
         case 'money':
+            try {
+                $amount = parseMoneyInput($value, null, 18); // DECIMAL(20,2)
+                return ['ok' => true, 'text' => null, 'number' => $amount, 'date' => null];
+            } catch (InvalidArgumentException $e) {
+                return ['ok' => false, 'message' => 'مبلغ «' . $label . '» نامعتبر یا فاقد دقت ذخیره‌سازی است.'];
+            }
+
+        case 'number':
             if (!preg_match('/^-?\\d+(\\.\\d{1,2})?$/', $value)) {
                 return ['ok' => false, 'message' => 'مقدار «' . $label . '» باید یک عدد معتبر با حداکثر دو رقم اعشار باشد.'];
             }

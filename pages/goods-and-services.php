@@ -21,7 +21,7 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
                 <?php echo buildCategoryFilterOptionsHtml($mysqli); ?>
             </select>
             <span>ارزش موجودی:</span>
-            <span class="value-badge"><span id="inventoryValue"><?php echo number_format($summary['value'], 0); ?></span> ریال</span>
+            <span class="value-badge"><span id="inventoryValue"><?php echo formatMoneyNumber(number_format((float) $summary['value'], 2, '.', '')); ?></span> <?php echo htmlspecialchars(getCurrencyLabel(), ENT_QUOTES, 'UTF-8'); ?></span>
             <input type="search" id="productSearch" placeholder="جستجو...">
             <label class="page-size-label">تعداد در صفحه:
                 <select id="productPageSize">

@@ -72,16 +72,16 @@ $(function () {
         var sale = calcSale();
         var avail = calcAvailability();
 
-        $('#bundlePurchaseCalc').text('مجموع اجزا: ' + splitNum(purchase) + ' ریال');
-        $('#bundleSaleCalc').text('مجموع اجزا: ' + splitNum(sale) + ' ریال');
+        $('#bundlePurchaseCalc').text('مجموع اجزا: ' + window.Currency.format(purchase));
+        $('#bundleSaleCalc').text('مجموع اجزا: ' + window.Currency.format(sale));
         $('#bundleStock').val(avail);
 
         // اگر کاربر قیمت نهایی را دستی تغییر نداده باشد، مقدار محاسبه‌شده پیشنهاد می‌شود
         if (!$('#bundlePurchasePrice').data('touched')) {
-            $('#bundlePurchasePrice').val(purchase > 0 ? formatPriceInput(String(purchase)) : '');
+            $('#bundlePurchasePrice').val(purchase > 0 ? formatPriceInput(window.Currency.fromBase(String(purchase))) : '');
         }
         if (!$('#bundleSalePrice').data('touched')) {
-            $('#bundleSalePrice').val(sale > 0 ? formatPriceInput(String(sale)) : '');
+            $('#bundleSalePrice').val(sale > 0 ? formatPriceInput(window.Currency.fromBase(String(sale))) : '');
         }
     }
 
@@ -103,7 +103,7 @@ $(function () {
                 + '<td>' + esc(c.barcode) + '</td>'
                 + '<td>' + esc(c.name) + '</td>'
                 + '<td>' + esc(c.unit) + '</td>'
-                + '<td>' + splitNum(c.sale_price) + '</td>'
+                + '<td>' + window.Currency.formatNumber(c.sale_price) + '</td>'
                 + '<td>' + stockLabel(c.stock) + '</td>'
                 + '<td><span class="bc-qty-wrap">'
                 + '<button type="button" class="bc-qty-btn bc-minus" data-pid="' + escAttr(pid) + '"' + (qty <= 1 ? ' disabled' : '') + '>−</button>'
@@ -187,8 +187,8 @@ $(function () {
             $('#bundleCategory').val(p.category_id || '');
             $('#bundleMinStock').val(stockLabel(p.min_stock || '0'));
             $('#bundleDescription').val(p.description || '');
-            $('#bundlePurchasePrice').val(formatPriceInput(p.purchase_price)).data('touched', 1);
-            $('#bundleSalePrice').val(formatPriceInput(p.sale_price)).data('touched', 1);
+            $('#bundlePurchasePrice').val(formatPriceInput(window.Currency.fromBase(String(p.purchase_price || '0')))).data('touched', 1);
+            $('#bundleSalePrice').val(formatPriceInput(window.Currency.fromBase(String(p.sale_price || '0')))).data('touched', 1);
             (data.components || []).forEach(function (c) {
                 comps[String(c.component_product_id)] = {
                     id: String(c.component_product_id),
@@ -236,7 +236,7 @@ $(function () {
                     + '<td>' + esc(p.barcode) + '</td>'
                     + '<td>' + esc(p.name) + '</td>'
                     + '<td>' + esc(p.unit) + '</td>'
-                    + '<td>' + splitNum(p.sale_price) + '</td>'
+                    + '<td>' + window.Currency.formatNumber(p.sale_price) + '</td>'
                     + '<td>' + stockLabel(p.stock) + '</td>'
                     + '<td><span class="bp-qty">' + cur + '</span></td>'
                     + '<td><button type="button" class="button-secondary small bundle-product-pick"'

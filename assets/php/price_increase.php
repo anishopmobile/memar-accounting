@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/currency.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -40,6 +41,14 @@ if (!in_array($increaseType, $allowedIncreaseTypes, true)) {
 if ($increaseValueRaw === '' || !is_numeric($increaseValueRaw) || (float) $increaseValueRaw <= 0) {
     echo json_encode(['success' => false, 'message' => 'میزان افزایش باید یک عدد مثبت باشد.']);
     exit;
+}
+if ($increaseType === 'amount') {
+    try {
+        $increaseValueRaw = parseMoneyInput($increaseValueRaw);
+    } catch (InvalidArgumentException $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        exit;
+    }
 }
 $increaseValue = (float) $increaseValueRaw;
 
