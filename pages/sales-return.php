@@ -19,8 +19,10 @@
 <!-- ============================ لیست سندهای برگشت ============================ -->
 <div class="card" id="srListView">
     <div class="page-actions">
+        <div class="toolbar-actions">
         
         <button type="button" class="button" id="srNewReturn">+ برگشت فروش جدید</button>
+                </div>
         <div class="filter-panel">
             <input type="search" id="srSearch" placeholder="جستجو (شماره برگشت / فاکتور / مشتری / تلفن)...">
             <button type="button" class="button-secondary" id="srRefresh">تازه‌سازی</button>
