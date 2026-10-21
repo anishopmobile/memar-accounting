@@ -2320,8 +2320,10 @@ $(function () {
         var title = $note.find('.sticky-note-title').val().trim();
         var content = $note.find('.sticky-note-content').val();
 
-        var posX = Math.round(parseFloat($note.css('left')) || 0);
-        var posY = Math.round(parseFloat($note.css('top')) || 0);
+        // The responsive note grid must not overwrite saved desktop coordinates.
+        var compactNotes = window.matchMedia('(max-width: 1024px)').matches;
+        var posX = Math.round(parseFloat(compactNotes ? $note[0].style.left : $note.css('left')) || 0);
+        var posY = Math.round(parseFloat(compactNotes ? $note[0].style.top : $note.css('top')) || 0);
         var zIndex = parseInt($note.css('z-index'), 10) || 1;
 
         var color = $note.attr('data-color') || '#fff3a3';
@@ -2570,6 +2572,9 @@ $(function () {
         'mousedown',
         '.sticky-note .drag-handle',
         function (e) {
+
+            // Small screens show notes as a readable grid instead of draggable positions.
+            if (window.matchMedia('(max-width: 1024px)').matches) return;
 
             if ($(e.target).closest('button').length) {
                 return;
