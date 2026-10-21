@@ -1,0 +1,61 @@
+name: Product Media CI
+on:
+  push:
+    branches:
+      - feature/product-media-library-20261022
+  pull_request:
+    paths:
+      - 'assets/php/media_*.php'
+      - 'assets/js/media-ui.js'
+      - 'pages/**'
+      - 'tests/media_smoke.php'
+      - '.github/workflows/media-ci.yml'
+
+jobs:
+  media-verification:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mariadb:11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+          MARIADB_DATABASE: memar_accounting
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP runtime and extensions
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli,gd,fileinfo,zip,mbstring,bcmath
+          coverage: none
+      - name: Lint PHP code
+        shell: bash
+        run: |
+          set -euo pipefail
+          find assets/php pages tests -type f -name '*.php' -print0 | xargs -0 -n 1 php -l
+          php -l index.php
+      - name: Parse JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in assets/js/*.js assets/vendor/dropzone/dropzone.min.js; do node --check "$f"; done
+      - name: Database schema and financial invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/media_smoke.php
+      - name: Verify bundled Dropzone and no remote media runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s assets/vendor/dropzone/dropzone.min.js
+          test -s assets/vendor/dropzone/dropzone.min.css
+          test -s assets/vendor/dropzone/LICENSE
+          ! grep -R -En 'https?://(cdn|unpkg|jsdelivr)' assets/js/media-ui.js assets/css/media-library.css
