@@ -262,8 +262,9 @@ t_write_worker($defIdC, '2', $wB);
 @unlink($oA);
 @unlink($oB);
 
-$specA = [0 => ['file', 'NUL', 'r'], 1 => ['file', $oA, 'w'], 2 => ['file', 'NUL', 'w']];
-$specB = [0 => ['file', 'NUL', 'r'], 1 => ['file', $oB, 'w'], 2 => ['file', 'NUL', 'w']];
+$nullDevice = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+$specA = [0 => ['file', $nullDevice, 'r'], 1 => ['file', $oA, 'w'], 2 => ['file', $nullDevice, 'w']];
+$specB = [0 => ['file', $nullDevice, 'r'], 1 => ['file', $oB, 'w'], 2 => ['file', $nullDevice, 'w']];
 $pA = proc_open((extension_loaded('mysqli') ? 'php ' : 'php -d extension=mysqli ') . escapeshellarg($wA), $specA, $pipesA);
 $pB = proc_open((extension_loaded('mysqli') ? 'php ' : 'php -d extension=mysqli ') . escapeshellarg($wB), $specB, $pipesB);
 if (is_resource($pA)) { proc_close($pA); }
