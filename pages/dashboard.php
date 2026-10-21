@@ -213,7 +213,7 @@ foreach ($salesByDay as $date => $amount) {
     $chartLabels[] = convertToPersianNumber($jy) . '/' .
         convertToPersianNumber(str_pad($jm, 2, '0', STR_PAD_LEFT)) . '/' .
         convertToPersianNumber(str_pad($jd, 2, '0', STR_PAD_LEFT));
-    $chartData[]   = $floatAmount;
+    $chartData[]   = (float) convertFromBaseCurrency(number_format($floatAmount, 2, '.', ''));
 }
 // ═══════════════════════════════════════════════════════════════════
 //  پایان بخش محاسبه نمودار
@@ -272,10 +272,10 @@ foreach ($salesByDay as $date => $amount) {
                 <i class="fas fa-calendar-day"></i>
             </div>
         </div>
-        <div class="metric-value-large"><?php echo number_format($todaySales); ?> ریال</div>
+        <div class="metric-value-large"><?php echo formatMoney(number_format($todaySales, 2, '.', '')); ?></div>
         <?php if ($todayUnpaid > 0): ?>
         <div class="metric-unpaid-amount">
-            مبلغ پرداخت نشده: <?php echo number_format($todayUnpaid); ?> ریال
+            مبلغ پرداخت نشده: <?php echo formatMoney(number_format($todayUnpaid, 2, '.', '')); ?>
         </div>
         <?php endif; ?>
     </div>
@@ -286,10 +286,10 @@ foreach ($salesByDay as $date => $amount) {
                 <i class="fas fa-chart-line"></i>
             </div>
         </div>
-        <div class="metric-value-large"><?php echo number_format($monthlySales); ?> ریال</div>
+        <div class="metric-value-large"><?php echo formatMoney(number_format($monthlySales, 2, '.', '')); ?></div>
         <?php if ($monthlyUnpaid > 0): ?>
         <div class="metric-unpaid-amount">
-            مبلغ پرداخت نشده: <?php echo number_format($monthlyUnpaid); ?> ریال
+            مبلغ پرداخت نشده: <?php echo formatMoney(number_format($monthlyUnpaid, 2, '.', '')); ?>
         </div>
         <?php endif; ?>
     </div>
@@ -335,7 +335,7 @@ foreach ($salesByDay as $date => $amount) {
                     }
 
                     function formatMoney(n) {
-                        return toPersianNum(Math.round(n).toLocaleString('en-US')) + ' ریال';
+                        return toPersianNum(Math.round(n).toLocaleString('en-US')) + ' ' + <?php echo json_encode(getCurrencyLabel(), JSON_UNESCAPED_UNICODE); ?>;
                     }
 
                     // فشرده‌سازی اعداد بزرگ برای محور Y
@@ -560,7 +560,7 @@ $colorIndex = 0;
                                     <?php echo htmlspecialchars($paymentStatus, ENT_QUOTES, 'UTF-8'); ?>
                                 </span>
                             </td>
-                            <td><?php echo number_format((float) $invoice['payable_amount']); ?> ریال</td>
+                            <td><?php echo formatMoney((string) $invoice['payable_amount']); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>

@@ -3,6 +3,7 @@
         <button type="button" class="active" data-target="store-info">اطلاعات فروشگاه</button>
         <button type="button" data-target="invoice-settings">تنظیمات فاکتور</button>
         <button type="button" data-target="taxes">مالیات و تخفیف</button>
+        <button type="button" data-target="currency-settings">تنظیمات واحد پولی</button>
         <button type="button" data-target="security">امنیت ورود</button>
         <button type="button" data-target="database">پایگاه داده</button>
     </div>
@@ -126,6 +127,31 @@
             <div class="form-actions">
                 <button class="button" type="submit">ذخیره تنظیمات مالیات</button>
                 <span class="tax-settings-save-message" aria-live="polite"></span>
+            </div>
+        </form>
+    </div>
+    <div id="currency-settings" class="settings-section" style="display:none;">
+        <h2>تنظیمات واحد پولی</h2>
+        <p class="setting-note">واحد پایه ذخیره ارقام حسابداری تومان است. تغییر واحد نمایشی نباید سوابق مالی ثبت‌شده را بازنویسی کند.</p>
+        <form id="currencySettingsForm">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+            <div class="form-grid">
+                <div class="form-row">
+                    <label for="currencyCode">واحد پولی نمایشی</label>
+                    <select id="currencyCode" name="currency_code">
+                        <option value="TOMAN">تومان</option>
+                        <option value="IRR">ریال (هر تومان = ۱۰ ریال)</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>پیش‌نمایش تبدیل ۱۰٬۰۰۰ تومان</label>
+                    <div id="currencyPreview" class="money-cell" aria-live="polite">۱۰٬۰۰۰ تومان</div>
+                </div>
+            </div>
+            <p class="setting-note">این قابلیت هنوز روی تمام فرم‌ها و درگاه پرداخت یکپارچه نشده است؛ تا تکمیل تست‌های یکپارچه، فقط روی نسخه آزمایشی تغییر بدهید.</p>
+            <div class="form-actions">
+                <button type="submit" class="button" id="currencySave">ذخیره واحد پولی</button>
+                <span id="currencySaveMessage" class="settings-save-message" role="status" aria-live="polite"></span>
             </div>
         </form>
     </div>

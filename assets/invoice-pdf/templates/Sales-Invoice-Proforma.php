@@ -99,8 +99,8 @@ $accent = pdf_esc($accent);
                     <?php echo pdf_money_format($it['quantity'] ?? '0'); ?>
                     <?php if (!empty($it['unit_name'])): ?><?php echo ' ' . pdf_esc($it['unit_name']); ?><?php endif; ?>
                 </td>
-                <td class="c5 left"><?php echo pdf_money_format($it['unit_price'] ?? '0'); ?></td>
-                <td class="c6 left"><?php echo pdf_money_format($it['line_total'] ?? '0'); ?></td>
+                <td class="c5 left"><?php echo pdf_currency_money($it['unit_price'] ?? '0'); ?></td>
+                <td class="c6 left"><?php echo pdf_currency_money($it['line_total'] ?? '0'); ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -117,7 +117,7 @@ $accent = pdf_esc($accent);
         </tr>
         <tr class="grand">
             <td class="lbl">مبلغ قابل پرداخت</td>
-            <td class="money"><?php echo pdf_money_format($inv['payable_amount'] ?? '0'); ?> ریال</td>
+            <td class="money"><?php echo pdf_currency_money($inv['payable_amount'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td>
         </tr>
     </table>
 

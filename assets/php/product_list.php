@@ -153,7 +153,7 @@ echo json_encode([
     'success' => true,
     'tableBody' => $tableBody,
     'totalProducts' => $summary['total'],
-    'inventoryValue' => number_format($summary['value'], 0),
+    'inventoryValue' => formatMoneyNumber(number_format((float) $summary['value'], 2, '.', '')),
     'filteredTotal' => $total,
     'page' => $page,
     'perPage' => $perPage,

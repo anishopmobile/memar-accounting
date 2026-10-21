@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/report_excel_lib.php';
 
@@ -63,8 +64,8 @@ foreach ($rows as $r) {
         'name'            => $displayName,
         'phone'           => $r['phone'],
         'address'         => $r['address'],
-        'total_purchases' => number_format((float) $r['total_purchases']),
-        'unpaid'          => number_format((float) $r['unpaid']),
+        'total_purchases' => formatMoneyNumber((string) $r['total_purchases']),
+        'unpaid'          => formatMoneyNumber((string) $r['unpaid']),
     ];
 }
 

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../assets/php/db.php';
+require_once __DIR__ . '/../assets/php/currency.php';
 
 $rows = [];
 $query = "
@@ -51,8 +52,8 @@ if ($result) {
                             <td><?php echo htmlspecialchars($r['full_name'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars($r['phone'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($r['address'], ENT_QUOTES, 'UTF-8')); ?></td>
-                            <td><?php echo number_format((float) $r['total_purchases']); ?></td>
-                            <td><?php echo number_format((float) $r['debt']); ?></td>
+                            <td><?php echo formatMoneyNumber((string) $r['total_purchases']); ?></td>
+                            <td><?php echo formatMoneyNumber((string) $r['debt']); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>

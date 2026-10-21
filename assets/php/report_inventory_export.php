@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/report_excel_lib.php';
 
@@ -103,8 +104,8 @@ foreach ($rows as $r) {
         'category_name' => $r['category_name'] !== null ? $r['category_name'] : '-',
         'type'          => $r['type'],
         'unit_name'     => $r['unit_name'],
-        'purchase_price'=> number_format((float) $r['purchase_price']),
-        'sale_price'    => number_format((float) $r['sale_price']),
+        'purchase_price'=> formatMoneyNumber((string) $r['purchase_price']),
+        'sale_price'    => formatMoneyNumber((string) $r['sale_price']),
         'unit_stock'    => number_format((float) $r['unit_stock']),
     ];
 }

@@ -9,6 +9,7 @@
  */
 
 declare(strict_types=1);
+require_once __DIR__ . '/currency.php';
 
 /** Escape امن HTML برای خروجی داخل قالب‌های PDF */
 function pdf_esc($value): string
@@ -158,6 +159,12 @@ function pdf_money_format($amount): string
     return $neg . $formatted;
 }
 
+/** Currency-specific PDF money display; quantities and percentages stay unchanged. */
+function pdf_currency_money($amount): string
+{
+    return formatMoneyNumber((string) ($amount ?? '0'));
+}
+
 /** تبدیل عدد به حروف فارسی — هم‌ارز منطق موجود در assets/js/invoice.js */
 function pdf_number_to_words(int $num): string
 {
@@ -216,7 +223,7 @@ function pdf_number_to_words(int $num): string
 /** مبلغ به حروف + واحد ریال (بر اساس مقدار معتبر ذخیره‌شده payable_amount) */
 function pdf_amount_in_words($amount): string
 {
-    $s = (string) ($amount ?? '0');
+    $s = convertFromBaseCurrency((string) ($amount ?? '0'));
     if (str_starts_with($s, '-')) {
         $s = substr($s, 1);
     }
@@ -226,7 +233,7 @@ function pdf_amount_in_words($amount): string
     $intPart = str_replace(',', '', $intPart);
     $intPart = str_replace('٬', '', $intPart);
     $intPart = $intPart === '' ? '0' : $intPart;
-    return pdf_number_to_words((int) $intPart) . ' ریال';
+    return pdf_number_to_words((int) $intPart) . ' ' . getCurrencyLabel();
 }
 
 /** برچسب فارسی نوع پرداخت */
