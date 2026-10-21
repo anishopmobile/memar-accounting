@@ -1,10 +1,57 @@
 'use strict';
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+
+/** Inspect actual rasterized first/last PDF pages rather than just %PDF- bytes.
+ * Without this the old SVG/HTML PDF could pass tests despite being blank.
+ */
+function countPdfBarcodeInk(pdfPath, pageNumber, prefix) {
+  execFileSync('pdftoppm', [
+    '-f', String(pageNumber), '-l', String(pageNumber),
+    '-r', '90', '-gray', '-singlefile', pdfPath, prefix
+  ], { timeout: 20000, stdio: 'pipe' });
+  const image = fs.readFileSync(prefix + '.pgm');
+  let cursor = 0;
+  function token() {
+    while (cursor < image.length) {
+      if (image[cursor] === 35) {
+        while (cursor < image.length && image[cursor] !== 10) cursor++;
+      } else if (image[cursor] <= 32) {
+        cursor++;
+      } else break;
+    }
+    const start = cursor;
+    while (cursor < image.length && image[cursor] > 32 && image[cursor] !== 35) cursor++;
+    return image.toString('ascii', start, cursor);
+  }
+  assert.equal(token(), 'P5', 'raster page format must be binary grayscale PGM');
+  const width = Number(token()), height = Number(token()), max = Number(token());
+  assert.ok(width > 700 && height > 900 && max === 255, 'A4 grayscale raster dimensions');
+  cursor += image[cursor] === 13 && image[cursor+1] === 10 ? 2 : 1;
+  assert.ok(image.length - cursor >= width * height, 'raster contains all page pixels');
+  // Upper half of the first label's barcode, deliberately excluding its text.
+  const pxPerMm = 90/25.4;
+  const x0 = Math.floor(20 * pxPerMm), x1 = Math.ceil(65 * pxPerMm);
+  const y0 = Math.floor(18 * pxPerMm), y1 = Math.ceil(33 * pxPerMm);
+  let dark = 0;
+  for (let y=y0; y<y1; y++) {
+    for (let x=x0; x<x1; x++) {
+      if (image[cursor + y*width + x] < 110) dark++;
+    }
+  }
+  assert.ok(dark > 1500, 'barcode bars must be visibly inked on PDF page '
+    + pageNumber + ', got only ' + dark + ' dark pixels');
+  return dark;
+}
 const base = 'http://127.0.0.1:8872';
 const cookie = {name:'PHPSESSID',value:'ci-tabler-browser-123456789',domain:'127.0.0.1',path:'/',sameSite:'Lax',httpOnly:true};
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAV4BAX6b7A8AAAAASUVORK5CYII=','base64');
 (async function () {
+  const rasterDir = fs.mkdtempSync(path.join(os.tmpdir(),'memar-pdf-ink-'));
   const browser = await chromium.launch({headless:true});
   try {
     const context = await browser.newContext({viewport:{width:1440,height:900},locale:'fa-IR'});
@@ -54,6 +101,18 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
       assert.ok(bytes.subarray(0,5).equals(Buffer.from('%PDF-')),'mPDF output PDF header');
       assert.ok(bytes.length > 2500,'nonempty generated barcode document '+count);
       assert.ok((pdf.headers()['content-disposition']||'').includes('attachment'),'download rather than inline');
+      const pdfPath = path.join(rasterDir, 'barcode-'+count+'.pdf');
+      fs.writeFileSync(pdfPath, bytes);
+      const metadata = execFileSync('pdfinfo', [pdfPath], {encoding:'utf8',timeout:20000});
+      const pagesMatch = /^Pages:\s+(\d+)/m.exec(metadata);
+      assert.ok(pagesMatch, 'pdfinfo can read generated barcode PDF');
+      const pages = Number(pagesMatch[1]);
+      assert.equal(pages, Math.ceil(count / 18), 'no blank or extra PDF pages');
+      for (const pageNumber of new Set([1, pages])) {
+        const dark = countPdfBarcodeInk(pdfPath, pageNumber,
+          path.join(rasterDir,'barcode-'+count+'-page-'+pageNumber));
+        console.log('PASS visible PDF ink count='+count+' page='+pageNumber+' dark='+dark);
+      }
       console.log('PASS mPDF barcode PDF '+count+' label(s), '+bytes.length+' bytes');
     }
     for (const bad of ['0','1001','abc','-4','2.5']) {
@@ -131,5 +190,8 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
       console.log('PASS defective-goods '+width+'px');
     }
     await context.close();
-  } finally { await browser.close(); }
+  } finally {
+    await browser.close();
+    fs.rmSync(rasterDir, {recursive:true,force:true});
+  }
 })().catch(e=>{console.error(e.stack||e);process.exit(1)});
