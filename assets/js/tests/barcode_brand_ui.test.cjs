@@ -88,9 +88,9 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
         && r.request().method()==='POST', {timeout:14000});
       await page.locator('#brandSettingsSave').click();
       const resp = await responses;
-      const body = await resp.json();
-      assert.equal(resp.status(),200,'brand save status '+JSON.stringify(body));
-      assert.equal(body.success,true,'brand save '+JSON.stringify(body));
+      // Success intentionally reloads the page and can release the response body
+      // before Playwright can read it; verify persisted state via GET instead.
+      assert.equal(resp.status(),200,'brand save HTTP result');
       await page.waitForLoadState('load');
       await page.reload({waitUntil:'domcontentloaded'});
       const state = await (await page.request.get(base+'/assets/php/app_brand_settings.php')).json();
