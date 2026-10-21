@@ -159,7 +159,7 @@ try {
         }
         $filename = basename(str_replace('\\', '/', (string)($file['name'] ?? 'image')));
         $filename = mb_substr($filename, 0, 250);
-        $userId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
+        $userId = isset($_SESSION['auth_user_id']) ? (int)$_SESSION['auth_user_id'] : null;
         try {
             $stmt = $mysqli->prepare(
                 'INSERT INTO media(original_filename,stored_filename,original_path,thumbnail_path,mime_type,
