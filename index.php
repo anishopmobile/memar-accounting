@@ -61,9 +61,13 @@ if (!array_key_exists($page, $pages)) {
     <link rel="stylesheet" href="assets/css/navbar-toolbar.css">
     <link rel="stylesheet" href="assets/css/dashboard-about.css">
     <link rel="stylesheet" href="assets/css/product-brand-defective.css">
+    <link rel="stylesheet" href="assets/vendor/hcg-searchable-select/hcg-select.css">
+    <link rel="stylesheet" href="assets/css/hcg-select-integration.css">
     <script src="assets/js/jquery.min.js"></script>
     <script src="assets/js/kamadatepicker.js"></script>
     <script>window.APP_CURRENCY = <?php echo json_encode(getCurrentCurrency(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;</script>
+    <script src="assets/vendor/hcg-searchable-select/hcg-select.js" defer></script>
+    <script src="assets/js/hcg-select-integration.js" defer></script>
     <script src="assets/js/currency.js" defer></script>
     <script src="assets/js/currency-settings.js" defer></script>
     <script src="assets/js/main.js" defer></script>
