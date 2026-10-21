@@ -20,6 +20,10 @@ $s->bind_param("ss", $name, $hash);
 $s->execute();
 $id = (int) $mysqli->insert_id;
 $s->close();
+/* Read-only barcode-print fixture in disposable CI database. */
+$mysqli->query("INSERT INTO products (code, barcode, name, type, stock)
+    VALUES (\"ci_print_barcode_fixture\", \"CI128ABC123\", \"تست برچسب کالا\", \"product\", 7)
+    ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)");
 session_id("ci-tabler-browser-123456789");
 session_start();
 $_SESSION["auth_user_id"] = $id;
