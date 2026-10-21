@@ -8,9 +8,14 @@ declare(strict_types=1);
 function media_storage_root(): string
 {
     $configured = getenv('MEMAR_MEDIA_STORAGE');
+    $documentRoot = isset($_SERVER['DOCUMENT_ROOT']) && is_string($_SERVER['DOCUMENT_ROOT'])
+        ? realpath($_SERVER['DOCUMENT_ROOT']) : false;
+    $documentRoot = $documentRoot ?: dirname(__DIR__, 2);
+    // Use parent of the actual served document root, not parent of the app,
+    // which could still be publicly accessible on shared hosting.
     $root = is_string($configured) && $configured !== ''
         ? $configured
-        : dirname(__DIR__, 3) . '/memar_media';
+        : dirname($documentRoot) . '/memar_media';
     if ($root[0] !== '/' && preg_match('/^[A-Za-z]:[\\\\\\/]/', $root) !== 1) {
         throw new RuntimeException('پوشه ذخیره رسانه باید مسیر مطلق سرور باشد.');
     }
@@ -26,9 +31,13 @@ function media_directory(bool $create = false): string
     // Refuse a storage directory inside the web document root, even via symlink.
     $resolved = realpath($dir);
     $webroot = realpath(dirname(__DIR__, 2));
-    if ($resolved && $webroot && ($resolved === $webroot
-        || str_starts_with($resolved, $webroot . DIRECTORY_SEPARATOR))) {
-        throw new RuntimeException('ذخیره‌سازی تصاویر باید خارج از پوشه عمومی سایت باشد.');
+    $docroot = isset($_SERVER['DOCUMENT_ROOT']) && is_string($_SERVER['DOCUMENT_ROOT'])
+        ? realpath($_SERVER['DOCUMENT_ROOT']) : false;
+    foreach ([$webroot, $docroot] as $forbidden) {
+        if ($resolved && $forbidden && ($resolved === $forbidden
+            || str_starts_with($resolved, $forbidden . DIRECTORY_SEPARATOR))) {
+            throw new RuntimeException('ذخیره‌سازی تصاویر باید خارج از پوشه عمومی سایت باشد.');
+        }
     }
     if ($create && !is_writable($dir)) {
         throw new RuntimeException('پوشه خصوصی رسانه‌ها قابل نوشتن نیست.');
