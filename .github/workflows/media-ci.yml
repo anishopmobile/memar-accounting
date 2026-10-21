@@ -51,6 +51,9 @@ jobs:
         run: |
           set -euo pipefail
           php tests/media_smoke.php
+      - name: Real mPDF 5-template image/no-image rendering
+        shell: bash
+        run: php tests/media_pdf_smoke.php
       - name: Authenticated upload and library HTTP smoke tests
         shell: bash
         run: bash tests/media_http_smoke.sh
