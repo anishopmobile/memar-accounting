@@ -17,13 +17,9 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
         <button type="button" class="button-secondary" id="openProductImportModal">ورود از اکسل</button>
                 </div>
         <div class="filter-panel">
-            <span>تعداد:</span>
-            <span id="productCount" class="value-badge"><?php echo $summary['total']; ?></span>
             <select id="productCategoryFilter">
                 <?php echo buildCategoryFilterOptionsHtml($mysqli); ?>
             </select>
-            <span>ارزش موجودی:</span>
-            <span class="value-badge"><span id="inventoryValue"><?php echo formatMoneyNumber(number_format((float) $summary['value'], 2, '.', '')); ?></span> <?php echo htmlspecialchars(getCurrencyLabel(), ENT_QUOTES, 'UTF-8'); ?></span>
             <input type="search" id="productSearch" placeholder="جستجو...">
             <label class="page-size-label">تعداد در صفحه:
                 <select id="productPageSize">
@@ -33,6 +29,10 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
                     <option value="100">100</option>
                 </select>
             </label>
+            <div class="inventory-value-last" aria-label="ارزش موجودی">
+                <span>ارزش موجودی:</span>
+                <span class="value-badge"><span id="inventoryValue"><?php echo formatMoneyNumber(number_format((float) $summary['value'], 2, '.', '')); ?></span> <?php echo htmlspecialchars(getCurrencyLabel(), ENT_QUOTES, 'UTF-8'); ?></span>
+            </div>
         </div>
     </div>
     <div class="table-wrapper">
@@ -435,67 +435,23 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
     font-size: 12px;
 }
 
-@media print {
-    html, body { overflow: visible !important; height: auto !important; }
-    body * { visibility: hidden !important; }
-    #barcodePrintModal,
-    #barcodePrintModal .modal-content,
-    #barcodePrintArea,
-    #barcodePrintArea * { visibility: visible !important; }
-
-    #barcodePrintModal {
-        position: static !important;
-        inset: auto !important;
-        display: block !important;
-        overflow: visible !important;
-        padding: 0 !important;
-        z-index: auto !important;
+/* Printing uses the dedicated product_barcode_print.php document.
+   The old @media print visibility hack was responsible for blank pages. */
+#goods-and-services .inventory-value-last {
+    display:inline-flex; gap:7px; align-items:center;
+    white-space:nowrap; flex:0 0 auto;
+}
+#goods-and-services #productCategoryFilter {
+    width: min(200px,100%); max-width: 200px; min-width: 140px;
+    text-overflow:ellipsis;
+}
+#goods-and-services .filter-panel .inventory-value-last .value-badge { white-space:nowrap; }
+@media (max-width:680px) {
+    #goods-and-services .filter-panel {
+        flex-direction: row !important;
+        align-items:center !important;
+        flex-wrap:nowrap !important;
     }
-    #barcodePrintModal .modal-backdrop { display: none !important; }
-    #barcodePrintModal .modal-content {
-        position: static !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-    }
-    #barcodePrintModal .modal-header,
-    #barcodePrintModal .barcode-print-summary,
-    #barcodePrintModal .barcode-print-form,
-    #barcodePrintModal .modal-actions { display: none !important; }
-
-    #barcodePrintArea {
-        display: block !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        direction: ltr !important;
-    }
-    .barcode-label {
-        display: inline-block;
-        width: 6cm;
-        border: none !important;
-        border-radius: 0 !important;
-        padding: 2mm 2mm 1mm;
-        margin: 0;
-        page-break-inside: avoid;
-        break-inside: avoid;
-        vertical-align: top;
-    }
-    .barcode-label-img {
-        width: 100% !important;
-        max-width: none !important;
-        height: 22mm !important;
-        margin: 0 0 1mm !important;
-    }
-    .barcode-label-pid,
-    .barcode-label-value {
-        font-size: 11pt !important;
-        line-height: 1.35 !important;
-        margin: 0 !important;
-    }
-    .barcode-label-value { font-size: 10pt !important; }
 }
 </style>
 
@@ -519,6 +475,7 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
         </div>
         <div class="form-actions modal-actions">
             <button type="button" class="button button-success" id="printBarcodeBtn">پرینت</button>
+            <a class="button-secondary" id="downloadBarcodePdfBtn" href="#" role="button" download>دانلود PDF</a>
             <button type="button" class="button-secondary" id="cancelBarcodePrintModal">بستن</button>
         </div>
         <div class="barcode-print-area" id="barcodePrintArea"></div>
