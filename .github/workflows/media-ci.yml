@@ -51,6 +51,9 @@ jobs:
         run: |
           set -euo pipefail
           php tests/media_smoke.php
+      - name: Authenticated upload and library HTTP smoke tests
+        shell: bash
+        run: bash tests/media_http_smoke.sh
       - name: Verify bundled Dropzone and no remote media runtime dependencies
         shell: bash
         run: |
