@@ -101,7 +101,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mysqli, mysqlnd, bcmath, mbstring
+          extensions: mysqli, mysqlnd, bcmath, mbstring, gd
           coverage: none
       - uses: actions/setup-node@v4
         with:
