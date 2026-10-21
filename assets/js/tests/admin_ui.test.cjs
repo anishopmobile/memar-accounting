@@ -16,7 +16,7 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
   const browser = await chromium.launch({ headless: true });
   let checked = 0;
   try {
-    for (const [width,height] of [[1440,900],[1280,800],[1024,768],[768,1024],[390,844],[360,800]]) {
+    for (const [width,height] of [[1440,900],[1280,800],[1100,850],[1025,768],[1024,768],[768,1024],[390,844],[360,800]]) {
       const context = await browser.newContext({ viewport: {width,height}, locale:'fa-IR' });
       await context.addCookies([{
         name:'PHPSESSID', value:cookie, domain:'127.0.0.1', path:'/',
@@ -41,8 +41,25 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
         if (width > 1024) {
           const navBox = await page.locator('#appSidebar').boundingBox();
           const contentBox = await page.locator('.main-content').boundingBox();
-          assert.ok(navBox.width >= width * .95 && navBox.height < 240,
-            id + ' full-width navbar');
+          assert.ok(navBox.width >= width * .95 && navBox.height < 105,
+            id + ' one-row full-width navbar: ' + JSON.stringify(navBox));
+          const navRows = await page.locator('#appSidebar').evaluate(el => {
+            const parts = ['.brand-panel','.main-nav','.user-chip','.logout-form'];
+            return parts.map(sel=>{
+              const r = el.querySelector(sel).getBoundingClientRect();
+              return {name:sel,mid:r.top+r.height/2,left:r.left,right:r.right};
+            });
+          });
+          const basemid = navRows[0].mid;
+          assert.ok(navRows.every(row=>Math.abs(row.mid-basemid)<24),
+            id+' brand/menu/account/logout same navbar row: '+JSON.stringify(navRows));
+          const navFlow = await page.locator('#appSidebar .main-nav').evaluate(el=>getComputedStyle(el).flexWrap);
+          assert.equal(navFlow,'nowrap',id+' prevent navbar wrapping');
+          assert.equal(await page.locator('#appSidebar .main-nav > a[href="?page=notes"]').count(),0);
+          assert.equal(await page.locator('#appSidebar .main-nav > a[href="?page=defective-goods"]').count(),0);
+          assert.equal(await page.locator('#appSidebar .main-nav > .nav-dropdown').filter({
+            has:page.locator('a[href="?page=payment-forms"]')
+          }).count(),1,'settings owns payment menu');
           assert.ok(contentBox.width >= width * .92,
             id + ' wide content area');
           if (id === 'dashboard') {
@@ -55,6 +72,17 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
             await item.locator('.nav-dropdown-toggle').click();
             assert.equal(await item.locator('.nav-dropdown-menu').isVisible(), false,
               'top navbar dropdown must close');
+            const settings = page.locator('.nav-dropdown').filter({
+              has:page.locator('.nav-sub-link[href="?page=notes"]')
+            });
+            await settings.locator('.nav-dropdown-toggle').click();
+            assert.equal(await settings.locator('.nav-sub-link[href="?page=notes"]').isVisible(),
+              true,'notes under Settings');
+            await settings.locator('.nav-subgroup summary').click();
+            assert.equal(await settings.locator('.nav-sub-link[href="?page=payment-forms"]').isVisible(),
+              true,'payment forms nested under Settings');
+            await settings.locator('.nav-subgroup summary').click();
+            await settings.locator('.nav-dropdown-toggle').click();
           }
         }
         const bars = await page.locator('.page-actions:visible').evaluateAll(items =>
@@ -109,6 +137,45 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
         }
         if (id === 'dashboard') {
           assert.equal(await page.locator('.quick-action-card[href]').count(), 4);
+          assert.equal(await page.locator('.metric-card-new').count(), 4);
+          const dashboard = await page.evaluate(() => {
+            const boxes = selector => Array.from(document.querySelectorAll(selector))
+              .map(el=>el.getBoundingClientRect());
+            return {
+              quick:boxes('.quick-actions > .quick-action-card'),
+              metric:boxes('.metrics-grid > .metric-card-new'),
+              panels:boxes('.dashboard-insights > .panel'),
+              stock:boxes('.dashboard-low-stock-row > .panel')
+            };
+          });
+          assert.equal(dashboard.panels.length,2,'chart and last invoices share one wrapper');
+          assert.equal(dashboard.stock.length,1,'one full-width low-stock panel');
+          assert.ok(dashboard.stock[0].top >= dashboard.panels[0].bottom - 3,
+            'low stock panel renders beneath insights');
+          if (width > 1024) {
+            assert.ok(dashboard.quick.every(b=>Math.abs(b.top-dashboard.quick[0].top)<3),
+              'four quick actions share one row');
+            assert.ok(dashboard.metric.every(b=>Math.abs(b.top-dashboard.metric[0].top)<3),
+              'four financial metrics share one row');
+            assert.ok(Math.abs(dashboard.panels[0].top-dashboard.panels[1].top)<3,
+              'chart alongside latest invoices');
+          }
+        }
+        if (id === 'about-us') {
+          assert.equal(await page.locator('#about-product-title').textContent(),'حسابداری معمار');
+          assert.equal(await page.locator('a[href="mailto:hmd.naeimi@gmail.com"]').count(),1);
+          assert.equal(await page.locator('.about-contact-actions a[href^="mailto:"]').count(),1);
+        }
+        if (id === 'notes' || id === 'payment-forms' || id === 'payment-transactions' ||
+            id === 'payment-sms-settings' || id === 'payment-zarinpal-settings') {
+          assert.equal(await page.locator('.nav-dropdown').filter({
+            has:page.locator('.nav-sub-link[href="?page=notes"]')
+          }).count(),1,'notes and payment navigation remains under settings');
+        }
+        if (id === 'defective-goods') {
+          assert.equal(await page.locator('.nav-dropdown').filter({
+            has:page.locator('.nav-sub-link[href="?page=defective-goods"]')
+          }).count(),1,'defective products remain discoverable under invoices');
         }
         if (width <= 1024 && id === 'dashboard') {
           await page.locator('#sidebarOpen').click();
