@@ -116,6 +116,7 @@
         active = null;
         selectedInPicker.clear();
         if (restoreFocus && typeof restoreFocus.focus === 'function') restoreFocus.focus();
+        if ($('#mediaLibraryPage').length) $('#mediaManagerSearch').trigger('input');
     }
     function loadPicker() {
         ensureModal();
@@ -138,6 +139,10 @@
             }).fail(function () { $('#mediaPickerGrid').text('خطا در ارتباط با سرور.'); });
     }
     function countSelection() { $('#mediaSelectedCount').text(selectedInPicker.size + ' تصویر انتخاب شده'); }
+    $(document).on('click', '#categoryMediaButton', function () {openPicker('category', false);});
+    $(document).on('click', '#categoryMediaClear', function () {
+        $('#categoryMediaId').val('0'); $('#categoryMediaPreview').attr('src','assets/img/product-placeholder.svg');
+    });
     $(document).on('click', '.media-open-library, .media-open-upload', function () {
         var name = $(this).closest('[data-media-editor]').attr('data-media-editor');
         openPicker(name, $(this).hasClass('media-open-upload'));
@@ -153,6 +158,15 @@
     });
     $(document).on('click', '#mediaPickerConfirm', function () {
         if (!active) return;
+        if (active === 'category') {
+            var first = selectedInPicker.values().next().value;
+            if (first) {
+                $('#categoryMediaId').val(first.id);
+                $('#categoryMediaPreview').attr('src', first.url);
+            }
+            closePicker();
+            return;
+        }
         var st = state(active);
         selectedInPicker.forEach(function (m, id) {
             if (st.items.length < 10 && !st.items.some(function (x) {return x.id === id;})) st.items.push(m);
