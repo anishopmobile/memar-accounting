@@ -63,7 +63,7 @@ $(function() {
       +'<div class="form-row"><label>توضیحات</label><input id="acctNote" maxlength="2000"></div></div>'
       +'<p id="acctAllocationTotal"></p><p class="setting-note">هر روش پرداخت یک سند مجزا دارد، ولی همه روش‌ها و تخصیص‌ها با یک عملیات اتمیک ثبت می‌شوند؛ مبلغ مازاد اعتبار طرف حساب خواهد بود.</p>'
       +'<button id="acctSubmit" type="button" class="button">ثبت دریافت/پرداخت</button>';
-    out+='<h3>سوابق پرداخت‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>کل</th><th>تخصیص</th><th>بدون تخصیص</th><th>شماره پیگیری</th><th>توضیحات</th><th>عملیات</th></tr></thead><tbody>';
+    out+='<h3>سوابق پرداخت‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>کل</th><th>تخصیص</th><th>بدون تخصیص</th><th>شماره پیگیری</th><th>توضیحات</th><th>ثبت‌کننده</th><th>عملیات</th></tr></thead><tbody>';
     (s.payments||[]).forEach(function(p){
       out+='<tr><td>'+safe(p.date)+'</td><td>'+safe(p.method)+'</td><td>'+fmt(p.amount)+'</td><td>'+fmt(p.allocated)+'</td><td>'+fmt(p.unallocated)+'</td>'
         +'<td>'+(!p.is_reversal&&!p.is_reversed&&!zero(p.unallocated)&&p.direction===(kind==='customer'?'in':'out')?'<button type="button" class="button-secondary small acctUseCredit" data-id="'+p.id+'" data-available="'+safe(p.unallocated)+'">تخصیص اعتبار</button>':'')+' '+(!p.is_reversal&&!p.is_reversed?'<button type="button" class="button-secondary small acctReverse" data-id="'+p.id+'">ثبت سند اصلاحی</button>':'ابطال‌شده')+'</td></tr>';
