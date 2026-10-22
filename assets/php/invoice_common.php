@@ -732,6 +732,17 @@ function getInvoice(mysqli $mysqli, int $invoiceId): ?array
         unset($it);
     }
 
+    if (isFinal($inv['type'])) {
+        $accounting = ledger_invoice_balance($mysqli,$invoiceId);
+        $inv['settled_amount'] = $accounting['paid'];
+        $inv['remaining_amount'] = $accounting['due'];
+        $inv['legacy_unresolved'] = $accounting['legacy_classification']==='requires_reconciliation';
+        $inv['payment_status'] = $accounting['status'];
+    } else {
+        $inv['settled_amount'] = null;
+        $inv['remaining_amount'] = null;
+        $inv['legacy_unresolved'] = false;
+    }
     $inv['items'] = $items;
     return $inv;
 }
