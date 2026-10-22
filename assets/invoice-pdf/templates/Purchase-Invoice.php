@@ -203,8 +203,12 @@ $mediaSource = !empty($it['media_print_path']) ? $it['media_print_path'] : (__DI
                         <td>مبلغ قابل پرداخت</td>
                         <td class="money strong"><?php echo pdf_currency_money($inv['payable_amount'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td>
                     </tr>
+                    <?php if ($is_proforma): ?>
+                    <tr><td>پیش‌پرداخت ثبت‌شده (بدهی قطعی نیست)</td><td class="money"><?php echo pdf_currency_money($inv['accounting']['advance'] ?? '0'); ?></td></tr>
+                    <?php else: ?>
                     <tr><td>تسویه‌شده</td><td class="money"><?php echo pdf_currency_money($inv['accounting']['paid'] ?? '0'); ?></td></tr>
                     <tr><td>مانده فاکتور</td><td class="money"><?php echo pdf_currency_money($inv['accounting']['remaining'] ?? '0'); ?></td></tr>
+                    <?php endif; ?>
                 </table>
             </td>
             <td class="payment-side">
