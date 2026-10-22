@@ -11,7 +11,10 @@
       <option value="used">در حال استفاده</option>
       <option value="unused">بدون استفاده</option>
     </select>
+    <select id="mediaManagerFolder" aria-label="پوشه تصاویر"><option value="all">همه پوشه‌ها</option><option value="0">بدون پوشه</option></select>
+    <button type="button" class="button-secondary media-create-folder">+ ایجاد پوشه</button>
   </div>
+  <p class="setting-note">در این قسمت می‌توانید برای هر دسته‌بندی یک پوشه بسازید، تصاویر را بدون کپی بین پوشه‌ها جابه‌جا کنید و از داخل پوشه یا همه کتابخانه انتخاب نمایید.</p>
   <div class="media-manager-grid" id="mediaManagerGrid" aria-live="polite">در حال دریافت تصاویر...</div>
   <div class="media-pages">
     <button id="mediaManagerPrev" type="button">قبلی</button>
