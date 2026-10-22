@@ -1,4 +1,9 @@
 <?php
+// Internal library only; a public direct request must not trigger migrations.
+if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
+    http_response_code(404);
+    exit;
+}
 /** Database credentials must come from the server environment, NEVER Git.
  * CI-only empty-password MySQL is explicitly isolated behind CI=true.
  */
