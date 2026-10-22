@@ -65,3 +65,32 @@ function ledger_parties_report(mysqli $db,string $kind,string $search=''): array
     $rows=$r->fetch_all(MYSQLI_ASSOC);$r->free();
     return $rows;
 }
+
+/** Sum of actual remaining amounts on final sales invoices within a date window. */
+function ledger_outstanding_for_period(mysqli $db,string $from,string $to): string {
+    if(!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$from)||!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$to))throw new InvalidArgumentException('بازه زمانی نامعتبر است.');
+    ledger_initialize_legacy($db);
+    $sql="SELECT COALESCE(SUM(GREATEST(i.payable_amount
+        -COALESCE(l.recognized_paid,0)
+        -COALESCE(p.amount,0)
+        -COALESCE(c.amount,0)
+        -COALESCE(r.amount,0),0)),0) AS outstanding
+      FROM invoices i
+      LEFT JOIN ledger_legacy_invoices l ON l.invoice_id=i.id
+      LEFT JOIN (
+        SELECT a.invoice_id,SUM(a.amount) amount
+          FROM ledger_allocations a JOIN ledger_payments p ON p.id=a.payment_id AND p.voided_at IS NULL
+          GROUP BY a.invoice_id
+      ) p ON p.invoice_id=i.id
+      LEFT JOIN (
+        SELECT a.invoice_id,SUM(a.amount) amount
+          FROM ledger_credit_allocations a JOIN ledger_payments p ON p.id=a.payment_id AND p.voided_at IS NULL
+          GROUP BY a.invoice_id
+      ) c ON c.invoice_id=i.id
+      LEFT JOIN (
+        SELECT invoice_id,SUM(payable_amount) amount FROM sales_returns GROUP BY invoice_id
+      ) r ON r.invoice_id=i.id
+      WHERE i.type='sales_invoice' AND i.invoice_date BETWEEN ? AND ?";
+    $s=$db->prepare($sql);$s->bind_param('ss',$from,$to);$s->execute();$amount=(string)($s->get_result()->fetch_assoc()['outstanding']??'0');$s->close();
+    return money_round($amount);
+}
