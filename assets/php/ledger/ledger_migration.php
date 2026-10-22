@@ -103,7 +103,18 @@ function ledger_migrate(mysqli $db): void {
  * Historical paid invoices are non-cash opening recognition, not receipts.
  */
 function ledger_initialize_legacy(mysqli $db): void {
+    static $ready = false;
+    if($ready) return;
     ledger_migrate($db);
+    // Existing installations must not acquire migration row locks on every request.
+    // This also prevents competing requests from deadlocking during normal posting.
+    $already=$db->query("SELECT legacy_initialized FROM ledger_metadata WHERE id=1 LIMIT 1");
+    if($already && ($row=$already->fetch_assoc()) && (int)$row['legacy_initialized']===1){
+        $already->free();
+        $ready=true;
+        return;
+    }
+    if($already)$already->free();
     $db->begin_transaction();
     try {
         $db->query("INSERT IGNORE INTO ledger_metadata(id,legacy_initialized) VALUES(1,0)");
@@ -121,5 +132,6 @@ function ledger_initialize_legacy(mysqli $db): void {
             $db->query("UPDATE ledger_metadata SET legacy_initialized=1 WHERE id=1");
         }
         $db->commit();
+        $ready=true;
     }catch(Throwable $e){$db->rollback();throw $e;}
 }
