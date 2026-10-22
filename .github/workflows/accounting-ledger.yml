@@ -24,3 +24,36 @@ jobs:
           find assets/php/ledger -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           php -l assets/php/db.php
           php -l assets/php/invoice_common.php
+          php -l assets/php/invoice_save.php
+          php -l pages/accounting-ledger.php
+          php -l assets/php/tests/accounting_ledger_mysql_test.php
+      - name: JS syntax checks
+        run: |
+          node --check assets/js/invoice.js
+          node --check assets/js/accounting-ledger.js
+  mysql-accounting:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP with MySQL and BCMath
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mysqlnd, bcmath, mbstring
+          coverage: none
+      - name: Run isolated ledger integration scenarios
+        env:
+          CI: 'true'
+        run: php assets/php/tests/accounting_ledger_mysql_test.php
