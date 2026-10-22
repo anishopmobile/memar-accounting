@@ -736,4 +736,8 @@ function migrate_product_media_schema(mysqli $mysqli): void
 }
 migrate_product_media_schema($mysqli);
 
+// Accounting subledger schema is additive; legacy amounts and online gateways stay unchanged.
+require_once __DIR__ . '/accounting/ledger.php';
+acct_migrate($mysqli);
+
 } // End database schema initialization; normal application requests are unchanged.
