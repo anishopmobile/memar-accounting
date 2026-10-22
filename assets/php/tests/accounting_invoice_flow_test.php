@@ -53,8 +53,9 @@ ensure_flow($conversion['ok'],'proforma conversion succeeded: '.($conversion['me
 $after=ledger_invoice_balance($mysqli,$proId);
 ensure_flow(money_cmp($after['balance'],'0')===0,'advance automatically settled converted invoice');
 $cash=ledger_party_balance($mysqli,'customer',$c);
-ensure_flow(money_cmp($cash['credit'],'4000000')===0,'unused advance retained for other invoices');
+ensure_flow(money_cmp($cash['debt'],'1000000')===0,'account balances net original invoice debt and remaining advance');
 $st=$mysqli->prepare('SELECT COALESCE(SUM(amount),0) amount FROM accounting_allocations WHERE receipt_id=?');
 $advanceId=(int)$advance['receipt_id'];$st->bind_param('i',$advanceId);$st->execute();$used=$st->get_result()->fetch_assoc()['amount'];$st->close();
 ensure_flow(money_cmp($used,'5000000')===0,'linked prepayment allocation capped at invoice total');
+ensure_flow(money_cmp(money_sub('6000000',$used),'1000000')===0,'unused 1m advance retained for later allocation');
 echo "PASS all end-to-end invoice accounting checks\n";
