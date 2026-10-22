@@ -51,12 +51,15 @@ function resolveBackupDir($dir)
     }
     $webroot = realpath(__DIR__ . '/../..');
     if (!$webroot) throw new RuntimeException('Document root not found');
+    $documentRoot = isset($_SERVER['DOCUMENT_ROOT'])
+        ? realpath((string)$_SERVER['DOCUMENT_ROOT']) : false;
+    $documentRoot = $documentRoot ?: $webroot;
     $absolute = preg_match('#^(?:[A-Za-z]:[\\\\/]|/|\\\\)#', $dir) === 1;
     if (!$absolute) {
         if (!preg_match('#^[a-zA-Z0-9_-]{1,80}$#D', $dir)) {
             throw new InvalidArgumentException('نام پوشه نسبی فقط شامل حروف انگلیسی، اعداد، خط تیره یا زیرخط باشد.');
         }
-        return dirname($webroot) . DIRECTORY_SEPARATOR . 'memar-private-backups' . DIRECTORY_SEPARATOR . $dir;
+        return dirname($documentRoot) . DIRECTORY_SEPARATOR . 'memar-private-backups' . DIRECTORY_SEPARATOR . $dir;
     }
     $dir = rtrim($dir, '/\\\\');
     // Canonicalize the nearest existing parent to reject webroot symlinks
@@ -73,10 +76,12 @@ function resolveBackupDir($dir)
     if (!$canonical) throw new InvalidArgumentException('مسیر پشتیبان نامعتبر است.');
     $dest = rtrim($canonical . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR,$suffix), DIRECTORY_SEPARATOR);
     // Reject any absolute path whose canonical parent resides in the public app.
-    $root = strtolower(rtrim($webroot, DIRECTORY_SEPARATOR));
     $lower = strtolower($dest);
-    if ($lower === $root || str_starts_with($lower, $root . DIRECTORY_SEPARATOR)) {
-        throw new InvalidArgumentException('پشتیبان نباید داخل پوشه عمومی سایت ذخیره شود.');
+    foreach ([$webroot, $documentRoot] as $publicRoot) {
+        $root = strtolower(rtrim($publicRoot, DIRECTORY_SEPARATOR));
+        if ($lower === $root || str_starts_with($lower, $root . DIRECTORY_SEPARATOR)) {
+            throw new InvalidArgumentException('پشتیبان نباید داخل پوشه عمومی سایت ذخیره شود.');
+        }
     }
     return $dest;
 }
