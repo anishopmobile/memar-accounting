@@ -62,7 +62,7 @@ $columns = [
     'phone'           => 'تلفن',
     'address'         => 'آدرس',
     'total_purchases' => 'مجموع خرید',
-    'unpaid'          => 'مبلغ پرداخت نشده',
+    'unpaid'          => 'مانده حساب (+ بدهی / − پیش‌پرداخت)',
 ];
 
 $exportRows = [];
