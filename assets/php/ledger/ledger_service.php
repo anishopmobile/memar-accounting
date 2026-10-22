@@ -115,3 +115,30 @@ function ledger_record_payment(mysqli $db,array $in): array {
         $db->commit();return ['payment_id'=>$paymentId,'duplicate'=>false,'unallocated'=>money_sub($amount,$sum)];
     } catch(Throwable $e){$db->rollback();throw $e;}
 }
+
+/**
+ * One-time historic paid-amount correction; no cash movement is fabricated.
+ * Restricts adjustment to legacy partial invoices and preserves an audit reason.
+ */
+function ledger_reconcile_partial(mysqli $db,int $invoiceId,$paidRaw,string $explanation): array {
+    ledger_initialize_legacy($db);
+    if($invoiceId<1)throw new InvalidArgumentException('شناسه نامعتبر است.');
+    $paid=ledger_decimal($paidRaw);
+    $explanation=trim($explanation);
+    if(strlen($explanation)<8 || strlen($explanation)>2000)throw new InvalidArgumentException('توضیح مستند اصلاح الزامی است.');
+    $db->begin_transaction();
+    try{
+        $s=$db->prepare('SELECT type,payable_amount FROM invoices WHERE id=? FOR UPDATE');
+        $s->bind_param('i',$invoiceId);$s->execute();$invoice=$s->get_result()->fetch_assoc();$s->close();
+        if(!$invoice || !in_array($invoice['type'],['sales_invoice','purchase_invoice'],true))
+            throw new DomainException('فاکتور قطعی یافت نشد.');
+        if(money_cmp($paid,$invoice['payable_amount'])>0)throw new DomainException('مبلغ پرداختی تاریخی بیشتر از مبلغ فاکتور است.');
+        $s=$db->prepare("UPDATE ledger_legacy_invoices SET recognized_paid=?,classification='historical_paid',reconciled_at=NOW() WHERE invoice_id=? AND classification='requires_reconciliation'");
+        $s->bind_param('si',$paid,$invoiceId);$s->execute();$changed=$s->affected_rows;$s->close();
+        if($changed!==1)throw new DomainException('این فاکتور نیازمند اصلاح نیست یا قبلاً اصلاح شده است.');
+        $s=$db->prepare('INSERT INTO ledger_reconciliations(invoice_id,recognized_paid,explanation) VALUES(?,?,?)');
+        $s->bind_param('iss',$invoiceId,$paid,$explanation);$s->execute();$s->close();
+        $db->commit();
+        return ['invoice_id'=>$invoiceId,'recognized_paid'=>$paid];
+    }catch(Throwable $e){$db->rollback();throw $e;}
+}
