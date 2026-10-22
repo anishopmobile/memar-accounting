@@ -116,7 +116,7 @@ $(function () {
                     $('<option/>').val(inv.id).text(inv.invoice_number+' ('+money(inv.due)+')').appendTo(creditInvoices);
                 }
             });
-            $('#ledgerOpeningForm button').prop('disabled',sameCurrency(current.summary.opening||'0','0')!==0);
+            $('#ledgerOpeningForm button').prop('disabled',!!current.summary.opening_recorded);
             $('#ledgerAmount').val('');$('#ledgerPaymentForm')[0].reset();
             $('#ledgerDate,#ledgerOpeningDate').val(todayISO());
             showAllocation();
