@@ -77,7 +77,7 @@ $reportImageMap = $showReportImages ? media_primary_map($mysqli, array_column($r
                                 $mediaId = (int)($reportImageMap[(int)$r['id']]['id'] ?? 0);
                                 $src = $mediaId ? media_image_url($mediaId) : media_default_url();
                             ?>
-                            <td class="product-thumb-cell"><img class="media-thumb" width="40" height="40" loading="lazy" decoding="async" data-id="<?php echo $mediaId; ?>" src="<?php echo htmlspecialchars($src, ENT_QUOTES, 'UTF-8'); ?>" alt=""></td>
+                            <td class="product-thumb-cell"><img class="media-thumb" width="40" height="40" loading="lazy" decoding="async" data-id="<?php echo $mediaId; ?>" data-product-id="<?php echo (int)$r['id']; ?>" src="<?php echo htmlspecialchars($src, ENT_QUOTES, 'UTF-8'); ?>" alt=""></td>
                             <?php endif; ?>
                             <td><?php echo htmlspecialchars($r['name'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars($cat, ENT_QUOTES, 'UTF-8'); ?></td>
