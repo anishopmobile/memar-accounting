@@ -68,6 +68,13 @@ try {
         if (!$id) throw new InvalidArgumentException('شناسه سند مالی نامعتبر است.');
         respond_json(true,'سند برگشتی ثبت شد.',acct_reverse_payment($mysqli,(int)$id,(string)($_POST['reason']??''),(string)($_POST['client_token']??'')));
     }
+    if ($action==='apply_return_credit') {
+        $returnId=filter_var($_POST['return_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        $invoiceId=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if (!$returnId || !$invoiceId) throw new InvalidArgumentException('سند برگشت یا فاکتور نامعتبر است.');
+        $amount=parseMoneyInput((string)($_POST['amount']??''));
+        respond_json(true,'اعتبار برگشت از فروش تخصیص داده شد.',acct_allocate_return_credit($mysqli,(int)$returnId,(int)$invoiceId,$amount));
+    }
     if ($action==='apply_credit') {
         $paymentId=filter_var($_POST['payment_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         $invoiceId=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
