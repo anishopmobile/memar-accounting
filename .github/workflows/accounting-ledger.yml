@@ -27,10 +27,23 @@ jobs:
           php -l assets/php/invoice_save.php
           php -l pages/accounting-ledger.php
           php -l assets/php/tests/accounting_ledger_mysql_test.php
+          php -l index.php
+          php -l assets/php/sales_return_common.php
+          php -l assets/php/invoice_pdf_data.php
+          php -l assets/php/save_customer.php
+          php -l assets/php/save_supplier.php
+          php -l assets/php/delete_customer.php
+          php -l assets/php/delete_supplier.php
+          php -l assets/php/report_customer_debt_export.php
+          php -l assets/php/report_supplier_debt_export.php
+          find pages -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          find assets/invoice-pdf/templates -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: JS syntax checks
         run: |
           node --check assets/js/invoice.js
           node --check assets/js/accounting-ledger.js
+          node --check assets/js/main.js
+          node assets/js/currency.test.js
   mysql-accounting:
     runs-on: ubuntu-latest
     services:
@@ -56,4 +69,12 @@ jobs:
       - name: Run isolated ledger integration scenarios
         env:
           CI: 'true'
-        run: php assets/php/tests/accounting_ledger_mysql_test.php
+        run: |
+          php assets/php/tests/accounting_ledger_mysql_test.php
+          php assets/php/tests/currency_mysql_test.php
+          php assets/php/tests/current_affairs_test.php
+          php assets/php/tests/multi_unit_inventory_test.php
+          php assets/php/tests/sales_return_test.php
+          php assets/php/tests/sales_invoice_product_service_test.php
+          php assets/php/tests/product_bundling_test.php
+          php assets/php/tests/defective_return_test.php
