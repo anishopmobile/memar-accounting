@@ -7,6 +7,11 @@ require_once __DIR__ . '/accounting_ledger.php';
 
 $action=(string)($_REQUEST['action']??'');
 try {
+    if ($_SERVER['REQUEST_METHOD']==='GET' && $action==='accounts') {
+        $res=$mysqli->query('SELECT id,name,account_type FROM accounting_cash_accounts WHERE is_active=1 ORDER BY account_type,id');
+        $accounts=[];while($res && ($row=$res->fetch_assoc()))$accounts[]=$row;
+        respond_json(true,'حساب‌ها',['accounts'=>$accounts]);
+    }
     if ($_SERVER['REQUEST_METHOD']==='GET' && $action==='statement') {
         $kind=(string)($_GET['party_kind']??'');
         $id=filter_var($_GET['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
@@ -17,13 +22,22 @@ try {
         respond_error('عملیات نامعتبر است.',405);
     }
     require_csrf_or_fail();
+    if ($action==='create_account') {
+        $name=trim((string)($_POST['name']??''));
+        $type=(string)($_POST['account_type']??'');
+        if (mb_strlen($name)<3 || mb_strlen($name)>120 || !in_array($type,['cash','pos','bank_transfer'],true))
+            throw new InvalidArgumentException('نام یا نوع حساب نامعتبر است.');
+        $stmt=$mysqli->prepare('INSERT INTO accounting_cash_accounts(name,account_type) VALUES(?,?)');
+        $stmt->bind_param('ss',$name,$type);$stmt->execute();$id=(int)$stmt->insert_id;$stmt->close();
+        respond_json(true,'حساب جدید ایجاد شد.',['id'=>$id]);
+    }
     if ($action==='payment') {
         $alloc=$_POST['allocations']??'[]';
         if (is_string($alloc)) $alloc=json_decode($alloc,true,16,JSON_THROW_ON_ERROR);
         $input=[
             'party_kind'=>$_POST['party_kind']??'','party_id'=>$_POST['party_id']??0,
             'amount'=>parseMoneyInput((string)($_POST['amount']??'')),
-            'method'=>$_POST['method']??'','direction'=>$_POST['direction']??'',
+            'method'=>$_POST['method']??'','cash_account_id'=>$_POST['cash_account_id']??null,'direction'=>$_POST['direction']??'',
             'payment_date'=>$_POST['payment_date']??date('Y-m-d'),
             'reference_no'=>$_POST['reference_no']??'','note'=>$_POST['note']??'',
             'client_token'=>$_POST['client_token']??'','allocations'=>[]
@@ -42,6 +56,7 @@ try {
           'party_id'=>$_POST['party_id']??0,
           'amount'=>parseMoneyInput((string)($_POST['amount']??'')),
           'method'=>$_POST['method']??'',
+          'cash_account_id'=>$_POST['cash_account_id']??null,
           'payment_date'=>$_POST['payment_date']??date('Y-m-d'),
           'client_token'=>$_POST['client_token']??'',
           'note'=>$_POST['note']??''
