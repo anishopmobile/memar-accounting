@@ -439,6 +439,12 @@ function acct_party_timeline(array $statement): array {
         $credit=$payment['direction']===$expected;
         $label=($credit?'دریافت/پرداخت ':'استرداد/سند اصلاحی ').'#'.$payment['id'];
         if($payment['is_reversal'])$label='سند معکوس #'.$payment['id'];
+        $account=trim((string)($payment['cash_account_name']??''));
+        $ref=trim((string)($payment['reference_no']??''));
+        $note=trim((string)($payment['note']??''));
+        if($account!=='')$label.=' | '.$account;
+        if($ref!=='')$label.=' | پیگیری: '.$ref;
+        if($note!=='')$label.=' | '.$note;
         $append((string)$payment['date'],$label,
             $credit?'0':(string)$payment['amount'],$credit?(string)$payment['amount']:'0',40);
     }
