@@ -45,8 +45,8 @@ function ledger_parties_report(mysqli $db,string $kind,string $search=''): array
             WHERE x.type='$iType' GROUP BY x.$iFk
         ) h ON h.party_id=p.id
         LEFT JOIN (
-            SELECT party_id,SUM(amount) amount FROM ledger_payments
-            WHERE party_kind='$kind' AND direction='$movement' AND voided_at IS NULL
+            SELECT party_id,SUM(CASE WHEN direction='$movement' THEN amount ELSE -amount END) amount FROM ledger_payments
+            WHERE party_kind='$kind' AND voided_at IS NULL
             GROUP BY party_id
         ) m ON m.party_id=p.id
         LEFT JOIN ledger_openings o ON o.party_kind='$kind' AND o.party_id=p.id
