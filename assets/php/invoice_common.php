@@ -1271,6 +1271,10 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
 
         $partyId = (int) $in['party_id'];
         if ($partyId !== (int)(isSales($newType)?$old['customer_id']:$old['supplier_id'])) {
+            // An advance is linked to the original party and may not be reassigned.
+            $st=$mysqli->prepare('SELECT 1 FROM accounting_receipts WHERE source_proforma_id=? LIMIT 1');
+            $st->bind_param('i',$invoiceId);$st->execute();$hasAdvance=$st->get_result()->fetch_assoc();$st->close();
+            if($hasAdvance) throw new Exception('تغییر طرف حساب پیش‌فاکتور دارای پیش‌پرداخت مجاز نیست.');
             require_once __DIR__ . '/accounting_ledger.php';
             $hasFinancial = ledger_invoice_balance($mysqli,$invoiceId);
             if (money_cmp($hasFinancial['allocated'],'0')>0 || money_cmp($hasFinancial['historical'],'0')>0 || $hasFinancial['needs_review']) {
@@ -1418,6 +1422,9 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
             // پیش‌فاکتور: بدون تغییر موجودی
         }
 
+        $st=$mysqli->prepare('SELECT 1 FROM accounting_receipts WHERE source_proforma_id=? LIMIT 1');
+        $st->bind_param('i',$invoiceId);$st->execute();$hasAdvance=$st->get_result()->fetch_assoc();$st->close();
+        if($hasAdvance) throw new Exception('فاکتور دارای پیش‌پرداخت تاریخی قابل حذف مستقیم نیست.');
         // Financial records are immutable and must never disappear with an invoice.
         require_once __DIR__ . '/accounting_ledger.php';
         $check=ledger_invoice_balance($mysqli,$invoiceId,true);
