@@ -25,6 +25,7 @@
     <form id="ledgerPaymentForm">
       <div class="form-grid">
         <div class="form-row"><label>مبلغ واقعی دریافت / پرداخت</label><input required type="number" min="0.01" step="0.01" id="ledgerAmount"></div>
+        <div class="form-row"><label>نوع عملیات مالی</label><select id="ledgerDirection"><option value="normal">دریافت / پرداخت عادی</option><option value="reverse">استرداد وجه / برگشت بانکی واقعی</option></select></div>
         <div class="form-row"><label>روش</label><select id="ledgerMethod"><option value="cash">نقدی</option><option value="pos">کارت‌خوان</option><option value="bank_transfer">انتقال بانکی</option></select></div>
         <div class="form-row"><label>تاریخ پرداخت (میلادی؛ مطابق تاریخ سند ذخیره می‌شود)</label><input required type="date" id="ledgerDate"></div>
         <div class="form-row"><label>شماره پیگیری (اختیاری)</label><input maxlength="120" id="ledgerReference"></div>
