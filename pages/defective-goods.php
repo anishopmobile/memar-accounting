@@ -72,6 +72,9 @@ if ($dgExportQs) { $dgExportUrl .= '?' . http_build_query($dgExportQs); }
                 <textarea id="defDescription" name="description" rows="3" maxlength="2000"></textarea>
             </div>
         </div>
+        <h3 style="margin-top:16px">تصاویر کالای معیوب هنگام ثبت</h3>
+        <p class="setting-note">تصاویر این ثبت جدا از گالری خود کالا ذخیره می‌شوند و پس از برگشت به موجودی نیز در گزارش باقی می‌مانند.</p>
+        <?php $mediaWidgetPrefix = 'defective'; include __DIR__ . '/../assets/php/media_product_widget.php'; unset($mediaWidgetPrefix); ?>
         <div class="form-actions">
             <button type="submit" class="button button-success" id="defSubmit">ثبت کالای معیوب</button>
             <button type="button" class="button-secondary" id="defReset">تازه‌سازی فرم</button>
@@ -109,6 +112,7 @@ if ($dgExportQs) { $dgExportUrl .= '?' . http_build_query($dgExportQs); }
                     <th>ردیف</th>
                     <th>تاریخ (شمسی)</th>
                     <th>نام کالا</th>
+                    <th>تصویر معیوب</th>
                     <th>بارکد</th>
                     <th>کد کالا</th>
                     <th>تعداد</th>
@@ -119,13 +123,20 @@ if ($dgExportQs) { $dgExportUrl .= '?' . http_build_query($dgExportQs); }
             </thead>
             <tbody id="defReportBody">
                 <?php if (count($dgData['rows']) === 0): ?>
-                    <tr class="empty-state-row"><td colspan="9" class="empty-state">رکوردی یافت نشد</td></tr>
+                    <tr class="empty-state-row"><td colspan="10" class="empty-state">رکوردی یافت نشد</td></tr>
                 <?php else: ?>
                     <?php $dgRowNo = $dgData['rangeStart']; foreach ($dgData['rows'] as $dgRow): ?>
                         <tr>
                             <td><?php echo $dgRowNo++; ?></td>
                             <td><?php echo jdate('Y/m/d', strtotime((string) $dgRow['defective_date'])); ?></td>
                             <td><?php echo htmlspecialchars((string) $dgRow['product_name'], ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td class="product-thumb-cell">
+                                <?php $defPhoto = (int)($dgRow['defective_media_id'] ?? 0); ?>
+                                <img class="media-thumb" loading="lazy" decoding="async" width="46" height="46"
+                                     data-id="<?php echo $defPhoto; ?>"
+                                     src="<?php echo $defPhoto ? 'assets/php/media_file.php?id=' . $defPhoto . '&amp;size=thumb' : 'assets/img/product-placeholder.svg'; ?>"
+                                     alt="تصویر کالای معیوب">
+                            </td>
                             <td dir="ltr"><?php echo htmlspecialchars((string) ($dgRow['product_barcode'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td dir="ltr"><?php echo htmlspecialchars((string) $dgRow['product_code'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo number_format((float) $dgRow['quantity']); ?> <?php echo htmlspecialchars((string) ($dgRow['product_unit'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
