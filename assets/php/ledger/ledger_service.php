@@ -156,6 +156,11 @@ function ledger_reconcile_partial(mysqli $db,int $invoiceId,$paidRaw,string $exp
 function ledger_party_details(mysqli $db,string $kind,int $id): array {
     ledger_initialize_legacy($db);
     $summary=ledger_party_summary($db,$kind,$id);
+    $partyTable=$kind==='customer'?'customers':'suppliers';
+    $nameExpr=$kind==='customer' ? "CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,''))" : "COALESCE(NULLIF(company_name,''),CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,'')))";
+    $pstmt=$db->prepare("SELECT $nameExpr AS name,phone FROM $partyTable WHERE id=?");
+    $pstmt->bind_param('i',$id);$pstmt->execute();$party=$pstmt->get_result()->fetch_assoc();$pstmt->close();
+    if(!$party)throw new DomainException('طرف حساب یافت نشد.');
     $fk=$kind==='customer'?'customer_id':'supplier_id';
     $type=$kind==='customer'?'sales_invoice':'purchase_invoice';
     $s=$db->prepare("SELECT id,invoice_number,invoice_date,payable_amount FROM invoices WHERE type=? AND $fk=? ORDER BY invoice_date DESC,id DESC LIMIT 150");
@@ -169,7 +174,7 @@ function ledger_party_details(mysqli $db,string $kind,int $id): array {
     }
     $s=$db->prepare('SELECT p.id,p.direction,p.amount,p.method,p.paid_on,p.reference_no,p.note,p.voided_at, (p.amount-COALESCE((SELECT SUM(a.amount) FROM ledger_allocations a WHERE a.payment_id=p.id),0)-COALESCE((SELECT SUM(a.amount) FROM ledger_credit_allocations a WHERE a.payment_id=p.id),0)) AS unapplied FROM ledger_payments p WHERE p.party_kind=? AND p.party_id=? ORDER BY p.id DESC LIMIT 150');
     $s->bind_param('si',$kind,$id);$s->execute();$payments=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
-    return ['summary'=>$summary,'invoices'=>$invoices,'payments'=>$payments];
+    return ['party'=>$party,'summary'=>$summary,'invoices'=>$invoices,'payments'=>$payments];
 }
 
 /**
