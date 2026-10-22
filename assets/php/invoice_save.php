@@ -48,6 +48,14 @@ try {
     $documentDiscount = trim((string) ($_POST['discount'] ?? '0'));
     $documentDiscount = parseMoneyInput($documentDiscount === '' ? '0' : $documentDiscount);
     $initialPayment = parseMoneyInput(trim((string)($_POST['initial_payment_amount'] ?? '0')) ?: '0');
+    $initialPayments=json_decode((string)($_POST['initial_payments']??'[]'),true);
+    if (!is_array($initialPayments) || count($initialPayments)>12) throw new InvalidArgumentException('حداکثر ۱۲ روش پرداخت اولیه مجاز است.');
+    foreach ($initialPayments as &$p) {
+        if(!is_array($p))throw new InvalidArgumentException('داده پرداخت اولیه نامعتبر است.');
+        $p['amount']=parseMoneyInput((string)($p['amount']??'0'));
+        $p['method']=trim((string)($p['method']??''));
+        $p['reference_number']=substr(trim((string)($p['reference_number']??'')),0,120);
+    }unset($p);
 } catch (InvalidArgumentException $e) {
     respond_error($e->getMessage(), 422);
 }
@@ -59,6 +67,7 @@ $in = [
     'payment_type'   => trim((string) ($_POST['payment_type'] ?? 'pos')),
     'payment_status' => 'unpaid',
     'initial_payment_amount' => $initialPayment,
+    'initial_payments' => $initialPayments,
     'invoice_date'   => trim((string) ($_POST['invoice_date'] ?? '')),
     'discount'       => $documentDiscount,
     'note'           => trim((string) ($_POST['note'] ?? '')),
