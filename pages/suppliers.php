@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../assets/php/accounting_ledger.php';
 require_once __DIR__ . '/../assets/php/db.php';
 
 $suppliers = [];
@@ -27,6 +28,7 @@ $query = "
 $result = $mysqli->query($query);
 if ($result) {
     while ($row = $result->fetch_assoc()) {
+        $row['unpaid']=ledger_party_balance($mysqli,'supplier',(int)$row['id'])['debt'];
         $suppliers[] = $row;
     }
     $result->free();
