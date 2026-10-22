@@ -142,3 +142,32 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
     $balance=money_sub(money_add($total,$opening),money_add($unallocated,$returnCredits));
     return ['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'return_credit'=>$returnCredits,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
 }
+
+/** Apply existing unallocated credit to one final invoice. */
+function acct_apply_credit(mysqli $db, int $paymentId, int $invoiceId, $rawAmount): array {
+    $amount=acct_decimal($rawAmount,true);
+    $db->begin_transaction();
+    try {
+        $stmt=$db->prepare('SELECT party_kind,party_id,amount FROM account_payments WHERE id=?');
+        $stmt->bind_param('i',$paymentId);$stmt->execute();$r=$stmt->get_result();$p=$r?$r->fetch_assoc():null;$stmt->close();
+        if (!$p) throw new InvalidArgumentException('پرداخت یافت نشد.');
+        acct_party_lock($db,$p['party_kind'],(int)$p['party_id']);
+        $stmt=$db->prepare('SELECT * FROM account_payments WHERE id=? FOR UPDATE');
+        $stmt->bind_param('i',$paymentId);$stmt->execute();$p=$stmt->get_result()->fetch_assoc();$stmt->close();
+        $v=acct_invoice_outstanding($db,$invoiceId,true);
+        if ($v['unreconciled']) throw new InvalidArgumentException('فاکتور تاریخی باید ابتدا تطبیق داده شود.');
+        $inv=$v['invoice'];$kind=$p['party_kind'];
+        if (($kind==='customer' && ($inv['type']!=='sales_invoice'||(int)$inv['customer_id']!==(int)$p['party_id']))
+            || ($kind==='supplier' && ($inv['type']!=='purchase_invoice'||(int)$inv['supplier_id']!==(int)$p['party_id'])))
+            throw new InvalidArgumentException('طرف حساب فاکتور و پرداخت متفاوت است.');
+        $stmt=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE payment_id=?');
+        $stmt->bind_param('i',$paymentId);$stmt->execute();$used=$stmt->get_result()->fetch_assoc()['s'];$stmt->close();
+        if (money_cmp($amount,money_sub($p['amount'],$used))>0 || money_cmp($amount,$v['remaining'])>0)
+            throw new InvalidArgumentException('مبلغ از اعتبار آزاد یا مانده فاکتور بیشتر است.');
+        $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount) VALUES(?,?,?) ON DUPLICATE KEY UPDATE amount=amount+VALUES(amount)');
+        $stmt->bind_param('iis',$paymentId,$invoiceId,$amount);$stmt->execute();$stmt->close();
+        acct_update_status($db,$invoiceId);
+        $db->commit();
+        return ['invoice_id'=>$invoiceId,'payment_id'=>$paymentId];
+    } catch (Throwable $e) {$db->rollback();throw $e;}
+}
