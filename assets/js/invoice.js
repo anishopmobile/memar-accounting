@@ -325,6 +325,15 @@ $(function () {
             + '<div class="form-row"><label>مالیات</label><div id="invTax" class="money-cell">0</div></div>'
             + '<div class="form-row"><label>مبلغ قابل پرداخت</label><div id="invPayable" class="money-cell strong">0</div></div>'
             + '</div>'
+            + (isEdit
+                ? '<p class="setting-note">دریافت‌ها و پرداخت‌های ثبت‌شده از طریق «صورت‌حساب طرف معامله» مدیریت می‌شوند و ویرایش فاکتور آن‌ها را پاک نمی‌کند.</p>'
+                : '<div class="card" id="invInitialPaymentSection"><h3>' + (isSales ? 'دریافت هنگام ثبت' : 'پرداخت هنگام ثبت') + '</h3>'
+                + '<p class="setting-note">پرداخت‌ها مستقل و دارای سابقه مالی هستند. پرداخت بیش از مبلغ فاکتور به‌عنوان اعتبار طرف حساب نگهداری می‌شود. برای تخصیص اعتبار به بدهی‌های قبلی از صفحه صورت‌حساب استفاده کنید.</p>'
+                + '<div class="table-wrapper"><table class="action-table"><thead><tr><th>مبلغ</th><th>روش</th><th>تاریخ</th><th>شماره پیگیری</th><th>حذف</th></tr></thead><tbody id="invInitialPaymentRows"></tbody></table></div>'
+                + '<button type="button" class="button-secondary" id="invAddInitialPayment">+ افزودن پرداخت</button>'
+                + '<div class="form-grid"><div class="form-row"><label>جمع ' + (isSales?'دریافتی':'پرداختی') + '</label><div id="invInitialPaid" class="money-cell">0</div></div>'
+                + '<div class="form-row"><label>مانده فاکتور پس از این پرداخت‌ها</label><div id="invInitialDue" class="money-cell">0</div></div>'
+                + '<div class="form-row"><label>مازاد واریز (اعتبار طرف حساب)</label><div id="invInitialExcess" class="money-cell">0</div></div></div></div>')
             + '<div class="form-row"><label>مبلغ به حروف</label><div id="invWords" class="words-cell"></div></div>'
             + '<div class="form-row"><label>یادداشت</label><textarea id="invNote" rows="2">' + esc(data ? data.note : '') + '</textarea></div>'
             + '<div class="form-actions">'
@@ -400,6 +409,21 @@ $(function () {
         recalcs();
     }
 
+    function addInitialPaymentRow() {
+        var date = $('#invDate').val() || todayISO();
+        var row = $('<tr class="inv-payment-row">'
+            + '<td><input type="number" class="inv-payment-amount" min="0.01" step="0.01" placeholder="مبلغ"></td>'
+            + '<td><select class="inv-payment-method"><option value="pos">کارت‌خوان</option><option value="cash">نقدی</option><option value="bank_transfer">انتقال بانکی</option></select></td>'
+            + '<td><input type="date" class="inv-payment-date"></td>'
+            + '<td><input type="text" class="inv-payment-reference" maxlength="120" placeholder="اختیاری"></td>'
+            + '<td><button type="button" class="button-danger small inv-payment-remove">حذف</button></td></tr>');
+        row.find('.inv-payment-date').val(date);
+        $('#invInitialPaymentRows').append(row);
+        recalcs();
+    }
+    $(document).on('click','#invAddInitialPayment',addInitialPaymentRow);
+    $(document).on('click','.inv-payment-remove',function(){$(this).closest('tr').remove();recalcs();});
+    $(document).on('input change','.inv-payment-amount,.inv-payment-method,.inv-payment-date',function(){recalcs();});
     function recalcs() {
         var subtotal = 0;
         $('#invItemsTable tbody tr').each(function () {
@@ -421,6 +445,17 @@ $(function () {
         $('#invTax').text(splitNum(Math.round(tax)) + ' ' + window.Currency.label);
         $('#invPayable').text(splitNum(Math.round(payable)) + ' ' + window.Currency.label);
         $('#invWords').text(amountToWords(payable));
+        if ($('#invInitialPaymentSection').length) {
+            var initialPaid = 0;
+            $('#invInitialPaymentRows .inv-payment-amount').each(function() {
+                initialPaid += parseFloat($(this).val()) || 0;
+            });
+            var remaining = Math.max(0, payable - initialPaid);
+            var excess = Math.max(0, initialPaid - payable);
+            $('#invInitialPaid').text(splitNum(Math.round(initialPaid))+' '+window.Currency.label);
+            $('#invInitialDue').text(splitNum(Math.round(remaining))+' '+window.Currency.label);
+            $('#invInitialExcess').text(splitNum(Math.round(excess))+' '+window.Currency.label);
+        }
     }
 
     function bindFormEvents() { /* رویدادها به‌صورت delegate روی document بسته شده‌اند */ }
@@ -711,6 +746,24 @@ $(function () {
         if (!gDate || !/^\d{4}-\d{2}-\d{2}$/.test(gDate)) { alert('تاریخ فاکتور نامعتبر است.'); return; }
         if (!items.length) { alert('حداقل یک کالا باید اضافه شود.'); return; }
 
+        var initialPayments = [];
+        var paymentInvalid = false;
+        $('#invInitialPaymentRows tr').each(function() {
+            var amount = String($('.inv-payment-amount',this).val() || '').trim();
+            var paidOn = String($('.inv-payment-date',this).val() || '').trim();
+            if (!amount || Number(amount) <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(paidOn)) {
+                paymentInvalid = true; return;
+            }
+            initialPayments.push({
+                amount: amount,
+                method: $('.inv-payment-method',this).val(),
+                paid_on: paidOn,
+                reference_no: $('.inv-payment-reference',this).val() || '',
+                allocations: []
+            });
+        });
+        if (paymentInvalid) { alert('مبلغ یا تاریخ یکی از پرداخت‌ها معتبر نیست.'); return; }
+        if (initialPayments.length > 10) { alert('حداکثر ۱۰ پرداخت در زمان ثبت فاکتور مجاز است.'); return; }
         var payload = {
             csrf_token: csrf,
             invoice_id: currentInvoiceId,
@@ -721,7 +774,8 @@ $(function () {
             discount: $('#invDiscount').val() || '0',
             note: $('#invNote').val(),
             client_token: clientToken,
-            items: JSON.stringify(items)
+            items: JSON.stringify(items),
+            initial_payments: JSON.stringify(initialPayments)
         };
         payload[partyField] = partyId;
 
