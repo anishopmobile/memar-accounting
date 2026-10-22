@@ -34,11 +34,14 @@ function migrate_accounting_ledger(mysqli $db): void
         note TEXT NULL,
         client_token VARCHAR(64) NOT NULL,
         request_hash CHAR(64) NULL,
+        source_proforma_id INT NULL,
         cash_account_id INT NULL,
         reversed_payment_id BIGINT UNSIGNED NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uq_ap_token(client_token),
         KEY idx_ap_account(cash_account_id),
+        KEY idx_ap_proforma(source_proforma_id),
+        CONSTRAINT fk_ap_proforma FOREIGN KEY(source_proforma_id) REFERENCES invoices(id) ON DELETE RESTRICT,
         CONSTRAINT fk_ap_account FOREIGN KEY(cash_account_id) REFERENCES accounting_cash_accounts(id) ON DELETE RESTRICT,
         UNIQUE KEY uq_ap_reversal(reversed_payment_id),
         KEY idx_ap_party(party_kind,party_id,payment_date),
@@ -48,6 +51,12 @@ function migrate_accounting_ledger(mysqli $db): void
     $requestHashCol=$db->query("SHOW COLUMNS FROM account_payments LIKE 'request_hash'");
     if ($requestHashCol && $requestHashCol->num_rows===0)
         $db->query("ALTER TABLE account_payments ADD COLUMN request_hash CHAR(64) NULL");
+    $sourceColumn=$db->query("SHOW COLUMNS FROM account_payments LIKE 'source_proforma_id'");
+    if ($sourceColumn && $sourceColumn->num_rows===0) {
+        $db->query("ALTER TABLE account_payments ADD COLUMN source_proforma_id INT NULL,
+            ADD KEY idx_ap_proforma(source_proforma_id),
+            ADD CONSTRAINT fk_ap_proforma FOREIGN KEY(source_proforma_id) REFERENCES invoices(id) ON DELETE RESTRICT");
+    }
     $cashColumn=$db->query("SHOW COLUMNS FROM account_payments LIKE 'cash_account_id'");
     if ($cashColumn && $cashColumn->num_rows===0) {
         $db->query("ALTER TABLE account_payments ADD COLUMN cash_account_id INT NULL,
