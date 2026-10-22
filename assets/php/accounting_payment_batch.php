@@ -26,8 +26,10 @@ function acct_record_payment_batch(mysqli $db, array $input): array
         $method=(string)($row['method']??'');
         if (!in_array($method,['cash','pos','bank_transfer'],true))
             throw new InvalidArgumentException('روش پرداخت نامعتبر است.');
-        $accountId=(int)($row['cash_account_id']??0);
-        if($accountId<0)throw new InvalidArgumentException('حساب پرداخت نامعتبر است.');
+        $accountRaw=$row['cash_account_id']??0;
+        $accountId=($accountRaw===0 || $accountRaw==='0' || $accountRaw===null || $accountRaw==='') ? 0
+            : filter_var($accountRaw,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if($accountId===false)throw new InvalidArgumentException('شناسه حساب پرداخت نامعتبر است.');
         $normalized[]=['amount'=>$amount,'method'=>$method,'cash_account_id'=>$accountId];
         $total=money_add($total,$amount);
     }
@@ -46,8 +48,10 @@ function acct_record_payment_batch(mysqli $db, array $input): array
     if(money_cmp($allocated,$total)>0)
         throw new InvalidArgumentException('تخصیص‌ها از مجموع پرداخت‌ها بیشتر است.');
     ksort($alloc,SORT_NUMERIC);
-    $sourceId=(int)($input['source_proforma_id']??0);
-    if($sourceId<0)throw new InvalidArgumentException('پیش‌فاکتور نامعتبر است.');
+    $sourceRaw=$input['source_proforma_id']??0;
+    $sourceId=($sourceRaw===0 || $sourceRaw==='0' || $sourceRaw===null || $sourceRaw==='') ? 0
+        : filter_var($sourceRaw,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+    if($sourceId===false)throw new InvalidArgumentException('پیش‌فاکتور نامعتبر است.');
     $ref=trim((string)($input['reference_no']??''));
     $note=trim((string)($input['note']??''));
     if(mb_strlen($ref)>120||mb_strlen($note)>2000)
