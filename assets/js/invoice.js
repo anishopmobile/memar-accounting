@@ -133,7 +133,7 @@ $(function () {
         var status = encodeURIComponent($('#invoiceStatusFilter').val() || '');
         $.getJSON('assets/php/invoice_list.php?type_group=' + typeGroup + '&search=' + search + '&payment_status=' + status + '&page=' + currentPage)
             .done(function (res) { renderInvoiceList(res.data); })
-            .fail(function () { $('#invoicesTable tbody').html('<tr><td colspan="7" class="empty-state">خطا در بارگذاری فاکتورها.</td></tr>'); });
+            .fail(function () { $('#invoicesTable tbody').html('<tr><td colspan="9" class="empty-state">خطا در بارگذاری فاکتورها.</td></tr>'); });
     }
     function renderInvoiceList(data) {
         var rows = (data && data.rows) || [];
@@ -143,7 +143,7 @@ $(function () {
         var perPage = (data && data.per_page) || 15;
         var tbody = $('#invoicesTable tbody');
         if (!rows.length) {
-            tbody.html('<tr><td colspan="7" class="empty-state">فاکتوری یافت نشد.</td></tr>');
+            tbody.html('<tr><td colspan="9" class="empty-state">فاکتوری یافت نشد.</td></tr>');
             renderInvoicePagination({ total: 0, page: 1, perPage: perPage });
             return;
         }
@@ -159,6 +159,8 @@ $(function () {
                 + '<td>' + typeLbl + '</td>'
                 + '<td>' + stLbl + '</td>'
                 + '<td>' + fmtRial(r.payable_amount) + ' ' + window.Currency.label + '</td>'
+                + '<td>' + (isPro ? '—' : r.unreconciled_payment ? 'نیازمند تطبیق' : fmtRial(r.paid_amount||'0')+' '+window.Currency.label) + '</td>'
+                + '<td>' + (isPro ? '—' : r.unreconciled_payment ? 'نیازمند تطبیق' : fmtRial(r.remaining_amount||'0')+' '+window.Currency.label) + '</td>'
                 + '<td class="invoice-actions">'
                 + '<button class="button-secondary small invoice-edit" data-id="' + r.id + '" type="button">مشاهده/ویرایش</button> '
                 + (isPro ? '<button class="button-secondary small invoice-convert" data-id="' + r.id + '" type="button">تبدیل به قطعی</button> ' : '')
@@ -464,7 +466,7 @@ $(function () {
     var pickedScheduled = true;
     var productSearchTimer = null, productRequest = null, productRequestSeq = 0;
     function openProductModal() {
-        $('#invoiceProductTable tbody').html('<tr><td colspan="7" class="empty-state">در حال بارگذاری...</td></tr>');
+        $('#invoiceProductTable tbody').html('<tr><td colspan="9" class="empty-state">در حال بارگذاری...</td></tr>');
         loadProducts('');
         openModal('invoiceProductModal');
         $('#invoiceProductSearch').val('').focus();
