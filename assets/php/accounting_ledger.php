@@ -193,14 +193,24 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
 }
 
 /** Apply existing unallocated credit to one final invoice. */
-function acct_apply_credit(mysqli $db, int $paymentId, int $invoiceId, $rawAmount): array {
+function acct_apply_credit(mysqli $db, int $paymentId, int $invoiceId, $rawAmount, ?string $token=null): array {
     $amount=acct_decimal($rawAmount,true);
+    $token=$token??bin2hex(random_bytes(20));
+    if(!preg_match('/^[A-Za-z0-9_-]{16,64}$/D',$token))throw new InvalidArgumentException('شناسه تخصیص نامعتبر است.');
     $db->begin_transaction();
     try {
         $stmt=$db->prepare('SELECT party_kind,party_id,amount FROM account_payments WHERE id=?');
         $stmt->bind_param('i',$paymentId);$stmt->execute();$r=$stmt->get_result();$p=$r?$r->fetch_assoc():null;$stmt->close();
         if (!$p) throw new InvalidArgumentException('پرداخت یافت نشد.');
         acct_party_lock($db,$p['party_kind'],(int)$p['party_id']);
+        $stmt=$db->prepare('SELECT payment_id,invoice_id,amount FROM account_payment_allocations WHERE client_token=? LIMIT 1');
+        $stmt->bind_param('s',$token);$stmt->execute();$rr=$stmt->get_result();$repeat=$rr?$rr->fetch_assoc():null;$stmt->close();
+        if($repeat) {
+            if((int)$repeat['payment_id']!==$paymentId || (int)$repeat['invoice_id']!==$invoiceId ||
+                 money_cmp($repeat['amount'],$amount)!==0)
+                throw new InvalidArgumentException('شناسه تخصیص برای سند متفاوت استفاده شده است.');
+            $db->commit();return ['invoice_id'=>$invoiceId,'payment_id'=>$paymentId,'duplicate'=>true];
+        }
         $stmt=$db->prepare('SELECT * FROM account_payments WHERE id=? FOR UPDATE');
         $stmt->bind_param('i',$paymentId);$stmt->execute();$p=$stmt->get_result()->fetch_assoc();$stmt->close();
         $validDirection=$p['party_kind']==='customer'?'in':'out';
@@ -220,8 +230,8 @@ function acct_apply_credit(mysqli $db, int $paymentId, int $invoiceId, $rawAmoun
         $stmt->bind_param('i',$paymentId);$stmt->execute();$used=$stmt->get_result()->fetch_assoc()['s'];$stmt->close();
         if (money_cmp($amount,money_sub($p['amount'],$used))>0 || money_cmp($amount,$v['remaining'])>0)
             throw new InvalidArgumentException('مبلغ از اعتبار آزاد یا مانده فاکتور بیشتر است.');
-        $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount) VALUES(?,?,?)');
-        $stmt->bind_param('iis',$paymentId,$invoiceId,$amount);$stmt->execute();$stmt->close();
+        $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount,client_token) VALUES(?,?,?,?)');
+        $stmt->bind_param('iiss',$paymentId,$invoiceId,$amount,$token);$stmt->execute();$stmt->close();
         acct_update_status($db,$invoiceId);
         $db->commit();
         return ['invoice_id'=>$invoiceId,'payment_id'=>$paymentId];
@@ -360,8 +370,10 @@ function acct_reverse_payment(mysqli $db,int $paymentId,string $reason,string $t
 }
 
 /** Allocate documented sales return credit without pretending cash was received. */
-function acct_allocate_return_credit(mysqli $db,int $returnId,int $invoiceId,$rawAmount): array {
+function acct_allocate_return_credit(mysqli $db,int $returnId,int $invoiceId,$rawAmount,?string $token=null): array {
     $amount=acct_decimal($rawAmount,true);
+    $token=$token??bin2hex(random_bytes(20));
+    if(!preg_match('/^[A-Za-z0-9_-]{16,64}$/D',$token))throw new InvalidArgumentException('شناسه تخصیص نامعتبر است.');
     $db->begin_transaction();
     try {
         $stmt=$db->prepare('SELECT customer_id FROM sales_returns WHERE id=?');
@@ -369,6 +381,14 @@ function acct_allocate_return_credit(mysqli $db,int $returnId,int $invoiceId,$ra
         if(!$stub || !$stub['customer_id'])throw new InvalidArgumentException('سند برگشت یافت نشد.');
         $customerId=(int)$stub['customer_id'];
         acct_party_lock($db,'customer',$customerId);
+        $stmt=$db->prepare('SELECT return_id,invoice_id,amount FROM account_return_allocations WHERE client_token=? LIMIT 1');
+        $stmt->bind_param('s',$token);$stmt->execute();$rr=$stmt->get_result();$repeat=$rr?$rr->fetch_assoc():null;$stmt->close();
+        if($repeat) {
+            if((int)$repeat['return_id']!==$returnId || (int)$repeat['invoice_id']!==$invoiceId ||
+                money_cmp($repeat['amount'],$amount)!==0)
+                throw new InvalidArgumentException('شناسه تخصیص برای سند متفاوت استفاده شده است.');
+            $db->commit();return ['invoice_id'=>$invoiceId,'return_id'=>$returnId,'duplicate'=>true];
+        }
         $stmt=$db->prepare('SELECT id,customer_id,payable_amount FROM sales_returns WHERE id=? FOR UPDATE');
         $stmt->bind_param('i',$returnId);$stmt->execute();$ret=$stmt->get_result()->fetch_assoc();$stmt->close();
         $v=acct_invoice_outstanding($db,$invoiceId,true);
@@ -380,9 +400,9 @@ function acct_allocate_return_credit(mysqli $db,int $returnId,int $invoiceId,$ra
         if(money_cmp($amount,money_sub($ret['payable_amount'],$used))>0 ||
            money_cmp($amount,$v['remaining'])>0)
             throw new InvalidArgumentException('مبلغ تخصیص از اعتبار برگشت یا مانده فاکتور بیشتر است.');
-        $stmt=$db->prepare('INSERT INTO account_return_allocations(return_id,invoice_id,amount,created_by) VALUES(?,?,?,?)');
+        $stmt=$db->prepare('INSERT INTO account_return_allocations(return_id,invoice_id,amount,created_by,client_token) VALUES(?,?,?,?,?)');
         $createdBy=function_exists('auth_user_id')?auth_user_id():null;
-        $stmt->bind_param('iisi',$returnId,$invoiceId,$amount,$createdBy);$stmt->execute();$stmt->close();
+        $stmt->bind_param('iisis',$returnId,$invoiceId,$amount,$createdBy,$token);$stmt->execute();$stmt->close();
         acct_update_status($db,$invoiceId);
         $db->commit();
         return ['return_id'=>$returnId,'invoice_id'=>$invoiceId];
