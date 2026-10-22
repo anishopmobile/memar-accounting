@@ -1,5 +1,7 @@
 <?php
+require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
+require_csrf_or_fail();
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -16,6 +18,16 @@ $stmt->execute();
 $stmt->bind_result($invoiceCount);
 $stmt->fetch();
 $stmt->close();
+
+$stmt = $mysqli->prepare("SELECT
+     (SELECT COUNT(*) FROM accounting_receipts WHERE party_kind='customer' AND party_id=?)
+     + (SELECT COUNT(*) FROM accounting_opening_entries WHERE party_kind='customer' AND party_id=?)");
+$stmt->bind_param('ii', $customer_id, $customer_id);
+$stmt->execute();$stmt->bind_result($financialHistory);$stmt->fetch();$stmt->close();
+if ($financialHistory > 0) {
+    echo json_encode(['success'=>false,'message'=>'طرف حساب دارای سوابق مالی است و قابل حذف نیست.']);
+    exit;
+}
 
 if ($invoiceCount > 0) {
     echo json_encode(['success' => false, 'message' => 'این مشتری دارای فاکتور است و قابل حذف نیست.']);
