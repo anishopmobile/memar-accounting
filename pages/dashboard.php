@@ -117,57 +117,21 @@ if ($stmt) {
     $stmt->close();
 }
 
-// ۵. محاسبه مبلغ پرداخت نشده فروش امروز
-// منطق «بدهی» مطابق بقیه برنامه: payment_status در حالت unpaid|partial
-// کل مبلغ قابل پرداخت به‌عنوان مانده شمرده می‌شود (مثل گزارش بدهی مشتریان).
-$todayUnpaid = 0;
-$stmt = $mysqli->prepare(
-    "SELECT COALESCE(
-         SUM(
-             CASE
-                 WHEN payment_status IN ('unpaid', 'partial')
-                 THEN payable_amount
-                 ELSE 0
-             END
-         ),
-         0
-     ) AS total
-     FROM invoices
-     WHERE type = 'sales_invoice'
-       AND invoice_date = ?"
-);
+// Receivables on today's and the current Jalali month's sales invoices.
+require_once __DIR__ . '/../assets/php/accounting_ledger.php';
+$todayUnpaid = '0';
+$monthlyUnpaid = '0';
+$stmt = $mysqli->prepare("SELECT id,invoice_date FROM invoices WHERE type='sales_invoice' AND invoice_date BETWEEN ? AND ?");
 if ($stmt) {
-    $stmt->bind_param('s', $todayGreg);
+    $stmt->bind_param('ss',$monthStartGreg,$monthEndGreg);
     $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result ? $result->fetch_assoc() : null;
-    $todayUnpaid = (float) ($row['total'] ?? 0);
-    $stmt->close();
-}
-
-// ۶. محاسبه مبلغ پرداخت نشده فروش ماه جاری
-$monthlyUnpaid = 0;
-$stmt = $mysqli->prepare(
-    "SELECT COALESCE(
-         SUM(
-             CASE
-                 WHEN payment_status IN ('unpaid', 'partial')
-                 THEN payable_amount
-                 ELSE 0
-             END
-         ),
-         0
-     ) AS total
-     FROM invoices
-     WHERE type = 'sales_invoice'
-       AND invoice_date BETWEEN ? AND ?"
-);
-if ($stmt) {
-    $stmt->bind_param('ss', $monthStartGreg, $monthEndGreg);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result ? $result->fetch_assoc() : null;
-    $monthlyUnpaid = (float) ($row['total'] ?? 0);
+    $result=$stmt->get_result();
+    while ($r=$result->fetch_assoc()) {
+        $finance=ledger_invoice_balance($mysqli,(int)$r['id']);
+        $balance=money_cmp($finance['balance'],'0')>0?$finance['balance']:'0';
+        $monthlyUnpaid=money_add($monthlyUnpaid,$balance);
+        if ($r['invoice_date']===$todayGreg) $todayUnpaid=money_add($todayUnpaid,$balance);
+    }
     $stmt->close();
 }
 // ═══════════════════════════════════════════════════════════════════
