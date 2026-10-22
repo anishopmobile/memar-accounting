@@ -97,7 +97,7 @@ if ($result && $result->num_rows > 0) {
         $tableBody .= '<tr>';
         $mediaId = (int)($imageMap[(int)$row['id']]['id'] ?? 0);
         $mediaUrl = $mediaId ? media_image_url($mediaId) : media_default_url();
-        $mediaHtml = $showImages ? '<img class="media-thumb" width="36" height="36" loading="lazy" alt="" style="vertical-align:middle;margin-left:6px" src="' .
+        $mediaHtml = $showImages ? '<img class="media-thumb" width="36" height="36" loading="lazy" decoding="async" data-id="' . $mediaId . '" alt="" style="vertical-align:middle;margin-left:6px" src="' .
             htmlspecialchars($mediaUrl, ENT_QUOTES, 'UTF-8') . '">' : '';
         $tableBody .= '<td>' . $mediaHtml . $name . '</td>';
         $tableBody .= '<td>' . $stock . ' ' . $unit . '</td>';
