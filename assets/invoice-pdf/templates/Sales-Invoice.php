@@ -121,6 +121,8 @@ $mediaSource = !empty($it['media_print_path']) ? $it['media_print_path'] : (__DI
                         <td>مبلغ قابل پرداخت</td>
                         <td class="money strong"><?php echo pdf_currency_money($inv['payable_amount'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td>
                     </tr>
+                    <tr><td>تسویه‌شده</td><td class="money"><?php echo pdf_currency_money($inv['accounting']['paid'] ?? '0'); ?></td></tr>
+                    <tr><td>مانده فاکتور</td><td class="money"><?php echo pdf_currency_money($inv['accounting']['remaining'] ?? '0'); ?></td></tr>
                 </table>
             </td>
         </tr>
