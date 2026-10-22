@@ -4,6 +4,7 @@ require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/accounting_ledger.php';
+date_default_timezone_set('Asia/Tehran');
 
 $action=(string)($_REQUEST['action']??'');
 try {
