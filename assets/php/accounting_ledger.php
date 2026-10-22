@@ -123,7 +123,7 @@ function acct_record_payment(mysqli $db,array $input): array {
             if (money_cmp($value,$v['remaining'])>0) throw new InvalidArgumentException('تخصیص از مانده فاکتور بیشتر است.');
         }
         $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token,cash_account_id,source_proforma_id,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)');
-        $stmt->bind_param('sissssssiis',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId,$sourceDbId = $sourceId ?: null;
+        $sourceDbId = $sourceId ?: null;
         $stmt->bind_param('sissssssiis',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId,$sourceDbId,$requestHash);
         $stmt->execute();$paymentId=(int)$stmt->insert_id;$stmt->close();
         foreach ($alloc as $invoiceId=>$value) {
