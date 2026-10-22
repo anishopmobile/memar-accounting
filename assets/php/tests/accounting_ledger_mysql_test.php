@@ -90,4 +90,54 @@ try {
   ]);
   throw new RuntimeException('excess refund should fail');
 } catch(DomainException $e) {ck(true,'over-refund denied');}
+// Atomic invoice + initial payments: payment validation failure must roll back the invoice too.
+$code='LEDGER-PRODUCT-'.bin2hex(random_bytes(5));
+$s=$mysqli->prepare("INSERT INTO products(code,name,type,stock,sale_price,purchase_price) VALUES(?,'Accounting test product','product',100,'5000000','15000000')");
+$s->bind_param('s',$code);$s->execute();$productId=(int)$mysqli->insert_id;$s->close();
+$unitId='';
+$baseData=[
+  'party_id'=>$customer,'payment_type'=>'pos','payment_status'=>'unpaid',
+  'invoice_date'=>date('Y-m-d'),'discount'=>'0','note'=>'atomic integration',
+  'client_token'=>bin2hex(random_bytes(20)),
+  'items'=>[['product_id'=>$productId,'unit_id'=>$unitId,'quantity'=>'1','unit_price'=>'5000000','discount'=>'0']]
+];
+$atomic=$baseData;
+$atomic['type']='sales_invoice';
+$atomic['initial_payments']=[[
+  'amount'=>'3000000','method'=>'pos','paid_on'=>date('Y-m-d'),
+  'reference_no'=>'CI-ATOMIC','note'=>'', 'allocations'=>[]
+]];
+$created=createInvoice($mysqli,$atomic);
+ck($created['ok'],'atomic invoice plus payment creation');
+$atomicInvoice=(int)$created['invoice_id'];
+ck(ledger_invoice_balance($mysqli,$atomicInvoice)['due']==='2000000.00','invoice initial payment reflected');
+$again=createInvoice($mysqli,$atomic);
+ck($again['ok']&&(int)$again['invoice_id']===$atomicInvoice,'invoice idempotent replay retains same payment');
+$s=$mysqli->prepare('SELECT COUNT(*) n FROM ledger_allocations WHERE invoice_id=?');
+$s->bind_param('i',$atomicInvoice);$s->execute();$count=(int)$s->get_result()->fetch_assoc()['n'];$s->close();
+ck($count===1,'idempotent invoice did not double charge');
+$blockedEdit=editInvoice($mysqli,$atomicInvoice,$atomic);
+ck(!$blockedEdit['ok'],'financially posted invoice editing is blocked');
+$blockedDelete=deleteInvoice($mysqli,$atomicInvoice);
+ck(!$blockedDelete['ok'],'financially posted invoice cannot be deleted');
+$failed=$baseData;$failed['type']='sales_invoice';$failed['client_token']=bin2hex(random_bytes(20));
+$failed['initial_payments']=[['amount'=>'200','method'=>'invalid','paid_on'=>date('Y-m-d')]];
+$rejected=createInvoice($mysqli,$failed);
+ck(!$rejected['ok'],'invalid initial method rolled back invoice');
+$s=$mysqli->prepare('SELECT COUNT(*) n FROM invoices WHERE client_token=?');
+$s->bind_param('s',$failed['client_token']);$s->execute();$n=(int)$s->get_result()->fetch_assoc()['n'];$s->close();
+ck($n===0,'invalid initial payment left no half-saved invoice');
+$pro=$baseData;$pro['type']='purchase_proforma';$pro['party_id']=$supplier;
+$pro['client_token']=bin2hex(random_bytes(20));
+$pro['items']=[['product_id'=>$productId,'unit_id'=>$unitId,'quantity'=>'1','unit_price'=>'15000000','discount'=>'0']];
+$pro['initial_payments']=[['amount'=>'5000000','method'=>'bank_transfer','paid_on'=>date('Y-m-d'),'reference_no'=>'PR-DEP','note'=>'']];
+$proMade=createInvoice($mysqli,$pro);
+ck($proMade['ok'],'purchase proforma accepts tracked deposit');
+$proId=(int)$proMade['invoice_id'];
+$s=$mysqli->prepare('SELECT COUNT(*) n FROM ledger_proforma_deposits WHERE proforma_invoice_id=?');
+$s->bind_param('i',$proId);$s->execute();$n=(int)$s->get_result()->fetch_assoc()['n'];$s->close();
+ck($n===1,'proforma deposit link exists before conversion');
+$converted=convertInvoice($mysqli,$proId);
+ck($converted['ok'],'proforma conversion successful');
+ck(ledger_invoice_balance($mysqli,$proId)['due']==='10000000.00','deposit applied to converted purchase invoice');
 echo "ALL ACCOUNTING LEDGER MYSQL INTEGRATION CHECKS PASSED\n";
