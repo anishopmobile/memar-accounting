@@ -69,4 +69,40 @@ $st=$mysqli->prepare("UPDATE invoices SET legacy_paid_amount='40000' WHERE id=?"
 $st->bind_param('i',$legacy);$st->execute();$st->close();
 acct_update_status($mysqli,$legacy);
 check_acct(acct_invoice_outstanding($mysqli,$legacy)['remaining']==='60000.00','historic payment reconciliation works');
+// Return credit is not cash, but may settle an invoice.
+$c2=a_customer($mysqli);
+$original=a_invoice($mysqli,'customer',$c2,'300000');
+$returnNumber='CI-RET-'.bin2hex(random_bytes(5));
+$stmt=$mysqli->prepare("INSERT INTO sales_returns(return_number,invoice_id,customer_id,return_date,payable_amount) VALUES(?,?,?,CURDATE(),'120000')");
+$stmt->bind_param('sii',$returnNumber,$original,$c2);$stmt->execute();$returnId=(int)$stmt->insert_id;$stmt->close();
+acct_allocate_return_credit($mysqli,$returnId,$original,'120000');
+check_acct(acct_invoice_outstanding($mysqli,$original)['remaining']==='180000.00','120k return credit allocated without pretending cash receipt');
+check_acct(acct_party_statement($mysqli,'customer',$c2)['return_credit']==='0.00','allocated return is no longer free credit');
+
+$common=[
+ 'party_kind'=>'customer','party_id'=>$c2,'direction'=>'in','amount'=>'200000','method'=>'pos',
+ 'payment_date'=>date('Y-m-d'),'client_token'=>bin2hex(random_bytes(16)),
+ 'allocations'=>[['invoice_id'=>$original,'amount'=>'180000']]
+];
+$once=acct_record_payment($mysqli,$common);
+$twice=acct_record_payment($mysqli,$common);
+check_acct($twice['duplicate']===true && $once['payment_id']===$twice['payment_id'],'identical retry is idempotent');
+$conflict=$common;$conflict['amount']='201000';$blocked=false;
+try {acct_record_payment($mysqli,$conflict);}catch(InvalidArgumentException $e){$blocked=true;}
+check_acct($blocked,'conflicting retry is rejected');
+$statement=acct_party_statement($mysqli,'customer',$c2);
+check_acct($statement['balance']==='-20000.00','20k unallocated customer credit accurately reported');
+$refund=acct_record_refund($mysqli,[
+ 'party_kind'=>'customer','party_id'=>$c2,'amount'=>'10000','method'=>'cash',
+ 'client_token'=>bin2hex(random_bytes(16))
+]);
+check_acct(acct_party_statement($mysqli,'customer',$c2)['balance']==='-10000.00','customer refund reduces available credit');
+acct_reverse_payment($mysqli,$refund['payment_id'],'اشتباه در استرداد',bin2hex(random_bytes(16)));
+check_acct(acct_party_statement($mysqli,'customer',$c2)['balance']==='-20000.00','refund reversal is auditable');
+acct_reverse_payment($mysqli,$once['payment_id'],'اصلاح دریافت اشتباه',bin2hex(random_bytes(16)));
+check_acct(acct_invoice_outstanding($mysqli,$original)['remaining']==='180000.00','receipt reversal restores invoice outstanding without deleting journal entries');
+check_acct(acct_party_statement($mysqli,'customer',$c2)['balance']==='180000.00','receipt and reversal fully cancel net cash');
+$blocked=false;
+try {acct_reverse_payment($mysqli,$once['payment_id'],'ابطال مجدد اشتباه',bin2hex(random_bytes(16)));}catch(InvalidArgumentException $e){$blocked=true;}
+check_acct(!$blocked,'repeated reversal is idempotently recognized');
 echo "PASS accounting integration suite\n";
