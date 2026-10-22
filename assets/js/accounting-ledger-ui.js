@@ -213,7 +213,9 @@ $(function() {
       .done(load).fail(fail);
   });
   $(document).on('click','.acctApplyReturn',function(){
-    var returnId=Number($(this).data('id')),available=String($(this).data('available'));
+    var $button=$(this),token=$button.data('requestToken');
+    if(!token){token='credit_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);$button.data('requestToken',token);}
+    var returnId=Number($button.data('id')),available=String($button.data('available'));
     var targets=(statement.invoices||[]).filter(function(i){return !i.unreconciled&&!zero(i.remaining);});
     if(!targets.length){alert('فاکتور باز برای تخصیص اعتبار برگشت وجود ندارد.');return;}
     var invoiceId=prompt('شناسه فاکتور مقصد: '+targets.map(function(i){return i.id+' ('+i.number+')';}).join('،'),String(targets[0].id));
@@ -221,11 +223,13 @@ $(function() {
     if(!targets.some(function(i){return String(i.id)===invoiceId})){alert('فاکتور مقصد معتبر نیست.');return;}
     var amount=prompt('مبلغ اعتبار برگشت برای تخصیص ('+window.Currency.label+')',input(available));
     if(amount===null)return;
-    $.post('assets/php/accounting_ledger_action.php',{action:'apply_return_credit',csrf_token:csrf,return_id:returnId,invoice_id:invoiceId,amount:amount})
+    $.post('assets/php/accounting_ledger_action.php',{action:'apply_return_credit',csrf_token:csrf,return_id:returnId,invoice_id:invoiceId,amount:amount,client_token:token})
       .done(load).fail(fail);
   });
   $(document).on('click','.acctUseCredit',function(){
-    var paymentId=$(this).data('id'),available=$(this).data('available');
+    var $button=$(this),token=$button.data('requestToken');
+    if(!token){token='credit_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);$button.data('requestToken',token);}
+    var paymentId=$button.data('id'),available=$button.data('available');
     var targets=(statement.invoices||[]).filter(function(i){return !i.unreconciled&&!zero(i.remaining);});
     if(!targets.length){alert('فاکتور تسویه‌نشده‌ای وجود ندارد.');return;}
     var invoiceId=prompt('شناسه فاکتور مقصد: '+targets.map(function(i){return i.id+' ('+i.number+')';}).join('،'),String(targets[0].id));
@@ -233,7 +237,7 @@ $(function() {
     if(!targets.some(function(i){return String(i.id)===invoiceId})){alert('فاکتور انتخاب‌شده معتبر نیست.');return;}
     var amount=prompt('مبلغ تخصیص از اعتبار آزاد ('+window.Currency.label+')',input(available));
     if(amount===null)return;
-    $.post('assets/php/accounting_ledger_action.php',{action:'apply_credit',csrf_token:csrf,payment_id:paymentId,invoice_id:invoiceId,amount:amount})
+    $.post('assets/php/accounting_ledger_action.php',{action:'apply_credit',csrf_token:csrf,payment_id:paymentId,invoice_id:invoiceId,amount:amount,client_token:token})
       .done(load).fail(fail);
   });
   if(isPartyPage){
