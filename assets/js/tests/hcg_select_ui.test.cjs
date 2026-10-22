@@ -89,13 +89,15 @@ function ready(page,selector) {
       assert.ok(fonts.control.includes('estedadv')&&fonts.panel.includes('estedadv'));
       assert.equal(fonts.direction,'rtl');
 
-      // Dynamic invoice edit uses 3 selects created after initial DOM ready.
+      // Dynamic invoice form now stores amounts and derives the payment status.
       await page.locator('.invoice-new[data-type="sales_invoice"]').click();
-      await ready(page,'#invPaymentStatus');
-      const pay=page.locator('#invPaymentStatus');
+      await ready(page,'#invPaymentType');
+      const pay=page.locator('#invPaymentType');
       await pay.locator('xpath=..').locator('.hcg-select-control').click();
-      await pay.locator('xpath=..').locator('.hcg-select-option').filter({hasText:'پرداخت نشده'}).click();
-      assert.equal(await pay.inputValue(),'unpaid','dynamic invoice payment value is preserved');
+      await pay.locator('xpath=..').locator('.hcg-select-option').filter({hasText:'نقدی'}).click();
+      assert.equal(await pay.inputValue(),'cash','dynamic invoice payment method remains a native select');
+      assert.equal(await page.locator('#invInitialPaid').count(),1,'initial payment amount is required for partial receipts');
+      assert.equal(await page.locator('#invPaymentStatus').count(),0,'payment status is derived instead of editable');
       await page.locator('#invoiceBackToList').click();
 
       await page.goto(base+'/index.php?page=goods-and-services');
