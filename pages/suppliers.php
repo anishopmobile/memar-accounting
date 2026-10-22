@@ -77,6 +77,7 @@ $suppliers = ledger_parties_report($mysqli, 'supplier');
             <button class="modal-close" id="closeSupplierModal" type="button">×</button>
         </div>
         <form id="supplierForm" method="post" action="assets/php/save_supplier.php">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
             <input type="hidden" name="supplier_id" id="supplierId" value="">
             <div class="form-grid">
                 <div class="form-row" style="grid-column: span 2;"><label>نام شرکت</label><input type="text" name="company_name"></div>
