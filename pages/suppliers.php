@@ -86,7 +86,7 @@ if ($result) {
                             <td><?php echo number_format($supplier['total_purchases']); ?></td>
                             <td><?php echo number_format($supplier['unpaid']); ?></td>
                             <td>
-                                <button class="button-secondary small edit-supplier" type="button">ویرایش</button>
+                                <a class="button-secondary small" href="?page=accounting&amp;party_kind=supplier&amp;party_id=<?php echo (int) $supplier['id']; ?>">صورت‌حساب</a> <button class="button-secondary small edit-supplier" type="button">ویرایش</button>
                                 <button class="button-danger small delete-supplier" type="button">حذف</button>
                             </td>
                         </tr>
