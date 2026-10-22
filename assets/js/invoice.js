@@ -236,7 +236,7 @@ $(function () {
     });
     $(document).on('click', '.invoice-convert', function () {
         var id = $(this).data('id');
-        if (!confirm('تبدیل این پیش‌فاکتور به فاکتور قطعی؟\nموجودی کالاها یک بار به‌روزرسانی خواهد شد.')) return;
+        if (!confirm('تبدیل این پیش‌فاکتور به فاکتور قطعی؟\nموجودی کالاها به‌روزرسانی و پیش‌دریافت‌های مرتبط تا سقف مبلغ فاکتور تخصیص می‌یابند.')) return;
         $.post('assets/php/invoice_convert.php', { csrf_token: csrf, id: id }).done(function (res) {
             if (res.success) { alert(res.message); loadInvoices(currentPage); } else alert(res.message || 'خطا در تبدیل.');
         }).fail(function () { alert('خطا در ارتباط با سرور.'); });
@@ -325,7 +325,7 @@ $(function () {
             + (!isEdit && !/proforma/.test(typeVal) ? '<div class="form-row" style="grid-column:span 2"><label>روش‌های پرداخت بیشتر (در صورت پرداخت ترکیبی)</label><div id="invExtraPayments"></div><button type="button" class="button-secondary" id="invAddPaymentMethod">+ افزودن روش پرداخت</button></div>' : '')
             + '<div class="form-row"><label>مانده فاکتور</label><div id="invRemaining" class="money-cell strong">0</div></div>'
             + '</div>'
-            + (isEdit && !/proforma/.test(typeVal) ? '<div class="card" id="invSettlementPanel"><h3>دریافت‌ها و پرداخت‌های فاکتور</h3><div id="invSettlementHistory">در حال بارگذاری...</div><div class="form-grid"><div class="form-row"><label>مبلغ تراکنش جدید</label><input type="number" id="invReceiptAmount" min="1" step="1"></div><div class="form-row"><label>روش</label><select id="invReceiptMethod">' + paymentTypes + '</select></div><div class="form-row"><label>شماره پیگیری</label><input id="invReceiptReference" type="text" maxlength="120"></div></div><div id="invAllocationOptions"></div><button type="button" class="button" id="invRegisterReceipt">ثبت دریافت / پرداخت جدید</button></div>' : '')
+            + (isEdit ? '<div class="card" id="invSettlementPanel"><h3>دریافت‌ها و پرداخت‌های فاکتور</h3><div id="invSettlementHistory">در حال بارگذاری...</div><div class="form-grid"><div class="form-row"><label>مبلغ تراکنش جدید</label><input type="number" id="invReceiptAmount" min="1" step="1"></div><div class="form-row"><label>روش</label><select id="invReceiptMethod">' + paymentTypes + '</select></div><div class="form-row"><label>شماره پیگیری</label><input id="invReceiptReference" type="text" maxlength="120"></div></div><div id="invAllocationOptions"></div><button type="button" class="button" id="invRegisterReceipt">ثبت دریافت / پرداخت جدید</button></div>' : '')
             + '<div class="form-row"><label>مبلغ به حروف</label><div id="invWords" class="words-cell"></div></div>'
             + '<div class="form-row"><label>یادداشت</label><textarea id="invNote" rows="2">' + esc(data ? data.note : '') + '</textarea></div>'
             + '<div class="form-actions">'
@@ -347,7 +347,7 @@ $(function () {
             });
         }
         recalcs();
-        if (isEdit && !/proforma/.test(typeVal)) loadInvoiceSettlement();
+        if (isEdit) loadInvoiceSettlement();
         bindFormEvents();
         initDatePicker();
     }
@@ -430,8 +430,13 @@ $(function () {
         $('.inv-extra-payment-amount').each(function () { extraPaid += parseFloat($(this).val()) || 0; });
         var currentPaid = currentInvoiceId ? Number($('#invoiceFormView').data('settled') || 0) : (parseFloat($initial.val()) || 0) + extraPaid;
         var due = payable - currentPaid;
-        $('#invRemaining').text(splitNum(Math.round(due)) + ' ' + window.Currency.label);
-        if (!currentInvoiceId) $('#invPaymentStatus').text(due <= 0 ? 'پرداخت شده' : currentPaid > 0 ? 'پرداخت جزئی' : 'پرداخت نشده');
+        if (/proforma/.test($('#invType').val() || '')) {
+            $('#invRemaining').text('بدون بدهی قطعی تا زمان تبدیل');
+            $('#invPaymentStatus').text('پیش‌فاکتور');
+        } else {
+            $('#invRemaining').text(splitNum(Math.round(due)) + ' ' + window.Currency.label);
+        }
+        if (!currentInvoiceId && !/proforma/.test($('#invType').val() || '')) $('#invPaymentStatus').text(due <= 0 ? 'پرداخت شده' : currentPaid > 0 ? 'پرداخت جزئی' : 'پرداخت نشده');
     }
 
     function bindFormEvents() { /* رویدادها به‌صورت delegate روی document بسته شده‌اند */ }
@@ -737,7 +742,7 @@ $(function () {
                     alloc += '<tr><td>' + esc(inv.invoice_number) + '</td><td>' + fmtRial(inv.remaining) + '</td><td><input type="number" class="inv-payment-allocation" min="0" max="' + escAttr(showBase(inv.remaining)) + '" step="1" value="0" data-id="' + inv.id + '"></td></tr>';
                 });
                 alloc += '</tbody></table></div>';
-                $('#invAllocationOptions').html(alloc);
+                $('#invAllocationOptions').html(/proforma/.test($('#invType').val() || '') ? '<p>پیش‌پرداخت در اعتبار طرف حساب نگهداری می‌شود و پس از تبدیل به فاکتور قطعی تخصیص می‌یابد.</p>' : alloc);
             })
             .fail(function () { $('#invSettlementHistory').text('خطا در دریافت صورت‌حساب'); });
     }
@@ -762,7 +767,8 @@ $(function () {
             method:$('#invReceiptMethod').val(),
             reference_number:$('#invReceiptReference').val(),
             request_key:uuid(),
-            allocations:JSON.stringify(allocations)
+            source_proforma_id: /proforma/.test($('#invType').val() || '') ? currentInvoiceId : '',
+            allocations:JSON.stringify(/proforma/.test($('#invType').val() || '') ? [] : allocations)
         }).done(function (res) {
             if (!res.success) { alert(res.message || 'خطا در ثبت'); return; }
             $('#invReceiptAmount').val('');
