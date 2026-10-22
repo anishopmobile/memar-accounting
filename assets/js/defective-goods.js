@@ -251,7 +251,7 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
                     + '<td>' + esc(r.row_no) + '</td>'
                     + '<td>' + esc(r.defective_date_jalali) + '</td>'
                     + '<td>' + esc(r.product_name) + '</td>'
-                    + '<td class="product-thumb-cell"><img class="media-thumb" loading="lazy" decoding="async" width="46" height="46" data-id="' + Number(r.defective_media_id || 0) + '" src="' + (Number(r.defective_media_id) ? 'assets/php/media_file.php?id=' + Number(r.defective_media_id) + '&size=thumb' : 'assets/img/product-placeholder.svg') + '" alt=""></td>'
+                    + '<td class="product-thumb-cell"><img class="media-thumb" loading="lazy" decoding="async" width="46" height="46" data-id="' + Number(r.defective_media_id || 0) + '" data-defective-id="' + Number(r.id) + '" src="' + (Number(r.defective_media_id) ? 'assets/php/media_file.php?id=' + Number(r.defective_media_id) + '&size=thumb' : 'assets/img/product-placeholder.svg') + '" alt=""></td>'
                     + '<td dir="ltr">' + esc(r.product_barcode) + '</td>'
                     + '<td dir="ltr">' + esc(r.product_code) + '</td>'
                     + '<td>' + esc(r.quantity_display) + ' ' + esc(r.product_unit) + '</td>'
