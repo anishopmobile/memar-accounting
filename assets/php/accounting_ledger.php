@@ -227,3 +227,71 @@ function acct_party_balances(mysqli $db,string $kind): array {
     if($res) $res->free();
     return $map;
 }
+
+/** Refund an existing customer/supplier credit; never a new invoice settlement. */
+function acct_record_refund(mysqli $db,array $input): array {
+    $kind=acct_party_kind((string)($input['party_kind']??''));
+    $partyId=(int)($input['party_id']??0);
+    $amount=acct_decimal($input['amount']??'',true);
+    $method=(string)($input['method']??'');
+    if (!in_array($method,['cash','pos','bank_transfer'],true)) throw new InvalidArgumentException('روش پرداخت نامعتبر است.');
+    $token=(string)($input['client_token']??'');
+    if (!preg_match('/^[a-zA-Z0-9_-]{16,64}$/D',$token)) throw new InvalidArgumentException('شناسه ثبت تکراری نامعتبر است.');
+    $date=(string)($input['payment_date']??date('Y-m-d'));
+    $dt=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
+    if (!$dt || $dt->format('Y-m-d')!==$date) throw new InvalidArgumentException('تاریخ نامعتبر است.');
+    $note=trim((string)($input['note']??''));
+    if (mb_strlen($note)>2000) throw new InvalidArgumentException('توضیح بیش از حد مجاز است.');
+    $direction=$kind==='customer'?'out':'in';
+    $db->begin_transaction();
+    try {
+        acct_party_lock($db,$kind,$partyId);
+        $stmt=$db->prepare('SELECT id FROM account_payments WHERE client_token=?');
+        $stmt->bind_param('s',$token);$stmt->execute();$r=$stmt->get_result();$old=$r?$r->fetch_assoc():null;$stmt->close();
+        if ($old) {$db->commit();return ['payment_id'=>(int)$old['id'],'duplicate'=>true];}
+        $statement=acct_party_statement($db,$kind,$partyId);
+        if (!$statement['balance_final'] || money_cmp($statement['balance'],'0')>=0
+            || money_cmp($amount,money_abs($statement['balance']))>0)
+            throw new InvalidArgumentException('استرداد فقط تا سقف اعتبار قطعی طرف حساب مجاز است.');
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token) VALUES(?,?,?,?,?,?,?,?)');
+        $stmt->bind_param('sissssss',$kind,$partyId,$direction,$amount,$method,$date,$note,$token);
+        $stmt->execute();$pid=(int)$stmt->insert_id;$stmt->close();
+        $db->commit();
+        return ['payment_id'=>$pid,'duplicate'=>false];
+    } catch (Throwable $e) {$db->rollback();throw $e;}
+}
+/** A reversal is a new opposite-direction record; original receipts stay auditable. */
+function acct_reverse_payment(mysqli $db,int $paymentId,string $reason,string $token): array {
+    if (!preg_match('/^[a-zA-Z0-9_-]{16,64}$/D',$token)) throw new InvalidArgumentException('شناسه تراکنش نامعتبر است.');
+    $reason=trim($reason);
+    if (mb_strlen($reason)<5||mb_strlen($reason)>2000) throw new InvalidArgumentException('علت اصلاح باید به‌صورت مستند ثبت شود.');
+    $db->begin_transaction();
+    try {
+        $stmt=$db->prepare('SELECT party_kind,party_id FROM account_payments WHERE id=?');
+        $stmt->bind_param('i',$paymentId);$stmt->execute();$res=$stmt->get_result();$where=$res?$res->fetch_assoc():null;$stmt->close();
+        if (!$where) throw new InvalidArgumentException('تراکنش یافت نشد.');
+        acct_party_lock($db,$where['party_kind'],(int)$where['party_id']);
+        $stmt=$db->prepare('SELECT * FROM account_payments WHERE id=? FOR UPDATE');
+        $stmt->bind_param('i',$paymentId);$stmt->execute();$p=$stmt->get_result()->fetch_assoc();$stmt->close();
+        if ($p['reversed_payment_id']!==null) throw new InvalidArgumentException('سند برگشتی دوباره برگشت‌پذیر نیست.');
+        $stmt=$db->prepare('SELECT id FROM account_payments WHERE reversed_payment_id=?');
+        $stmt->bind_param('i',$paymentId);$stmt->execute();$res=$stmt->get_result();$already=$res?$res->fetch_assoc():null;$stmt->close();
+        if ($already) {$db->commit();return ['payment_id'=>(int)$already['id'],'duplicate'=>true];}
+        $stmt=$db->prepare('SELECT invoice_id FROM account_payment_allocations WHERE payment_id=? AND reversed_at IS NULL ORDER BY invoice_id');
+        $stmt->bind_param('i',$paymentId);$stmt->execute();$res=$stmt->get_result();$invoiceIds=[];
+        while($res && ($r=$res->fetch_assoc()))$invoiceIds[]=(int)$r['invoice_id'];
+        $stmt->close();
+        foreach($invoiceIds as $invId)acct_invoice_outstanding($db,$invId,true);
+        $direction=$p['direction']==='in'?'out':'in';
+        $note="ابطال سند مالی #{$paymentId}: ".$reason;
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,reversed_payment_id) VALUES(?,?,?,?,?,?,?,?,?)');
+        $date=date('Y-m-d');
+        $stmt->bind_param('sissssssi',$p['party_kind'],$p['party_id'],$direction,$p['amount'],$p['method'],$date,$note,$token,$paymentId);
+        $stmt->execute();$reverseId=(int)$stmt->insert_id;$stmt->close();
+        $stmt=$db->prepare('UPDATE account_payment_allocations SET reversed_at=NOW() WHERE payment_id=? AND reversed_at IS NULL');
+        $stmt->bind_param('i',$paymentId);$stmt->execute();$stmt->close();
+        foreach($invoiceIds as $invId)acct_update_status($db,$invId);
+        $db->commit();
+        return ['payment_id'=>$reverseId,'duplicate'=>false];
+    } catch(Throwable $e){$db->rollback();throw $e;}
+}
