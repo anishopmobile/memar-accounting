@@ -16,6 +16,11 @@ $(function() {
   var $modal=$('#accountingModal');
   function safe(v){return $('<div>').text(v==null?'':String(v)).html();}
   function fmt(v){return window.Currency.format(v);}
+  function formatLedgerDate(date){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date)))return 'افتتاحیه';
+    try{return new Intl.DateTimeFormat('fa-IR-u-ca-persian',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Tehran'}).format(new Date(date+'T12:00:00Z'));}
+    catch(e){return safe(date);}
+  }
   function input(v){return window.Currency.fromBase(v);}
   function raw(v){return window.Currency.toBase(v);}
   function zero(v){return Number(v||0)<=0;}
@@ -71,6 +76,15 @@ $(function() {
       });
       out+='</tbody></table></div>';
     }
+    out+='<h3>دفتر گردش مالی (صورت‌حساب)</h3>'
+      +'<p><a class="button-secondary" id="acctExport" href="assets/php/accounting_statement_export.php?party_kind='+encodeURIComponent(kind)+'&party_id='+Number(partyId)+'" target="_blank" rel="noopener">خروجی اکسل صورت‌حساب</a></p>'
+      +'<div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ شمسی</th><th>شرح</th><th>افزایش بدهی</th><th>کاهش بدهی</th><th>مانده پس از سند</th></tr></thead><tbody>';
+    (s.movements||[]).forEach(function(m){
+      out+='<tr><td>'+safe(formatLedgerDate(m.date))+'</td><td>'+safe(m.description)+'</td>'
+        +'<td>'+(!zero(m.debit)?fmt(m.debit):'—')+'</td><td>'+(!zero(m.credit)?fmt(m.credit):'—')+'</td>'
+        +'<td>'+(s.balance_final?fmt(m.balance):'نیازمند تطبیق')+'</td></tr>';
+    });
+    out+='</tbody></table></div>';
     $('#acctContent').html(out);
     // Capture unenhanced HTML before the HCG select observer decorates it.
     cleanPaymentRow=$('#acctPaymentRows .acctPaymentRow').first().prop('outerHTML');
