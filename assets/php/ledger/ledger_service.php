@@ -354,3 +354,47 @@ function ledger_party_statement(mysqli $db,string $kind,int $id,?string $endingB
     unset($row);
     return ['entries'=>array_reverse($rows),'truncated'=>$truncated,'balance_prior_to_first_event'=>$balance];
 }
+
+/**
+ * Void a bookkeeping error without deleting the audit trail. Real refunds
+ * require separate reverse-direction payments and must not use this operation.
+ */
+function ledger_void_payment(mysqli $db,string $kind,int $partyId,int $paymentId,string $reason): array {
+    ledger_initialize_legacy($db);
+    if(!in_array($kind,['customer','supplier'],true)||$partyId<1||$paymentId<1)
+        throw new InvalidArgumentException('شناسه تراکنش نامعتبر است.');
+    $reason=trim($reason);
+    if(strlen($reason)<12||strlen($reason)>2000)throw new InvalidArgumentException('دلیل اصلاح سند حداقل ۱۲ کاراکتر است.');
+    $db->begin_transaction();
+    try {
+        $table=$kind==='customer'?'customers':'suppliers';
+        $s=$db->prepare("SELECT id FROM $table WHERE id=? FOR UPDATE");$s->bind_param('i',$partyId);$s->execute();$party=$s->get_result()->fetch_assoc();$s->close();
+        if(!$party)throw new DomainException('طرف حساب یافت نشد.');
+        $s=$db->prepare('SELECT party_kind,party_id,direction,amount,voided_at FROM ledger_payments WHERE id=? FOR UPDATE');
+        $s->bind_param('i',$paymentId);$s->execute();$p=$s->get_result()->fetch_assoc();$s->close();
+        if(!$p||$p['party_kind']!==$kind||(int)$p['party_id']!==$partyId)
+            throw new DomainException('این تراکنش متعلق به طرف حساب نیست.');
+        if($p['voided_at']!==null)throw new DomainException('تراکنش قبلاً ابطال شده است.');
+        // Any later credit applications must be dealt with before the source receipt is voided.
+        $s=$db->prepare('SELECT COUNT(*) n FROM ledger_credit_allocations WHERE payment_id=?');
+        $s->bind_param('i',$paymentId);$s->execute();$used=(int)$s->get_result()->fetch_assoc()['n'];$s->close();
+        if($used>0)throw new DomainException('تراکنش دارای تخصیص اعتبار ثانویه است و ابطال مستقیم مجاز نیست.');
+        $s=$db->prepare('SELECT invoice_id FROM ledger_allocations WHERE payment_id=? ORDER BY invoice_id');
+        $s->bind_param('i',$paymentId);$s->execute();$ids=array_map('intval',array_column($s->get_result()->fetch_all(MYSQLI_ASSOC),'invoice_id'));$s->close();
+        // Reverse-direction cash movements may already have consumed this credit; disallow
+        // creating a positive debt by voiding an older credit.
+        $expected=$kind==='customer'?'receipt':'disbursement';
+        if($p['direction']===$expected) {
+            $account=ledger_party_summary($db,$kind,$partyId);
+            if(money_cmp($account['balance'],'0')<0 &&
+               money_cmp($account['credit'],$p['amount'])<0)
+                throw new DomainException('این مبلغ ممکن است قبلاً مسترد شده باشد؛ نیازمند سند اصلاحی جداگانه است.');
+        }
+        $s=$db->prepare('UPDATE ledger_payments SET voided_at=NOW(),void_reason=? WHERE id=? AND voided_at IS NULL');
+        $s->bind_param('si',$reason,$paymentId);$s->execute();$affected=$s->affected_rows;$s->close();
+        if($affected!==1)throw new DomainException('ابطال تراکنش همزمان انجام شده است.');
+        foreach($ids as $id)ledger_sync_invoice_status($db,$id);
+        $db->commit();
+        return ['voided_payment_id'=>$paymentId,'affected_invoices'=>$ids];
+    } catch(Throwable $e){$db->rollback();throw $e;}
+}
