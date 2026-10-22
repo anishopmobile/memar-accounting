@@ -7,7 +7,7 @@ $(function() {
   if (!isInvoicePage && !isPartyPage) return;
   var kind=(isInvoicePage ? $('#invoiceMode').val()==='sales' : $('body').is('#customers'))?'customer':'supplier';
   var csrf=window.APP_CSRF_TOKEN;
-  var partyId=0, selectedInvoice=0, statement=null, posting=false;
+  var partyId=0, selectedInvoice=0, statement=null, posting=false, paymentToken='';
   var html='<div class="modal" id="accountingModal"><div class="modal-backdrop" data-close="accountingModal"></div>'
     +'<div class="modal-content" style="max-width:900px;max-height:90vh;overflow:auto">'
     +'<div class="modal-header"><h2>دریافت‌ها، پرداخت‌ها و صورت‌حساب</h2><button type="button" class="modal-close" id="acctClose">×</button></div>'
@@ -19,7 +19,7 @@ $(function() {
   function input(v){return window.Currency.fromBase(v);}
   function raw(v){return window.Currency.toBase(v);}
   function zero(v){return Number(v||0)<=0;}
-  function show(){ $modal.addClass('open');$('body').addClass('modal-open');}
+  function show(){ paymentToken='acct_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2); $modal.addClass('open');$('body').addClass('modal-open');}
   function close(){$modal.removeClass('open');$('body').removeClass('modal-open');}
   $('#acctClose').on('click',close);
   $modal.find('.modal-backdrop').on('click',close);
@@ -66,7 +66,7 @@ $(function() {
     var total=0;
     try{total=Number(raw($('#acctAmount').val()||'0'));}catch(e){invalid=true;}
     if(total<sum)invalid=true;
-    $('#acctAllocationTotal').text('تخصیص به فاکتورها: '+fmt(String(sum))+' | اعتبار آزاد جدید: '+(total>=sum?fmt(String(total-sum)):'نامعتبر')+(invalid?' | مقادیر نامعتبر هستند.':''));
+    $('#acctAllocationTotal').text('تخصیص به فاکتورها: '+fmt(sum.toFixed(2))+' | اعتبار آزاد جدید: '+(total>=sum?fmt((total-sum).toFixed(2)):'نامعتبر')+(invalid?' | مقادیر نامعتبر هستند.':''));
     $('#acctSubmit').prop('disabled',invalid||posting||total<=0);
   }
   $(document).on('input','#acctContent .acctAlloc,#acctAmount',updateTotals);
@@ -79,12 +79,11 @@ $(function() {
       if(Number(amount)<=0||sum>Number(amount)+0.00001) throw Error('invalid');
     }catch(e){alert('مبالغ ثبت‌شده نامعتبر هستند.');return;}
     posting=true;updateTotals();
-    var token='acct_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
     $.post('assets/php/accounting_ledger_action.php',{
       action:'payment',csrf_token:csrf,party_kind:kind,party_id:partyId,direction:kind==='customer'?'in':'out',
       amount:$('#acctAmount').val(),method:$('#acctMethod').val(),payment_date:$('#acctDate').val(),
-      reference_no:$('#acctRef').val(),note:$('#acctNote').val(),allocations:JSON.stringify(allocations),client_token:token
-    }).done(function(){posting=false;selectedInvoice=0;load();if(typeof window.refreshInvoiceAccountingList==='function')window.refreshInvoiceAccountingList();})
+      reference_no:$('#acctRef').val(),note:$('#acctNote').val(),allocations:JSON.stringify(allocations),client_token:paymentToken
+    }).done(function(){posting=false;selectedInvoice=0;paymentToken='acct_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);load();if(typeof window.refreshInvoiceAccountingList==='function')window.refreshInvoiceAccountingList();})
       .fail(function(e){posting=false;updateTotals();fail(e);});
   });
   $(document).on('click','.acctReconcile',function(){
