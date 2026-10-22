@@ -17,6 +17,13 @@ try {
             $result=ledger_reconcile_partial($mysqli,(int)$id,parseMoneyInput((string)($_POST['paid_amount']??'')),(string)($_POST['explanation']??''));
             ledger_respond(200,['success'=>true,'data'=>$result]);
         }
+        if(($_POST['action']??'')==='void_payment') {
+            $kind=(string)($_POST['party_kind']??'');
+            $pid=filter_var($_POST['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            $paymentId=filter_var($_POST['payment_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            if(!$pid||!$paymentId)throw new InvalidArgumentException('شناسه نامعتبر است.');
+            ledger_respond(200,['success'=>true,'data'=>ledger_void_payment($mysqli,$kind,(int)$pid,(int)$paymentId,(string)($_POST['reason']??''))]);
+        }
         if(($_POST['action']??'')==='apply_credit') {
             $kind=(string)($_POST['party_kind']??'');
             $pid=filter_var($_POST['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
