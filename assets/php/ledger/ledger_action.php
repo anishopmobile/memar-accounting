@@ -35,6 +35,7 @@ try {
         }
         $input=[
             'party_kind'=>$_POST['party_kind']??'',
+            'direction'=>$_POST['direction']??(($_POST['party_kind']??'')==='customer'?'receipt':'disbursement'),
             'party_id'=>$_POST['party_id']??'',
             'method'=>$_POST['method']??'',
             'paid_on'=>$_POST['paid_on']??'',
