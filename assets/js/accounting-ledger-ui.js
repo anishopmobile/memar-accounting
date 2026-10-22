@@ -157,9 +157,9 @@ $(function() {
   });
   window.AccountingLedger={
     openInvoice:function(i){
-      if(!i || !i.id || /proforma/.test(i.type))return;
+      if(!i || !i.id)return;
       partyId=Number(kind==='customer'?i.customer_id:i.supplier_id);
-      selectedInvoice=Number(i.id);show();load();
+      selectedInvoice=/proforma/.test(i.type)?0:Number(i.id);show();load();
     }
   };
   $(document).on('click','.invoice-accounting',function(){
