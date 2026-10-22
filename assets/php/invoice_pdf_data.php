@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/accounting/ledger.php';
 
 /**
  * invoice_pdf_data.php — Data Provider فقط‌خواندنی برای PDF فاکتور فروش
@@ -96,6 +97,7 @@ function getSalesInvoicePrintData(mysqli $mysqli, int $invoiceId): array
     $cityName = pdf_city_name($store['city_id'] ?? null);
     $loc = pdf_direction_and_footer($settings, $type);
 
+    $invoice['accounting'] = acct_invoice_balance($mysqli, $invoiceId);
     $invoice['invoice_date_shamsi'] = !empty($invoice['invoice_date'])
         ? jdate('j F Y', strtotime((string) $invoice['invoice_date']))
         : '';
@@ -205,6 +207,7 @@ function getPurchaseInvoicePrintData(mysqli $mysqli, int $invoiceId): array
     $cityName = pdf_city_name($store['city_id'] ?? null);
     $loc = pdf_direction_and_footer($settings, $type);
 
+    $invoice['accounting'] = acct_invoice_balance($mysqli, $invoiceId);
     $invoice['invoice_date_shamsi'] = !empty($invoice['invoice_date'])
         ? jdate('j F Y', strtotime((string) $invoice['invoice_date']))
         : '';
