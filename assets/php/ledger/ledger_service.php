@@ -112,6 +112,14 @@ function ledger_record_payment(mysqli $db,array $in): array {
             $s=$db->prepare('INSERT INTO ledger_allocations(payment_id,invoice_id,amount) VALUES(?,?,?)');
             $s->bind_param('iis',$paymentId,$invId,$value);$s->execute();$s->close();
         }
+        // Compatibility cache: legacy screens still display invoices.payment_status.
+        // The ledger calculation remains authoritative.
+        foreach($mapped as $invId=>$value){
+            $balance=ledger_invoice_balance($db,(int)$invId,true);
+            $derived=$balance['status'];
+            $s=$db->prepare('UPDATE invoices SET payment_status=? WHERE id=?');
+            $s->bind_param('si',$derived,$invId);$s->execute();$s->close();
+        }
         $db->commit();return ['payment_id'=>$paymentId,'duplicate'=>false,'unallocated'=>money_sub($amount,$sum)];
     } catch(Throwable $e){$db->rollback();throw $e;}
 }
