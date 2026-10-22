@@ -60,7 +60,7 @@ $columns = [
     'phone'           => 'تلفن',
     'address'         => 'آدرس',
     'total_purchases' => 'مجموع خرید',
-    'debt'            => 'مجموع بدهی',
+    'debt'            => 'مانده حساب (+ بدهکار / − بستانکار)',
 ];
 
 $exportRows = [];
