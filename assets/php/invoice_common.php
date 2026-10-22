@@ -1708,6 +1708,17 @@ function listInvoices(mysqli $mysqli, array $filter): array
             }
             $r['party_name'] = $partyCache['s'][$sid];
         }
+        if(isFinal($r['type'])){
+            $ledger = ledger_invoice_balance($mysqli,(int)$r['id']);
+            $r['payment_status'] = $ledger['status'];
+            $r['settled_amount'] = $ledger['paid'];
+            $r['remaining_amount'] = $ledger['due'];
+            $r['legacy_unresolved'] = $ledger['legacy_classification']==='requires_reconciliation';
+        }else{
+            $r['settled_amount'] = null;
+            $r['remaining_amount'] = null;
+            $r['legacy_unresolved'] = false;
+        }
         $r['invoice_date_shamsi'] = $r['invoice_date'] ? jdate('j F Y', strtotime($r['invoice_date'])) : '';
         unset($r);
     }
