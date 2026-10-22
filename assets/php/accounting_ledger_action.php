@@ -1,0 +1,63 @@
+<?php
+/** Authenticated accounting receipts, payments, and account statements. */
+require_once __DIR__ . '/boot.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/currency.php';
+require_once __DIR__ . '/accounting_ledger.php';
+
+$action=(string)($_REQUEST['action']??'');
+try {
+    if ($_SERVER['REQUEST_METHOD']==='GET' && $action==='statement') {
+        $kind=(string)($_GET['party_kind']??'');
+        $id=filter_var($_GET['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if (!$id) throw new InvalidArgumentException('طرف حساب نامعتبر است.');
+        respond_json(true,'صورت‌حساب',acct_party_statement($mysqli,$kind,(int)$id));
+    }
+    if ($_SERVER['REQUEST_METHOD']!=='POST') {
+        respond_error('عملیات نامعتبر است.',405);
+    }
+    require_csrf_or_fail();
+    if ($action==='payment') {
+        $alloc=$_POST['allocations']??'[]';
+        if (is_string($alloc)) $alloc=json_decode($alloc,true,16,JSON_THROW_ON_ERROR);
+        $input=[
+            'party_kind'=>$_POST['party_kind']??'','party_id'=>$_POST['party_id']??0,
+            'amount'=>parseMoneyInput((string)($_POST['amount']??'')),
+            'method'=>$_POST['method']??'','direction'=>$_POST['direction']??'',
+            'payment_date'=>$_POST['payment_date']??date('Y-m-d'),
+            'reference_no'=>$_POST['reference_no']??'','note'=>$_POST['note']??'',
+            'client_token'=>$_POST['client_token']??'','allocations'=>[]
+        ];
+        if (!is_array($alloc)) throw new InvalidArgumentException('تخصیص‌های نامعتبر.');
+        foreach ($alloc as $a) {
+            if (!is_array($a)) throw new InvalidArgumentException('تخصیص نامعتبر.');
+            $a['amount']=parseMoneyInput((string)($a['amount']??''));
+            $input['allocations'][]=$a;
+        }
+        respond_json(true,'پرداخت ثبت شد.',acct_record_payment($mysqli,$input));
+    }
+    if ($action==='reconcile_legacy') {
+        $invoiceId=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        $amount=acct_decimal(parseMoneyInput((string)($_POST['historical_paid']??'')));
+        if (!$invoiceId) throw new InvalidArgumentException('فاکتور نامعتبر است.');
+        $mysqli->begin_transaction();
+        try {
+            $stmt=$mysqli->prepare('SELECT * FROM invoices WHERE id=? FOR UPDATE');
+            $stmt->bind_param('i',$invoiceId);$stmt->execute();$res=$stmt->get_result();$inv=$res?$res->fetch_assoc():null;$stmt->close();
+            if (!$inv || !in_array($inv['type'],['sales_invoice','purchase_invoice'],true)
+                || $inv['legacy_paid_amount']!==null) throw new InvalidArgumentException('این فاکتور نیازی به تطبیق تاریخی ندارد.');
+            if (money_cmp($amount,$inv['payable_amount'])>0) throw new InvalidArgumentException('پرداخت تاریخی از مبلغ فاکتور بیشتر است.');
+            $stmt=$mysqli->prepare('UPDATE invoices SET legacy_paid_amount=? WHERE id=? AND legacy_paid_amount IS NULL');
+            $stmt->bind_param('si',$amount,$invoiceId);$stmt->execute();$stmt->close();
+            acct_update_status($mysqli,(int)$invoiceId);
+            $mysqli->commit();
+        } catch (Throwable $e) {$mysqli->rollback();throw $e;}
+        respond_json(true,'مبلغ پرداخت تاریخی ثبت شد.',['invoice_id'=>(int)$invoiceId]);
+    }
+    respond_error('عملیات نامعتبر.',400);
+} catch (InvalidArgumentException|JsonException $e) {
+    respond_error($e->getMessage(),422);
+} catch (Throwable $e) {
+    error_log('accounting_ledger_action: '.$e->getMessage());
+    respond_error('خطای ثبت مالی؛ هیچ تراکنش ناقصی ذخیره نشد.',500);
+}
