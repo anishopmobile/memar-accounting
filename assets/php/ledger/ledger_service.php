@@ -228,6 +228,8 @@ function ledger_apply_credit(mysqli $db,string $kind,int $partyId,int $paymentId
         $s=$db->prepare('SELECT COALESCE((SELECT SUM(amount) FROM ledger_allocations WHERE payment_id=?),0)+COALESCE((SELECT SUM(amount) FROM ledger_credit_allocations WHERE payment_id=?),0) allocated');
         $s->bind_param('ii',$paymentId,$paymentId);$s->execute();$used=$s->get_result()->fetch_assoc()['allocated'];$s->close();
         if(money_cmp($amount,money_sub($payment['amount'],$used))>0)throw new DomainException('اعتبار پرداخت کافی نیست.');
+        if(money_cmp($amount,ledger_unapplied_cash_pool($db,$kind,$partyId))>0)
+            throw new DomainException('اعتبار نقدی قبلاً تخصیص یا مسترد شده است.');
         $balance=ledger_invoice_balance($db,$invoiceId,true);
         if($balance['party_kind']!==$kind||$balance['party_id']!==$partyId)
             throw new DomainException('فاکتور متعلق به این طرف حساب نیست.');
@@ -303,6 +305,8 @@ function ledger_apply_proforma_deposits(mysqli $db,int $invoiceId): void {
         $s=$db->prepare('SELECT COALESCE((SELECT SUM(amount) FROM ledger_allocations WHERE payment_id=?),0)+COALESCE((SELECT SUM(amount) FROM ledger_credit_allocations WHERE payment_id=?),0) used');
         $s->bind_param('ii',$pid,$pid);$s->execute();$used=$s->get_result()->fetch_assoc()['used'];$s->close();
         $available=money_sub($p['amount'],$used);
+        $pool=ledger_unapplied_cash_pool($db,$balance['party_kind'],$balance['party_id']);
+        if(money_cmp($available,$pool)>0)$available=$pool;
         if(money_cmp($available,'0')<=0)continue;
         $allocate=money_cmp($available,$balance['due'])<=0?$available:$balance['due'];
         $token='proforma_'.$invoiceId.'_'.$pid;
