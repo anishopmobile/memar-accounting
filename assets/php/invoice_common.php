@@ -895,6 +895,7 @@ function createInvoice(mysqli $mysqli, array $in): array
                  invoice_date, subtotal, discount, tax_rate, tax_amount, payable_amount, note, client_token)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
+        $statusOnCreate = 'unpaid';
         $stmt->bind_param(
             'ssiisssdddddss',
             $invoiceNumber,
@@ -902,7 +903,7 @@ function createInvoice(mysqli $mysqli, array $in): array
             $customerId,
             $supplierId,
             $in['payment_type'],
-            'unpaid',
+            $statusOnCreate,
             $in['invoice_date'],
             $totals['subtotal'],
             $invoiceDiscount,
