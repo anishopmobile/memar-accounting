@@ -86,6 +86,13 @@ if ($action === 'save_dir') {
     if ($backup_dir === '') {
         respond(false, 'آدرس پوشه پشتیبان نمی‌تواند خالی باشد.');
     }
+    try {
+        resolveBackupDir($backup_dir); // Reject webroot, symlink and traversal paths before saving settings.
+    } catch (InvalidArgumentException $e) {
+        respond(false, $e->getMessage());
+    } catch (Throwable $e) {
+        respond(false, 'مسیر پشتیبان معتبر نیست.');
+    }
 
     if ($settings) {
         $stmt = $mysqli->prepare('UPDATE db_backup_settings SET backup_dir = ? WHERE id = 1');
