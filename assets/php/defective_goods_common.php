@@ -10,6 +10,7 @@
  */
 
 require_once __DIR__ . '/invoice_common.php';
+require_once __DIR__ . '/media_common.php';
 
 /**
  * اعتبارسنجی و نرمال‌سازی تاریخ میلادی به شکل Y-m-d
@@ -178,7 +179,9 @@ function dg_list(mysqli $mysqli, array $filters, int $page, int $perPage = 25): 
 
 
     $sql = "SELECT dg.id,dg.product_id,dg.quantity,dg.defective_date,dg.reason,dg.description,
-                   p.name AS product_name,p.code AS product_code,p.barcode AS product_barcode,p.unit AS product_unit
+                   p.name AS product_name,p.code AS product_code,p.barcode AS product_barcode,p.unit AS product_unit,
+                   (SELECT dm.media_id FROM defective_media dm WHERE dm.defective_id=dg.id
+                    ORDER BY dm.sort_order,dm.media_id LIMIT 1) AS defective_media_id
             FROM defective_goods dg
             JOIN products p ON p.id = dg.product_id
             {$w['sql']}
@@ -226,8 +229,13 @@ function dg_all_for_export(mysqli $mysqli, array $filters): array
  *
  * @return array ['ok' => bool, 'message' => string, 'data' => array|null]
  */
-function dg_register_defective(mysqli $mysqli, int $productId, string $qtyRaw, string $dateRaw, string $reason, string $description): array
+function dg_register_defective(mysqli $mysqli, int $productId, string $qtyRaw, string $dateRaw, string $reason, string $description, string $mediaIdsJson = '[]'): array
 {
+    // Validate image IDs before opening the stock/financial transaction.
+    try { media_decode_ids($mediaIdsJson); }
+    catch (InvalidArgumentException $e) {
+        return ['ok'=>false, 'message'=>$e->getMessage()];
+    }
     if ($productId <= 0) {
         return ['ok' => false, 'message' => 'کالای انتخاب‌شده نامعتبر است.'];
     }
@@ -291,6 +299,7 @@ function dg_register_defective(mysqli $mysqli, int $productId, string $qtyRaw, s
         $stmt->execute();
         $defectiveId = (int) $stmt->insert_id;
         $stmt->close();
+        media_sync_defective($mysqli, $defectiveId, $mediaIdsJson);
 
         /* کاهش موجودی + ثبت گردش موجودی (stock_movements) — همان معماری موجود پروژه */
         $newStock = applyStockChange(
@@ -471,6 +480,7 @@ function dg_report_data(mysqli $mysqli, array $filters, int $page, int $perPage 
             'defective_date_jalali' => (string) $r['defective_date'] !== ''
                 ? jdate('Y/m/d', strtotime((string) $r['defective_date'])) : '',
             'product_id'            => (int) $r['product_id'],
+            'defective_media_id'   => (int)($r['defective_media_id'] ?? 0),
             'product_name'          => (string) $r['product_name'],
             'product_code'          => (string) $r['product_code'],
             'product_barcode'       => $r['product_barcode'] !== null && (string) $r['product_barcode'] !== ''
