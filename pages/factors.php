@@ -57,7 +57,7 @@
                 <thead>
                     <tr><th class="invoice-image-col" style="display:none">تصویر</th><th>کد</th><th>بارکد</th><th>نام</th><th>واحد</th><th>قیمت</th><th>موجودی</th><th></th></tr>
                 </thead>
-                <tbody><tr><td colspan="7" class="empty-state">جستجو کنید...</td></tr></tbody>
+                <tbody><tr><td colspan="8" class="empty-state">جستجو کنید...</td></tr></tbody>
             </table>
         </div>
     </div>
@@ -81,7 +81,7 @@
                 <thead>
                     <tr><th class="invoice-image-col" style="display:none">تصویر</th><th>کد</th><th>بارکد</th><th>نام</th><th>واحد</th><th>قیمت</th><th>موجودی</th><th></th></tr>
                 </thead>
-                <tbody><tr><td colspan="7" class="empty-state">جستجو کنید...</td></tr></tbody>
+                <tbody><tr><td colspan="8" class="empty-state">جستجو کنید...</td></tr></tbody>
             </table>
         </div>
     </div>
