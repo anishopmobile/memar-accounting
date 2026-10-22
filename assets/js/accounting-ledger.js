@@ -98,7 +98,7 @@ $(function () {
             var pays='';
             (current.payments||[]).forEach(function(p){
                 pays+='<tr><td>'+escapeHtml(p.paid_on)+'</td><td>'+escapeHtml((p.direction===($('#ledgerKind').val()==='customer'?'receipt':'disbursement')?'دریافت/پرداخت':'استرداد')+' - '+(({cash:'نقدی',pos:'کارت‌خوان',bank_transfer:'انتقال بانکی'})[p.method]||p.method))
-                    +'</td><td>'+money(p.amount)+'</td><td>'+escapeHtml(p.reference_no)+'</td><td>'+escapeHtml(p.note)+(p.voided_at?' (باطل‌شده)':'')+'</td>'
+                    +'</td><td>'+money(p.amount)+'</td><td>'+escapeHtml(p.reference_no)+'</td><td>'+escapeHtml(p.note)+(p.voided_at?' (باطل‌شده: '+escapeHtml(p.void_reason||'')+')':'')+'</td>'
                     +'<td>'+(p.voided_at?'ابطال شده':'<button type="button" class="button-danger small ledger-void" data-payment-id="'+escapeHtml(p.id)+'">ابطال ثبت اشتباه</button>')+'</td></tr>';
             });
             $('#ledgerPayments').html(pays||'<tr><td colspan="6">تراکنشی ثبت نشده است.</td></tr>');
