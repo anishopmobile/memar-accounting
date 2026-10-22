@@ -13,6 +13,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/client_ip.php';
 require_once __DIR__ . '/auth/auth_users.php';
 require_once __DIR__ . '/auth/auth_rate_limiter.php';
 require_once __DIR__ . '/auth/auth_settings.php';
@@ -75,15 +76,7 @@ function auth_last_failure(): string
 
 function auth_client_ip(): string
 {
-    foreach (['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR'] as $header) {
-        if (!empty($_SERVER[$header])) {
-            $ip = trim(explode(',', (string) $_SERVER[$header])[0]);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return $ip;
-            }
-        }
-    }
-    return (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    return memar_client_ip();
 }
 
 /**
