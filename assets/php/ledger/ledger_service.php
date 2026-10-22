@@ -136,7 +136,7 @@ function ledger_record_payment(mysqli $db,array $in,bool $insideExistingTransact
             $s=$db->prepare('UPDATE invoices SET payment_status=? WHERE id=?');
             $s->bind_param('si',$derived,$invId);$s->execute();$s->close();
         }
-        if(!$insideExistingTransaction) $db->commit();return ['payment_id'=>$paymentId,'duplicate'=>false,'unallocated'=>money_sub($amount,$sum)];
+        if(!$insideExistingTransaction) $db->commit();return ['payment_id'=>$paymentId,'duplicate'=>false,'unallocated'=>$direction===$expectedDirection?money_sub($amount,$sum):'0.00'];
     } catch(Throwable $e){if(!$insideExistingTransaction)$db->rollback();throw $e;}
 }
 
@@ -216,9 +216,9 @@ function ledger_apply_credit(mysqli $db,string $kind,int $partyId,int $paymentId
                 throw new DomainException('شناسه تخصیص با درخواست قبلی مغایرت دارد.');
             $db->commit();return ['duplicate'=>true];
         }
-        $s=$db->prepare('SELECT party_kind,party_id,amount,voided_at FROM ledger_payments WHERE id=? FOR UPDATE');
+        $s=$db->prepare('SELECT party_kind,party_id,direction,amount,voided_at FROM ledger_payments WHERE id=? FOR UPDATE');
         $s->bind_param('i',$paymentId);$s->execute();$payment=$s->get_result()->fetch_assoc();$s->close();
-        if(!$payment||$payment['voided_at']!==null||$payment['party_kind']!==$kind||(int)$payment['party_id']!==$partyId)
+        if(!$payment||$payment['voided_at']!==null||$payment['direction']!==($kind==='customer'?'receipt':'disbursement')||$payment['party_kind']!==$kind||(int)$payment['party_id']!==$partyId)
             throw new DomainException('تراکنش متعلق به طرف حساب نیست یا باطل شده است.');
         $s=$db->prepare('SELECT COALESCE((SELECT SUM(amount) FROM ledger_allocations WHERE payment_id=?),0)+COALESCE((SELECT SUM(amount) FROM ledger_credit_allocations WHERE payment_id=?),0) allocated');
         $s->bind_param('ii',$paymentId,$paymentId);$s->execute();$used=$s->get_result()->fetch_assoc()['allocated'];$s->close();
