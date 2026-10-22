@@ -15,6 +15,10 @@
       <div class="form-row"><label>مانده بدهی</label><div id="ledgerDebt" class="money-cell">—</div></div>
       <div class="form-row"><label>اعتبار نزد طرف حساب</label><div id="ledgerCredit" class="money-cell">—</div></div>
     </div>
+    <h3>صورت‌حساب و گردش مالی به‌ترتیب تاریخ</h3>
+    <p id="ledgerStatementWarning" class="setting-note" hidden>به دلیل تعداد زیاد اسناد، فقط ۵۰۰ گردش آخر نمایش داده می‌شود؛ مانده‌ها همچنان از کل اسناد محاسبه شده‌اند.</p>
+    <div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>نوع</th><th>شرح</th><th>افزایش بدهی</th><th>کاهش بدهی</th><th>مانده پس از رویداد</th></tr></thead>
+      <tbody id="ledgerStatement"><tr><td colspan="6">طرف حساب را انتخاب کنید.</td></tr></tbody></table></div>
     <h3>فاکتورهای این طرف حساب</h3>
     <div class="table-wrapper"><table class="action-table"><thead><tr><th>شماره فاکتور</th><th>مبلغ کل</th><th>تسویه‌شده</th><th>مانده</th><th>تخصیص از پرداخت جدید</th></tr></thead><tbody id="ledgerInvoices"></tbody></table></div>
     <h3>ثبت دریافت / پرداخت</h3>
