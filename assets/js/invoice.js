@@ -322,6 +322,7 @@ $(function () {
             + '<div class="form-row"><label>مالیات</label><div id="invTax" class="money-cell">0</div></div>'
             + '<div class="form-row"><label>مبلغ قابل پرداخت</label><div id="invPayable" class="money-cell strong">0</div></div>'
             + '<div class="form-row"><label>مبلغ دریافت/پرداخت اولیه (' + window.Currency.label + ')</label><input id="invInitialPayment" type="number" min="0" step="1" value="0" ' + (isEdit || /proforma/.test(typeVal) ? 'disabled' : '') + '></div>'
+            + (!isEdit && !/proforma/.test(typeVal) ? '<div class="form-row" style="grid-column:span 2"><label>روش‌های پرداخت بیشتر (در صورت پرداخت ترکیبی)</label><div id="invExtraPayments"></div><button type="button" class="button-secondary" id="invAddPaymentMethod">+ افزودن روش پرداخت</button></div>' : '')
             + '<div class="form-row"><label>مانده فاکتور</label><div id="invRemaining" class="money-cell strong">0</div></div>'
             + '</div>'
             + (isEdit && !/proforma/.test(typeVal) ? '<div class="card" id="invSettlementPanel"><h3>دریافت‌ها و پرداخت‌های فاکتور</h3><div id="invSettlementHistory">در حال بارگذاری...</div><div class="form-grid"><div class="form-row"><label>مبلغ تراکنش جدید</label><input type="number" id="invReceiptAmount" min="1" step="1"></div><div class="form-row"><label>روش</label><select id="invReceiptMethod">' + paymentTypes + '</select></div><div class="form-row"><label>شماره پیگیری</label><input id="invReceiptReference" type="text" maxlength="120"></div></div><div id="invAllocationOptions"></div><button type="button" class="button" id="invRegisterReceipt">ثبت دریافت / پرداخت جدید</button></div>' : '')
@@ -425,7 +426,9 @@ $(function () {
         $('#invWords').text(amountToWords(payable));
         var $initial = $('#invInitialPayment');
         if ($initial.data('auto')) $initial.val(Math.round(payable));
-        var currentPaid = currentInvoiceId ? Number($('#invoiceFormView').data('settled') || 0) : (parseFloat($initial.val()) || 0);
+        var extraPaid = 0;
+        $('.inv-extra-payment-amount').each(function () { extraPaid += parseFloat($(this).val()) || 0; });
+        var currentPaid = currentInvoiceId ? Number($('#invoiceFormView').data('settled') || 0) : (parseFloat($initial.val()) || 0) + extraPaid;
         var due = payable - currentPaid;
         $('#invRemaining').text(splitNum(Math.round(due)) + ' ' + window.Currency.label);
         if (!currentInvoiceId) $('#invPaymentStatus').text(due <= 0 ? 'پرداخت شده' : currentPaid > 0 ? 'پرداخت جزئی' : 'پرداخت نشده');
@@ -464,6 +467,14 @@ $(function () {
     $(document).on('click', '#invoiceBackToList, #invoiceFormCancel', function () { showList(); });
     $(document).on('input', '#invItemsTable .ii-price, #invItemsTable .ii-qty, #invItemsTable .ii-disc, #invDiscount', function () { recalcs(); });
     $(document).on('input', '#invInitialPayment', function () { $(this).data('auto', false); recalcs(); });
+    $(document).on('click', '#invAddPaymentMethod', function () {
+        $('#invInitialPayment').data('auto',false);
+        var methods='<option value="cash">نقدی</option><option value="pos">کارت‌خوان</option><option value="bank_transfer">انتقال بانکی</option>';
+        $('#invExtraPayments').append('<div class="form-grid inv-extra-payment"><div class="form-row"><label>مبلغ</label><input class="inv-extra-payment-amount" type="number" min="1" step="1" value="0"></div><div class="form-row"><label>روش</label><select class="inv-extra-payment-method">'+methods+'</select></div><div class="form-row"><label>شماره پیگیری (اختیاری)</label><input class="inv-extra-payment-reference" maxlength="120"></div><button type="button" class="button-secondary inv-extra-payment-remove">حذف</button></div>');
+        recalcs();
+    });
+    $(document).on('input', '.inv-extra-payment-amount', recalcs);
+    $(document).on('click', '.inv-extra-payment-remove', function () { $(this).closest('.inv-extra-payment').remove(); recalcs(); });
     $(document).on('click', '.ii-remove', function () { $(this).closest('tr').remove(); recalcs(); });
     $(document).on('click', '#invAddProduct', function () { openProductModal(); });
     $(document).on('click', '#invAddService', function () { openServiceModal(); });
@@ -797,6 +808,17 @@ $(function () {
             payment_type: $('#invPaymentType').val(),
             payment_status: 'unpaid',
             initial_payment_amount: $('#invInitialPayment').prop('disabled') ? '0' : ($('#invInitialPayment').val() || '0'),
+            initial_payments: (function () {
+                if ($('#invInitialPayment').prop('disabled')) return '[]';
+                var payments=[];
+                var first=$('#invInitialPayment').val() || '0';
+                if (Number(first)>0) payments.push({amount:first,method:$('#invPaymentType').val(),reference_number:''});
+                $('.inv-extra-payment').each(function(){
+                    var a=$('.inv-extra-payment-amount',this).val() || '0';
+                    if(Number(a)>0)payments.push({amount:a,method:$('.inv-extra-payment-method',this).val(),reference_number:$('.inv-extra-payment-reference',this).val()});
+                });
+                return JSON.stringify(payments);
+            })(),
             invoice_date: gDate,
             discount: $('#invDiscount').val() || '0',
             note: $('#invNote').val(),
