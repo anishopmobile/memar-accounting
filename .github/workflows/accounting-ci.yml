@@ -49,6 +49,8 @@ jobs:
           node --check assets/js/accounting.js
       - name: Accounting ledger MySQL integration
         run: php assets/php/tests/accounting_ledger_test.php
+      - name: Invoice and proforma settlement end-to-end
+        run: php assets/php/tests/accounting_invoice_flow_test.php
       - name: Financial regression suite
         run: |
           php assets/php/tests/currency_mysql_test.php
