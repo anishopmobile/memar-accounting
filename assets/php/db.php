@@ -735,5 +735,7 @@ function migrate_product_media_schema(mysqli $mysqli): void
     $mysqli->query("INSERT IGNORE INTO media_display_settings (id) VALUES (1)");
 }
 migrate_product_media_schema($mysqli);
+require_once __DIR__ . '/accounting_ledger_migration.php';
+migrate_accounting_ledger($mysqli);
 
 } // End database schema initialization; normal application requests are unchanged.
