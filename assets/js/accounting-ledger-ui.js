@@ -7,7 +7,7 @@ $(function() {
   if (!isInvoicePage && !isPartyPage) return;
   var kind=(isInvoicePage ? $('#invoiceMode').val()==='sales' : $('body').is('#customers'))?'customer':'supplier';
   var csrf=window.APP_CSRF_TOKEN;
-  var partyId=0, selectedInvoice=0, statement=null, posting=false, paymentToken='', cashAccounts=[], autoAllocation=true;
+  var partyId=0, selectedInvoice=0, sourceProformaId=0, statement=null, posting=false, paymentToken='', cashAccounts=[], autoAllocation=true;
   var html='<div class="modal" id="accountingModal"><div class="modal-backdrop" data-close="accountingModal"></div>'
     +'<div class="modal-content" style="max-width:900px;max-height:90vh;overflow:auto">'
     +'<div class="modal-header"><h2>دریافت‌ها، پرداخت‌ها و صورت‌حساب</h2><button type="button" class="modal-close" id="acctClose">×</button></div>'
@@ -118,7 +118,7 @@ $(function() {
     posting=true;updateTotals();
     $.post('assets/php/accounting_ledger_action.php',{
       action:'payment',csrf_token:csrf,party_kind:kind,party_id:partyId,direction:kind==='customer'?'in':'out',
-      amount:$('#acctAmount').val(),method:$('#acctMethod').val(),cash_account_id:$('#acctCashAccount').val(),payment_date:$('#acctDate').val(),
+      amount:$('#acctAmount').val(),source_proforma_id:sourceProformaId,method:$('#acctMethod').val(),cash_account_id:$('#acctCashAccount').val(),payment_date:$('#acctDate').val(),
       reference_no:$('#acctRef').val(),note:$('#acctNote').val(),allocations:JSON.stringify(allocations),client_token:paymentToken
     }).done(function(){posting=false;selectedInvoice=0;paymentToken='acct_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);load();if(typeof window.refreshInvoiceAccountingList==='function')window.refreshInvoiceAccountingList();})
       .fail(function(e){posting=false;updateTotals();fail(e);});
@@ -160,7 +160,7 @@ $(function() {
       var $actions=$(this).children('td').last();
       $('<button type="button" class="button-secondary small acctPartyOpen">صورت حساب / دریافت و پرداخت</button>').data('id',id).appendTo($actions);
     });
-    $(document).on('click','.acctPartyOpen',function(){partyId=Number($(this).data('id'));selectedInvoice=0;autoAllocation=false;show();load();});
+    $(document).on('click','.acctPartyOpen',function(){partyId=Number($(this).data('id'));selectedInvoice=0;sourceProformaId=0;autoAllocation=false;show();load();});
   }
   $(document).on('click','#acctRefund',function(){
     var amount=prompt('مبلغ استرداد از اعتبار ('+window.Currency.label+')',input(String(Math.abs(Number(statement.balance)))));
@@ -193,7 +193,7 @@ $(function() {
     openInvoice:function(i){
       if(!i || !i.id)return;
       partyId=Number(kind==='customer'?i.customer_id:i.supplier_id);
-      selectedInvoice=/proforma/.test(i.type)?0:Number(i.id);autoAllocation=selectedInvoice>0;show();load();
+      sourceProformaId=/proforma/.test(i.type)?Number(i.id):0;selectedInvoice=sourceProformaId?0:Number(i.id);autoAllocation=selectedInvoice>0;show();load();
     }
   };
   $(document).on('click','.invoice-accounting',function(){
