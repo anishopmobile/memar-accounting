@@ -7,6 +7,9 @@
     var libraryPage = 1;
     var libraryTerm = '';
     var libraryUsage = 'all';
+    var libraryFolder = 'all', folders = [], dzInstance = null;
+    var pickerRequest = null, pickerSequence = 0, managerRequest = null, managerSequence = 0;
+    var uploadRefreshTimer = null, managerSnapshot = null;
     var modal = null, restoreFocus = null;
 
     function escapeHtml(v) {
@@ -16,6 +19,37 @@
         return 'assets/php/media_file.php?id=' + encodeURIComponent(id) + '&size=' + (size || 'thumb');
     }
     function csrf() { return window.APP_CSRF_TOKEN || ''; }
+    function folderOptions(selected) {
+        var html = '<option value="all">همه پوشه‌ها</option><option value="0">بدون پوشه</option>';
+        folders.forEach(function(f) {
+            html += '<option value="' + Number(f.id) + '"' + (String(selected) === String(f.id) ? ' selected' : '') + '>'
+                + escapeHtml(f.name) + ' (' + Number(f.media_count || 0) + ')</option>';
+        });
+        return html;
+    }
+    function updateFolderSelectors() {
+        $('#mediaPickerFolder,#mediaManagerFolder').each(function () {
+            var selected = String($(this).val() || libraryFolder);
+            $(this).html(folderOptions(selected)).val(selected);
+            if ($(this).val() === null) $(this).val('all');
+        });
+    }
+    function loadFolders() {
+        return $.getJSON('assets/php/media_api.php', {action:'folders'}).done(function(res) {
+            if (res && res.success) {
+                folders = (res.data && res.data.folders) || [];
+                updateFolderSelectors();
+            }
+        });
+    }
+    function moveOptions(selected) {
+        var html = '<option value="0">بدون پوشه</option>';
+        folders.forEach(function(f) {
+            html += '<option value="' + Number(f.id) + '"' + (String(selected) === String(f.id) ? ' selected' : '') + '>'
+                + escapeHtml(f.name) + '</option>';
+        });
+        return html;
+    }
     function state(name) {
         if (!states[name]) states[name] = { items: [], original: '[]', loading: false, seq: 0 };
         return states[name];
@@ -71,7 +105,9 @@
             var st = state(name);
             return JSON.stringify(st.items.map(function (x) { return x.id; })) !== st.original;
         },
-        canSave: function (name) { return !state(name).loading; },
+        canSave: function (name) {
+            return !state(name).loading && !(dzInstance && (dzInstance.getQueuedFiles().length || dzInstance.getUploadingFiles().length));
+        },
         reset: function (name) { this.prepare(name, 0); }
     };
     window.MediaEditor = MediaEditor;
@@ -82,7 +118,9 @@
             + '<div class="media-picker-panel">'
             + '<header><h2>کتابخانه تصاویر</h2><button type="button" class="media-picker-close" aria-label="بستن">×</button></header>'
             + '<div class="media-picker-tools"><input type="search" id="mediaPickerSearch" placeholder="جستجو نام فایل">'
-            + '<select id="mediaPickerUsage"><option value="all">همه تصاویر</option><option value="used">استفاده‌شده</option><option value="unused">بدون استفاده</option></select></div>'
+            + '<select id="mediaPickerUsage"><option value="all">همه تصاویر</option><option value="used">استفاده‌شده</option><option value="unused">بدون استفاده</option></select>'
+            + '<select id="mediaPickerFolder" aria-label="انتخاب پوشه"><option value="all">همه پوشه‌ها</option></select>'
+            + '<button type="button" class="button-secondary media-create-folder">+ پوشه جدید</button></div>'
             + '<div id="mediaPickerGrid" class="media-grid" role="group"></div>'
             + '<div class="media-pages"><button type="button" id="mediaPrev">قبلی</button><span id="mediaPageText"></span><button type="button" id="mediaNext">بعدی</button></div>'
             + '<div class="media-dropbox dropzone" id="mediaDropArea" tabindex="0">'
@@ -100,18 +138,20 @@
         window.Dropzone.autoDiscover = false;
         var dz = new window.Dropzone(modal.find('#mediaDropArea')[0], {
             url:'assets/php/media_api.php', method:'post', paramName:'file',
-            maxFilesize:5, maxFiles:10, parallelUploads:2, uploadMultiple:false,
+            maxFilesize:5, parallelUploads:2, uploadMultiple:false,
             acceptedFiles:'image/jpeg,image/png,image/webp', clickable:true,
             addRemoveLinks:true, previewsContainer:'#mediaUploadQueue',
             dictDefaultMessage:'تصاویر را اینجا رها کنید',
             dictRemoveFile:'حذف از صف', dictCancelUpload:'لغو ارسال',
             dictInvalidFileType:'فرمت تصویر مجاز نیست',
             dictFileTooBig:'حجم فایل بیشتر از پنج مگابایت است',
-            dictMaxFilesExceeded:'حداکثر ۱۰ فایل در هر نوبت مجاز است'
+            dictMaxFilesExceeded:'محدودیت تصاویر فقط برای اتصال به هر محصول است'
         });
+        dzInstance = dz;
         dz.on('sending', function(file, xhr, formData) {
             formData.append('action','upload');
             formData.append('csrf_token',csrf());
+            formData.append('folder_id', /^[0-9]+$/.test(String(libraryFolder)) ? libraryFolder : '0');
         });
         dz.on('success', function(file, response) {
             var res = response;
@@ -129,7 +169,13 @@
                 $('#categoryMediaId').val(m.id);
                 $('#categoryMediaPreview').attr('src',m.url);
             }
-            loadPicker();
+            clearTimeout(uploadRefreshTimer);
+            uploadRefreshTimer = setTimeout(function () { loadPicker(); loadFolders(); }, 280);
+        });
+        dz.on('complete', function (file) {
+            if (file.status === window.Dropzone.SUCCESS) {
+                setTimeout(function () { dz.removeFile(file); }, 3000);
+            }
         });
         dz.on('error', function(file, message) {
             if (typeof message === 'object') message = message.message || 'خطا';
@@ -239,12 +285,30 @@
         renderEditor(name);
     });
     $(document).on('click','.media-preview,.media-thumb',function () {
-        var id = Number($(this).data('id') || $(this).closest('[data-id]').data('id') || 0);
+        // Never confuse a parent product ID with the thumbnail's media ID.
+        var id = Number($(this).attr('data-id') || 0);
         if (!id) return;
-        var overlay = $('<div class="media-lightbox" role="dialog" aria-modal="true"><button type="button" aria-label="بستن">×</button><img alt="تصویر بزرگ"></div>');
-        overlay.find('img').attr('src',mediaUrl(id,'original'));
-        overlay.on('click',function () {overlay.remove();});
+        $('.media-lightbox').remove();
+        var overlay = $('<div class="media-lightbox" role="dialog" aria-modal="true">'
+            + '<button type="button" aria-label="بستن تصویر">×</button>'
+            + '<span class="media-lightbox-status" role="status">در حال دریافت تصویر اصلی…</span>'
+            + '<img alt="تصویر بزرگ"></div>');
+        var img = overlay.find('img').attr('src',mediaUrl(id,'thumb'));
+        var full = new Image();
+        full.onload = function () {
+            if (!document.body.contains(overlay[0])) return;
+            img.attr('src', full.src);
+            overlay.find('.media-lightbox-status').remove();
+        };
+        full.onerror = function () {
+            if (document.body.contains(overlay[0])) overlay.find('.media-lightbox-status')
+                .text('تصویر اصلی در دسترس نیست؛ پیش‌نمایش کوچک نمایش داده می‌شود.');
+        };
+        full.src = mediaUrl(id,'original');
+        overlay.on('click',function(e){if(e.target===overlay[0] || $(e.target).is('button'))overlay.remove();});
+        overlay.on('keydown',function(e){if(e.key==='Escape')overlay.remove();});
         $(document.body).append(overlay);
+        overlay.find('button').trigger('focus');
     });
 
     // Full-page library manager shares the same API and picker.
