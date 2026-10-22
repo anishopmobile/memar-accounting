@@ -32,6 +32,40 @@ curl -sS -b "$tmp/cookies" -c "$tmp/cookies" -D "$tmp/login.headers" -o /dev/nul
   --data-urlencode "csrf_token=$token" "$base/login.php"
 grep -iq 'location: index.php' "$tmp/login.headers"
 echo 'PASS authenticated login'
+
+# Regression: party endpoints used to accept anonymous and forged-CSRF writes.
+for endpoint in save_customer.php save_supplier.php delete_customer.php delete_supplier.php; do
+  status="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Accept: application/json' \
+    -d 'customer_id=1&supplier_id=1&first_name=Test&last_name=User&company_name=CI&phone=12345' \
+    "$base/assets/php/$endpoint")"
+  [[ "$status" == '401' ]] || { echo "Unauthenticated $endpoint must be HTTP 401, got $status" >&2; exit 1; }
+  status="$(curl -sS -b "$tmp/cookies" -o /dev/null -w '%{http_code}' \
+    -d 'customer_id=1&supplier_id=1&first_name=Test&last_name=User&company_name=CI&phone=12345' \
+    "$base/assets/php/$endpoint")"
+  [[ "$status" == '403' ]] || { echo "Missing CSRF $endpoint must be HTTP 403, got $status" >&2; exit 1; }
+  status="$(curl -sS -b "$tmp/cookies" -o /dev/null -w '%{http_code}' \
+    "$base/assets/php/$endpoint")"
+  [[ "$status" == '405' ]] || { echo "GET $endpoint must be HTTP 405, got $status" >&2; exit 1; }
+done
+curl -sS -b "$tmp/cookies" -o "$tmp/new-customer.json" \
+  --data-urlencode 'first_name=CI' --data-urlencode 'last_name=Security' \
+  --data-urlencode 'phone=123456789' --data-urlencode "csrf_token=$token" \
+  "$base/assets/php/save_customer.php"
+customer_id="$(php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||empty($j["customer"]["id"]))exit(1);echo $j["customer"]["id"];' "$tmp/new-customer.json")"
+curl -sS -b "$tmp/cookies" -o "$tmp/remove-customer.json" \
+  --data-urlencode "customer_id=$customer_id" --data-urlencode "csrf_token=$token" \
+  "$base/assets/php/delete_customer.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"]))exit(1);' "$tmp/remove-customer.json"
+curl -sS -b "$tmp/cookies" -o "$tmp/new-supplier.json" \
+  --data-urlencode 'company_name=CI Security Supplier' --data-urlencode 'phone=123456789' \
+  --data-urlencode "csrf_token=$token" "$base/assets/php/save_supplier.php"
+supplier_id="$(php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||empty($j["supplier"]["id"]))exit(1);echo $j["supplier"]["id"];' "$tmp/new-supplier.json")"
+curl -sS -b "$tmp/cookies" -o "$tmp/remove-supplier.json" \
+  --data-urlencode "supplier_id=$supplier_id" --data-urlencode "csrf_token=$token" \
+  "$base/assets/php/delete_supplier.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"]))exit(1);' "$tmp/remove-supplier.json"
+echo 'PASS authenticated customer/supplier CRUD, forged CSRF, denied anonymous writes and GET'
+
 code="$(curl -sS -b "$tmp/cookies" -o "$tmp/no-csrf.json" -w '%{http_code}' \
   -F 'action=upload' -F "file=@$tmp/sample.png" "$base/assets/php/media_api.php")"
 [[ "$code" == '403' ]] || { echo "Expected CSRF 403, got $code" >&2; exit 1; }
