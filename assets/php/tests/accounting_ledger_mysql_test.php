@@ -4,6 +4,7 @@ declare(strict_types=1);
 if (getenv('GITHUB_ACTIONS') !== 'true') { fwrite(STDERR,"Refusing destructive accounting integration test outside CI.\n"); exit(2); }
 require_once dirname(__DIR__) . '/db.php';
 require_once dirname(__DIR__) . '/accounting_ledger.php';
+require_once dirname(__DIR__) . '/accounting_payment_batch.php';
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 function check_acct(bool $ok,string $why): void {
     if(!$ok) throw new RuntimeException($why);
@@ -105,4 +106,56 @@ check_acct(acct_party_statement($mysqli,'customer',$c2)['balance']==='180000.00'
 $blocked=false;
 try {acct_reverse_payment($mysqli,$once['payment_id'],'ابطال مجدد اشتباه',bin2hex(random_bytes(16)));}catch(InvalidArgumentException $e){$blocked=true;}
 check_acct(!$blocked,'repeated reversal is idempotently recognized');
+
+// Atomic multi-method settlement: split 200k into cash 50k and POS 150k.
+$batchCustomer=a_customer($mysqli);
+$batchInvoice=a_invoice($mysqli,'customer',$batchCustomer,'220000');
+$batch=[
+ 'party_kind'=>'customer','party_id'=>$batchCustomer,
+ 'client_token'=>bin2hex(random_bytes(20)),
+ 'payment_date'=>date('Y-m-d'),
+ 'payments'=>[['method'=>'cash','amount'=>'50000'],['method'=>'pos','amount'=>'150000']],
+ 'allocations'=>[['invoice_id'=>$batchInvoice,'amount'=>'200000']]
+];
+$resultBatch=acct_record_payment_batch($mysqli,$batch);
+check_acct(count($resultBatch['payment_ids'])===2,'mixed receipt writes two independently auditable payments');
+check_acct(acct_invoice_outstanding($mysqli,$batchInvoice)['remaining']==='20000.00','combined cash and POS settle 200k of 220k');
+$retryBatch=acct_record_payment_batch($mysqli,$batch);
+check_acct($retryBatch['duplicate']===true && $retryBatch['payment_ids']===$resultBatch['payment_ids'],'whole mixed-method batch retries idempotently');
+$conflictBatch=$batch;$conflictBatch['payments'][1]['amount']='160000';
+$blocked=false;
+try{acct_record_payment_batch($mysqli,$conflictBatch);}catch(InvalidArgumentException $e){$blocked=true;}
+check_acct($blocked,'conflicting batch replay rejected and unchanged');
+$invalidBatch=$batch;
+$invalidBatch['client_token']=bin2hex(random_bytes(20));
+$invalidBatch['allocations']=[['invoice_id'=>$batchInvoice,'amount'=>'150000']];
+$blocked=false;
+try{acct_record_payment_batch($mysqli,$invalidBatch);}catch(InvalidArgumentException $e){$blocked=true;}
+check_acct($blocked,'batch over-allocation rolls back all payment methods');
+$st=$mysqli->prepare("SELECT COUNT(*) AS c FROM account_payments WHERE party_kind='customer' AND party_id=?");
+$st->bind_param('i',$batchCustomer);$st->execute();$num=(int)$st->get_result()->fetch_assoc()['c'];$st->close();
+check_acct($num===2,'failed mixed-method action did not leave orphan cash transaction');
+
+// Historical proforma advances are linked to proforma until conversion.
+$advanceCustomer=a_customer($mysqli);
+$proformaNumber='CI-PRO-'.bin2hex(random_bytes(6));
+$stmt=$mysqli->prepare("INSERT INTO invoices(invoice_number,type,customer_id,invoice_date,payable_amount,legacy_paid_amount) VALUES(?,'sales_proforma',?,CURDATE(),'900000',0)");
+$stmt->bind_param('si',$proformaNumber,$advanceCustomer);$stmt->execute();$proformaId=(int)$stmt->insert_id;$stmt->close();
+$advanceBatch=[
+ 'party_kind'=>'customer','party_id'=>$advanceCustomer,
+ 'source_proforma_id'=>$proformaId,'client_token'=>bin2hex(random_bytes(20)),
+ 'payments'=>[['method'=>'bank_transfer','amount'=>'200000']],
+ 'allocations'=>[]
+];
+$advance=acct_record_payment_batch($mysqli,$advanceBatch);
+$st=$mysqli->prepare("SELECT source_proforma_id FROM account_payments WHERE id=?");
+$paymentId=$advance['payment_ids'][0];$st->bind_param('i',$paymentId);$st->execute();$row=$st->get_result()->fetch_assoc();$st->close();
+check_acct((int)$row['source_proforma_id']===$proformaId,'advance retains verifiable originating proforma');
+check_acct(acct_party_statement($mysqli,'customer',$advanceCustomer)['balance']==='-200000.00','proforma receipt is credit rather than immediate sale');
+$st=$mysqli->prepare("UPDATE invoices SET type='sales_invoice' WHERE id=?");
+$st->bind_param('i',$proformaId);$st->execute();$st->close();
+check_acct(acct_record_payment_batch($mysqli,$advanceBatch)['duplicate']===true,'converted proforma does not break retry idempotency');
+acct_apply_credit($mysqli,$paymentId,$proformaId,'200000');
+check_acct(acct_invoice_outstanding($mysqli,$proformaId)['remaining']==='700000.00','advance credit can be allocated to converted invoice');
+
 echo "PASS accounting integration suite\n";
