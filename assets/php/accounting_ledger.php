@@ -96,10 +96,15 @@ function acct_record_payment(mysqli $db,array $input): array {
     try {
         $cashAccountId=acct_resolve_cash_account($db,$method,$input['cash_account_id']??null);
         acct_party_lock($db,$kind,$id); // consistent lock order: party then invoice.
-        $stmt=$db->prepare('SELECT id FROM account_payments WHERE client_token=?');
-        $stmt->bind_param('s',$token);$stmt->execute();$res=$stmt->get_result();$existing=$res?$res->fetch_assoc():null;$stmt->close();
-        if ($existing) { $db->commit();return ['payment_id'=>(int)$existing['id'],'duplicate'=>true]; }
         ksort($alloc,SORT_NUMERIC);
+        $requestHash=hash('sha256',json_encode([$kind,$id,$direction,$amount,$method,$date,$ref,$note,$cashAccountId,$alloc],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
+        $stmt=$db->prepare('SELECT id,request_hash FROM account_payments WHERE client_token=?');
+        $stmt->bind_param('s',$token);$stmt->execute();$res=$stmt->get_result();$existing=$res?$res->fetch_assoc():null;$stmt->close();
+        if ($existing) {
+            if (!hash_equals((string)($existing['request_hash']??''),$requestHash))
+                throw new InvalidArgumentException('شناسه تکراری برای پرداخت متفاوت استفاده شده است.');
+            $db->commit();return ['payment_id'=>(int)$existing['id'],'duplicate'=>true];
+        }
         foreach ($alloc as $invoiceId=>$value) {
             $v=acct_invoice_outstanding($db,(int)$invoiceId,true);
             if ($v['unreconciled']) throw new InvalidArgumentException('ابتدا مبلغ پرداخت تاریخی این فاکتور را مشخص کنید.');
@@ -109,8 +114,8 @@ function acct_record_payment(mysqli $db,array $input): array {
                 throw new InvalidArgumentException('فاکتور متعلق به این طرف حساب نیست.');
             if (money_cmp($value,$v['remaining'])>0) throw new InvalidArgumentException('تخصیص از مانده فاکتور بیشتر است.');
         }
-        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token,cash_account_id) VALUES(?,?,?,?,?,?,?,?,?,?)');
-        $stmt->bind_param('sisssssssi',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId);
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token,cash_account_id,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
+        $stmt->bind_param('sisssssssis',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId,$requestHash);
         $stmt->execute();$paymentId=(int)$stmt->insert_id;$stmt->close();
         foreach ($alloc as $invoiceId=>$value) {
             $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount) VALUES(?,?,?)');
@@ -276,15 +281,20 @@ function acct_record_refund(mysqli $db,array $input): array {
     try {
         $cashAccountId=acct_resolve_cash_account($db,$method,$input['cash_account_id']??null);
         acct_party_lock($db,$kind,$partyId);
-        $stmt=$db->prepare('SELECT id FROM account_payments WHERE client_token=?');
+        $requestHash=hash('sha256',json_encode([$kind,$partyId,$direction,$amount,$method,$date,$note,$cashAccountId],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
+        $stmt=$db->prepare('SELECT id,request_hash FROM account_payments WHERE client_token=?');
         $stmt->bind_param('s',$token);$stmt->execute();$r=$stmt->get_result();$old=$r?$r->fetch_assoc():null;$stmt->close();
-        if ($old) {$db->commit();return ['payment_id'=>(int)$old['id'],'duplicate'=>true];}
+        if ($old) {
+            if (!hash_equals((string)($old['request_hash']??''),$requestHash))
+                throw new InvalidArgumentException('شناسه تکراری برای سند مالی متفاوت استفاده شده است.');
+            $db->commit();return ['payment_id'=>(int)$old['id'],'duplicate'=>true];
+        }
         $statement=acct_party_statement($db,$kind,$partyId);
         if (!$statement['balance_final'] || money_cmp($statement['balance'],'0')>=0
             || money_cmp($amount,money_abs($statement['balance']))>0)
             throw new InvalidArgumentException('استرداد فقط تا سقف اعتبار قطعی طرف حساب مجاز است.');
-        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,cash_account_id) VALUES(?,?,?,?,?,?,?,?,?)');
-        $stmt->bind_param('sissssssi',$kind,$partyId,$direction,$amount,$method,$date,$note,$token,$cashAccountId);
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,cash_account_id,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?)');
+        $stmt->bind_param('sissssssis',$kind,$partyId,$direction,$amount,$method,$date,$note,$token,$cashAccountId,$requestHash);
         $stmt->execute();$pid=(int)$stmt->insert_id;$stmt->close();
         $db->commit();
         return ['payment_id'=>$pid,'duplicate'=>false];
