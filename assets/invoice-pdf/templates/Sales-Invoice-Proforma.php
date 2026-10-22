@@ -125,6 +125,8 @@ $mediaSource = !empty($it['media_print_path']) ? $it['media_print_path'] : (__DI
             <td class="lbl">مبلغ قابل پرداخت</td>
             <td class="money"><?php echo pdf_currency_money($inv['payable_amount'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td>
         </tr>
+        <tr><td class="lbl">پیش‌پرداخت ثبت‌شده (بدون ایجاد بدهی قطعی)</td>
+            <td class="money"><?php echo pdf_currency_money($inv['accounting_deposit'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td></tr>
     </table>
 
     <!-- امضا -->
