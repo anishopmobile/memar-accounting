@@ -49,10 +49,32 @@ try {
     $documentDiscount = parseMoneyInput($documentDiscount === '' ? '0' : $documentDiscount);
     $initialPayment = parseMoneyInput(trim((string)($_POST['initial_payment'] ?? '0')) ?: '0');
     if (bccomp($initialPayment, '0', 2) < 0) throw new InvalidArgumentException('مبلغ پرداخت نمی‌تواند منفی باشد.');
-    if ($invoiceId !== '' && bccomp($initialPayment, '0', 2) !== 0) {
+    $initialPayments = [];
+    if (isset($_POST['initial_payments']) && (string)$_POST['initial_payments'] !== '') {
+        $rawPayments=json_decode((string)$_POST['initial_payments'],true,8,JSON_THROW_ON_ERROR);
+        if (!is_array($rawPayments) || count($rawPayments)>20)
+            throw new InvalidArgumentException('حداکثر ۲۰ پرداخت اولیه مجاز است.');
+        foreach($rawPayments as $pay) {
+            if(!is_array($pay))throw new InvalidArgumentException('ردیف پرداخت نامعتبر است.');
+            $amount=parseMoneyInput((string)($pay['amount']??''));
+            if(bccomp($amount,'0',2)<=0)
+                throw new InvalidArgumentException('مبلغ پرداخت باید بزرگ‌تر از صفر باشد.');
+            $method=trim((string)($pay['method']??''));
+            if(!in_array($method,['cash','pos','bank_transfer'],true))
+                throw new InvalidArgumentException('روش پرداخت اولیه نامعتبر است.');
+            $initialPayments[]=[
+                'amount'=>$amount,'method'=>$method,
+                'date'=>trim((string)($pay['date']??'')),
+                'reference'=>trim((string)($pay['reference']??'')),
+                'account'=>trim((string)($pay['account']??'')),
+                'note'=>trim((string)($pay['note']??'')),
+            ];
+        }
+    }
+    if ($invoiceId !== '' && (bccomp($initialPayment, '0', 2) !== 0 || $initialPayments)) {
         throw new InvalidArgumentException('برای دریافت یا پرداخت بعدی از ثبت تراکنش مستقل استفاده کنید.');
     }
-} catch (InvalidArgumentException $e) {
+} catch (InvalidArgumentException|JsonException $e) {
     respond_error($e->getMessage(), 422);
 }
 
@@ -65,6 +87,7 @@ $in = [
     'invoice_date'   => trim((string) ($_POST['invoice_date'] ?? '')),
     'discount'       => $documentDiscount,
     'initial_payment' => $initialPayment,
+    'initial_payments' => $initialPayments,
     'initial_payment_date' => trim((string)($_POST['initial_payment_date']??'')),
     'initial_payment_account' => trim((string)($_POST['initial_payment_account']??'')),
     'initial_payment_reference' => trim((string)($_POST['initial_payment_reference']??'')),
