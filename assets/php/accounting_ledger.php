@@ -186,3 +186,38 @@ function ledger_allocate_existing(mysqli $db,int $receiptId,int $invoiceId,strin
         ledger_update_invoice_status($db,$invoiceId);$db->commit();
     }catch(Throwable $e){$db->rollback();throw $e;}
 }
+
+/** Cancel an erroneous posted receipt without deleting history or moving cash. */
+function ledger_reverse_receipt(mysqli $db,int $receiptId,string $reason): int {
+    $reason=trim($reason);
+    if($receiptId<1 || mb_strlen($reason)<4 || mb_strlen($reason)>500)
+        throw new InvalidArgumentException('دلیل اصلاح سند (حداقل ۴ حرف) الزامی است.');
+    $db->begin_transaction();
+    try {
+        $st=$db->prepare('SELECT party_kind,party_id FROM accounting_receipts WHERE id=?');
+        $st->bind_param('i',$receiptId);$st->execute();$pre=$st->get_result()->fetch_assoc();$st->close();
+        if(!$pre)throw new InvalidArgumentException('سند مالی یافت نشد.');
+        ledger_assert_party($db,$pre['party_kind'],(int)$pre['party_id']);
+        $st=$db->prepare('SELECT * FROM accounting_receipts WHERE id=? FOR UPDATE');
+        $st->bind_param('i',$receiptId);$st->execute();$orig=$st->get_result()->fetch_assoc();$st->close();
+        if(!$orig || $orig['state']!=='posted' || $orig['reversal_of']!==null)
+            throw new InvalidArgumentException('این سند قابل ابطال نیست یا قبلاً ابطال شده است.');
+        $st=$db->prepare('SELECT invoice_id FROM accounting_allocations WHERE receipt_id=? ORDER BY invoice_id');
+        $st->bind_param('i',$receiptId);$st->execute();$invoices=array_column($st->get_result()->fetch_all(MYSQLI_ASSOC),'invoice_id');$st->close();
+        $st=$db->prepare("UPDATE accounting_receipts SET state='reversed' WHERE id=? AND state='posted'");
+        $st->bind_param('i',$receiptId);$st->execute();
+        if($st->affected_rows!==1)throw new RuntimeException('Concurrent receipt reversal');
+        $st->close();
+        $dir=$orig['direction']==='in'?'out':'in';
+        $note='ابطال سند #'.$receiptId.': '.$reason;
+        $date=date('Y-m-d');
+        $key='reversal-'.$receiptId;
+        $st=$db->prepare("INSERT INTO accounting_receipts
+           (party_kind,party_id,direction,amount,method,account_label,payment_date,reference_number,note,state,reversal_of,request_key)
+           VALUES (?,?,?,?,?,?,?,?,?,'reversed',?,?)");
+        $st->bind_param('sisssssssis',$orig['party_kind'],$orig['party_id'],$dir,$orig['amount'],$orig['method'],$orig['account_label'],$date,$orig['reference_number'],$note,$receiptId,$key);
+        $st->execute();$newId=(int)$db->insert_id;$st->close();
+        foreach($invoices as $id)ledger_update_invoice_status($db,(int)$id);
+        $db->commit();return $newId;
+    }catch(Throwable $e){$db->rollback();throw $e;}
+}
