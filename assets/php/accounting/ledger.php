@@ -46,6 +46,31 @@ function acct_migrate(mysqli $db): void {
             CONSTRAINT fk_aa_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
             CONSTRAINT chk_aa_amount CHECK (amount > 0)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS accounting_credit_transfers (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            source_invoice_id INT NOT NULL,
+            target_invoice_id INT NULL,
+            refund_receipt_id BIGINT UNSIGNED NULL,
+            amount DECIMAL(14,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_act_source (source_invoice_id),
+            KEY idx_act_target (target_invoice_id),
+            CONSTRAINT fk_act_source FOREIGN KEY (source_invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
+            CONSTRAINT fk_act_target FOREIGN KEY (target_invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
+            CONSTRAINT fk_act_refund FOREIGN KEY (refund_receipt_id) REFERENCES accounting_receipts(id) ON DELETE RESTRICT,
+            CONSTRAINT chk_act_positive CHECK (amount > 0),
+            CONSTRAINT chk_act_destination CHECK ((target_invoice_id IS NULL) <> (refund_receipt_id IS NULL))
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS accounting_refund_matches (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            source_receipt_id BIGINT UNSIGNED NOT NULL,
+            refund_receipt_id BIGINT UNSIGNED NOT NULL,
+            amount DECIMAL(14,2) NOT NULL,
+            KEY idx_arm_source (source_receipt_id),
+            CONSTRAINT fk_arm_source FOREIGN KEY (source_receipt_id) REFERENCES accounting_receipts(id) ON DELETE RESTRICT,
+            CONSTRAINT fk_arm_refund FOREIGN KEY (refund_receipt_id) REFERENCES accounting_receipts(id) ON DELETE RESTRICT,
+            CONSTRAINT chk_arm_positive CHECK (amount > 0)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         "CREATE TABLE IF NOT EXISTS accounting_opening_entries (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             party_kind ENUM('customer','supplier') NOT NULL,
@@ -144,10 +169,20 @@ function acct_invoice_balance(mysqli $db, int $id): array {
       "SELECT COALESCE(SUM(amount),0) FROM accounting_receipts WHERE proforma_id=? AND status='posted'",'i',[$id]) : '0';
     $net=bcsub((string)$r['payable_amount'],$returned,2);
     if (bccomp($net,'0',2)<0) $net='0.00';
-    $paid=bcadd($allocated,$legacy,2);
+    $creditsIn = $isFinal ? acct_one($db,
+      'SELECT COALESCE(SUM(amount),0) FROM accounting_credit_transfers WHERE target_invoice_id=?','i',[$id]) : '0';
+    $creditsOut = $isFinal ? acct_one($db,
+      "SELECT COALESCE(SUM(t.amount),0) FROM accounting_credit_transfers t
+       LEFT JOIN accounting_receipts p ON p.id=t.refund_receipt_id
+       WHERE t.source_invoice_id=? AND (t.refund_receipt_id IS NULL OR p.status='posted')",'i',[$id]) : '0';
+    $paid=bcadd(bcadd($allocated,$legacy,2),$creditsIn,2);
     $remaining=bcsub($net,$paid,2);
     $credit='0.00';
-    if (bccomp($remaining,'0',2)<0) { $credit=bcsub('0',$remaining,2); $remaining='0.00'; }
+    if (bccomp($remaining,'0',2)<0) {
+        $credit=bcsub(bcsub('0',$remaining,2),$creditsOut,2);
+        if(bccomp($credit,'0',2)<0)$credit='0.00';
+        $remaining='0.00';
+    }
     $status=!$isFinal ? 'proforma' :
        (bccomp($remaining,'0',2)===0 ? 'paid' :
         (bccomp($paid,'0',2)>0 || bccomp($returned,'0',2)>0 ? 'partial' : 'unpaid'));
@@ -158,6 +193,7 @@ function acct_invoice_balance(mysqli $db, int $id): array {
       'payable_amount'=>(string)$r['payable_amount'],'returned'=>$returned,
       'net_amount'=>$net,'legacy_paid'=>$legacy,'allocated'=>$allocated,
       'paid'=>$paid,'remaining'=>$remaining,'overpaid_credit'=>$credit,
+      'credit_received'=>$creditsIn,'credit_assigned'=>$creditsOut,
       'advance'=>$advance,'status'=>$status
     ];
 }
@@ -167,6 +203,74 @@ function acct_sync_invoice(mysqli $db,int $id): void {
     if ($b['status']==='proforma') return;
     $stmt=$db->prepare('UPDATE invoices SET payment_status=? WHERE id=?');
     $stmt->bind_param('si',$b['status'],$id); $stmt->execute(); $stmt->close();
+}
+
+/**
+ * Unallocated cash after posted refunds against that cash source.
+ * Refunds and allocations must never consume the same unit twice.
+ */
+function acct_receipt_available(mysqli $db,int $receiptId): string {
+    return acct_one($db, "SELECT GREATEST(0,p.amount
+      - COALESCE((SELECT SUM(a.amount) FROM accounting_allocations a WHERE a.receipt_id=p.id),0)
+      - COALESCE((SELECT SUM(m.amount) FROM accounting_refund_matches m
+          JOIN accounting_receipts refund ON refund.id=m.refund_receipt_id AND refund.status='posted'
+          WHERE m.source_receipt_id=p.id),0))
+      FROM accounting_receipts p WHERE p.id=? AND p.status='posted'",'i',[$receiptId]);
+}
+
+/** A sales-return overpayment may settle another sale without a second cash receipt. */
+function acct_transfer_credit(mysqli $db,int $sourceId,int $destId,string $amount,string $kind,int $partyId): void {
+    $amount=acct_decimal($amount);
+    $src=acct_invoice_balance($db,$sourceId);
+    $dst=acct_invoice_balance($db,$destId);
+    if ($sourceId===$destId || $src['party_kind']!==$kind || $dst['party_kind']!==$kind ||
+        $src['party_id']!==$partyId || $dst['party_id']!==$partyId ||
+        $src['status']==='proforma' || $dst['status']==='proforma' ||
+        bccomp($amount,$src['overpaid_credit'],2)>0 || bccomp($amount,$dst['remaining'],2)>0) {
+        throw new InvalidArgumentException('اعتبار یا مانده فاکتور برای انتقال کافی نیست.');
+    }
+    $st=$db->prepare('INSERT INTO accounting_credit_transfers
+        (source_invoice_id,target_invoice_id,amount) VALUES (?,?,?)');
+    $st->bind_param('iis',$sourceId,$destId,$amount);$st->execute();$st->close();
+    acct_sync_invoice($db,$destId);
+}
+
+/** Refund consumes the oldest unallocated cash first, then overpaid return credits. */
+function acct_match_refund(mysqli $db,string $kind,int $partyId,int $refundId,string $amount): void {
+    $flow=$kind==='customer'?'in':'out';
+    $st=$db->prepare("SELECT id FROM accounting_receipts WHERE party_kind=? AND party_id=?
+      AND flow=? AND status='posted' AND (proforma_id IS NULL OR EXISTS (
+        SELECT 1 FROM invoices i WHERE i.id=proforma_id AND i.type IN ('sales_invoice','purchase_invoice')
+      )) ORDER BY payment_date,id");
+    $st->bind_param('sis',$kind,$partyId,$flow);$st->execute();$rs=$st->get_result();$ids=[];
+    while($row=$rs->fetch_assoc())$ids[]=(int)$row['id'];$st->close();
+    foreach($ids as $srcId) {
+        if(bccomp($amount,'0',2)<=0)break;
+        $available=acct_receipt_available($db,$srcId);
+        if(bccomp($available,'0',2)<=0)continue;
+        $chunk=bccomp($amount,$available,2)<0?$amount:$available;
+        $st=$db->prepare('INSERT INTO accounting_refund_matches
+          (source_receipt_id,refund_receipt_id,amount) VALUES (?,?,?)');
+        $st->bind_param('iis',$srcId,$refundId,$chunk);$st->execute();$st->close();
+        $amount=bcsub($amount,$chunk,2);
+    }
+    if(bccomp($amount,'0',2)<=0)return;
+    $fk=$kind==='customer'?'customer_id':'supplier_id';
+    $type=$kind==='customer'?'sales_invoice':'purchase_invoice';
+    $st=$db->prepare("SELECT id FROM invoices WHERE {$fk}=? AND type=? ORDER BY invoice_date,id");
+    $st->bind_param('is',$partyId,$type);$st->execute();$rs=$st->get_result();$ids=[];
+    while($row=$rs->fetch_assoc())$ids[]=(int)$row['id'];$st->close();
+    foreach($ids as $invoiceId) {
+        if(bccomp($amount,'0',2)<=0)break;
+        $available=acct_invoice_balance($db,$invoiceId)['overpaid_credit'];
+        if(bccomp($available,'0',2)<=0)continue;
+        $chunk=bccomp($amount,$available,2)<0?$amount:$available;
+        $st=$db->prepare('INSERT INTO accounting_credit_transfers
+          (source_invoice_id,refund_receipt_id,amount) VALUES (?,?,?)');
+        $st->bind_param('iis',$invoiceId,$refundId,$chunk);$st->execute();$st->close();
+        $amount=bcsub($amount,$chunk,2);
+    }
+    // The remainder, if any, can only come from an opening credit.
 }
 
 /** Must be called inside transaction while party row is locked. */
@@ -180,9 +284,7 @@ function acct_allocate(mysqli $db,int $receiptId,int $invoiceId,string $amount,s
     if (bccomp($amount,$inv['remaining'],2)>0) throw new InvalidArgumentException('مبلغ تخصیص بیشتر از مانده فاکتور است.');
     $row=$db->query('SELECT id FROM accounting_receipts WHERE id='.(int)$receiptId.' FOR UPDATE')->fetch_assoc();
     if (!$row) throw new InvalidArgumentException('تراکنش یافت نشد.');
-    $available=acct_one($db, "SELECT p.amount-COALESCE(SUM(a.amount),0)
-      FROM accounting_receipts p LEFT JOIN accounting_allocations a ON a.receipt_id=p.id
-      WHERE p.id=? AND p.status='posted' GROUP BY p.id,p.amount",'i',[$receiptId]);
+    $available=acct_receipt_available($db,$receiptId);
     if (bccomp($amount,$available,2)>0) throw new InvalidArgumentException('اعتبار این پرداخت کافی نیست.');
     $stmt=$db->prepare('INSERT INTO accounting_allocations (receipt_id,invoice_id,amount) VALUES (?,?,?)');
     $stmt->bind_param('iis',$receiptId,$invoiceId,$amount);
@@ -267,6 +369,7 @@ function acct_post(mysqli $db,string $kind,int $partyId,string $flow,$amount,str
         $tk=$token!==''?$token:null;
         $st->bind_param('sisssssssisi',$kind,$partyId,$flow,$amount,$method,$account,$reference,$note,$date,$proformaId,$tk,$userId);
         $st->execute();$rid=(int)$db->insert_id;$st->close();
+        if (!$normalFlow) acct_match_refund($db,$kind,$partyId,$rid,$amount);
         $alloc=[];
         // Flow was validated against the party balance before recording.
         if (!$normalFlow && ($preferredInvoice || $manual)) throw new InvalidArgumentException('استرداد وجه نمی‌تواند بدهی فاکتور را تسویه کند.');
@@ -313,9 +416,28 @@ function acct_apply_credit(mysqli $db,string $kind,int $partyId,int $invoiceId):
         foreach($rows as $row) {
             $remain=acct_invoice_balance($db,$invoiceId)['remaining'];
             if(bccomp($remain,'0',2)<=0)break;
-            $chunk=bccomp($remain,$row['available'],2)<0?$remain:$row['available'];
+            $avail=acct_receipt_available($db,(int)$row['id']);
+            if(bccomp($avail,'0',2)<=0)continue;
+            $chunk=bccomp($remain,$avail,2)<0?$remain:$avail;
             acct_allocate($db,(int)$row['id'],$invoiceId,$chunk,$kind,$partyId);
             $used=bcadd($used,$chunk,2);
+        }
+        $remain=acct_invoice_balance($db,$invoiceId)['remaining'];
+        if(bccomp($remain,'0',2)>0) {
+            $fk=$kind==='customer'?'customer_id':'supplier_id';
+            $type=$kind==='customer'?'sales_invoice':'purchase_invoice';
+            $st=$db->prepare("SELECT id FROM invoices WHERE {$fk}=? AND type=? AND id<>? ORDER BY invoice_date,id");
+            $st->bind_param('isi',$partyId,$type,$invoiceId);$st->execute();$rs=$st->get_result();$sources=[];
+            while($r=$rs->fetch_assoc())$sources[]=(int)$r['id'];$st->close();
+            foreach($sources as $sourceId) {
+                $remain=acct_invoice_balance($db,$invoiceId)['remaining'];
+                if(bccomp($remain,'0',2)<=0)break;
+                $avail=acct_invoice_balance($db,$sourceId)['overpaid_credit'];
+                if(bccomp($avail,'0',2)<=0)continue;
+                $chunk=bccomp($remain,$avail,2)<0?$remain:$avail;
+                acct_transfer_credit($db,$sourceId,$invoiceId,$chunk,$kind,$partyId);
+                $used=bcadd($used,$chunk,2);
+            }
         }
         $db->commit();return $used;
     }catch(Throwable $e){$db->rollback();throw $e;}
@@ -329,6 +451,11 @@ function acct_reverse(mysqli $db,int $id,string $note=''): void {
         $st->bind_param('i',$id);$st->execute();$r=$st->get_result()->fetch_assoc();$st->close();
         if(!$r || $r['status']!=='posted')throw new InvalidArgumentException('تراکنش قابل ابطال نیست.');
         acct_lock_party($db,$r['party_kind'],(int)$r['party_id']);
+        if (acct_one($db,"SELECT COUNT(*) FROM accounting_refund_matches m
+              JOIN accounting_receipts p ON p.id=m.refund_receipt_id AND p.status='posted'
+              WHERE m.source_receipt_id=?", 'i',[$id]) !== '0') {
+            throw new InvalidArgumentException('ابتدا استرداد وجه وابسته به این تراکنش را ابطال کنید.');
+        }
         $st=$db->prepare("UPDATE accounting_receipts SET status='reversed' WHERE id=? AND status='posted'");
         $st->bind_param('i',$id);$st->execute();$count=$st->affected_rows;$st->close();
         if($count!==1)throw new RuntimeException('تراکنش قبلاً ابطال شده است.');
@@ -344,7 +471,15 @@ function acct_reverse(mysqli $db,int $id,string $note=''): void {
         $st=$db->prepare('SELECT invoice_id FROM accounting_allocations WHERE receipt_id=?');
         $st->bind_param('i',$id);$st->execute();$rs=$st->get_result();$ids=[];
         while($a=$rs->fetch_assoc())$ids[]=(int)$a['invoice_id'];$st->close();
-        foreach($ids as $iid)acct_sync_invoice($db,$iid);
+        foreach($ids as $iid) {
+            $b=acct_invoice_balance($db,$iid);
+            $spent=$b['credit_assigned'];
+            $rawCredit=bcsub($b['paid'],$b['net_amount'],2);
+            if(bccomp($rawCredit,'0',2)<0)$rawCredit='0.00';
+            if(bccomp($spent,$rawCredit,2)>0)
+                throw new InvalidArgumentException('اعتبار فاکتور قبلاً منتقل شده و این دریافت قابل ابطال مستقیم نیست.');
+            acct_sync_invoice($db,$iid);
+        }
         $db->commit();
     }catch(Throwable $e){$db->rollback();throw $e;}
 }
