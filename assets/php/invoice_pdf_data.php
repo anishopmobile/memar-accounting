@@ -16,7 +16,7 @@ require_once __DIR__ . '/accounting_ledger.php';
 
 /** Ledger amounts on a PDF are a dated snapshot, not a change to the invoice. */
 function pdf_invoice_settlement(mysqli $db,array $invoice): array {
-    $invoice['acct_printed_at']=date('Y-m-d H:i');
+    $invoice['acct_printed_at']=(new DateTimeImmutable('now',new DateTimeZone('Asia/Tehran')))->format('Y-m-d H:i');
     $invoice['acct_is_final']=in_array($invoice['type'],['sales_invoice','purchase_invoice'],true);
     if($invoice['acct_is_final']) {
         $settlement=acct_invoice_outstanding($db,(int)$invoice['id']);
