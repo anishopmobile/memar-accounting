@@ -743,6 +743,7 @@ function getInvoice(mysqli $mysqli, int $invoiceId): ?array
         $inv['remaining_amount'] = null;
         $inv['legacy_unresolved'] = false;
     }
+    $inv['accounting_locked'] = ledger_invoice_has_financial_events($mysqli,$invoiceId);
     $inv['items'] = $items;
     return $inv;
 }
