@@ -185,7 +185,8 @@ function ledger_party_details(mysqli $db,string $kind,int $id): array {
     }
     $s=$db->prepare('SELECT p.id,p.direction,p.amount,p.method,p.paid_on,p.reference_no,p.note,p.voided_at, (p.amount-COALESCE((SELECT SUM(a.amount) FROM ledger_allocations a WHERE a.payment_id=p.id),0)-COALESCE((SELECT SUM(a.amount) FROM ledger_credit_allocations a WHERE a.payment_id=p.id),0)) AS unapplied FROM ledger_payments p WHERE p.party_kind=? AND p.party_id=? ORDER BY p.id DESC LIMIT 150');
     $s->bind_param('si',$kind,$id);$s->execute();$payments=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
-    return ['party'=>$party,'summary'=>$summary,'invoices'=>$invoices,'payments'=>$payments];
+    $statement=ledger_party_statement($db,$kind,$id,$summary['balance']);
+    return ['party'=>$party,'summary'=>$summary,'invoices'=>$invoices,'payments'=>$payments,'statement'=>$statement];
 }
 
 /**
@@ -299,4 +300,47 @@ function ledger_apply_proforma_deposits(mysqli $db,int $invoiceId): void {
         $s->bind_param('iiss',$pid,$invoiceId,$allocate,$token);$s->execute();$s->close();
     }
     ledger_sync_invoice_status($db,$invoiceId);
+}
+
+/**
+ * Chronological statement with running balance. If history exceeds 500 events,
+ * use the final true balance as an anchor and clearly flag the abbreviated view.
+ */
+function ledger_party_statement(mysqli $db,string $kind,int $id,?string $endingBalance=null): array {
+    if(!in_array($kind,['customer','supplier'],true)||$id<1)throw new InvalidArgumentException('طرف حساب نامعتبر است.');
+    $fk=$kind==='customer'?'customer_id':'supplier_id';
+    $type=$kind==='customer'?'sales_invoice':'purchase_invoice';
+    $direction=$kind==='customer'?'receipt':'disbursement';
+    $id=(int)$id;
+    $events=[
+        "SELECT i.invoice_date occurred_on, i.id record_id,10 event_rank,'invoice' event_type,
+                CONCAT('فاکتور ',i.invoice_number) description,i.payable_amount delta
+          FROM invoices i WHERE i.type='$type' AND i.$fk=$id",
+        "SELECT p.paid_on occurred_on,p.id record_id,30 event_rank,'payment' event_type,
+                CONCAT('دریافت / پرداخت شماره ',p.id,' - ',p.method) description,-p.amount delta
+          FROM ledger_payments p WHERE p.party_kind='$kind' AND p.direction='$direction' AND p.party_id=$id AND p.voided_at IS NULL",
+        "SELECT o.effective_on occurred_on,o.id record_id,0 event_rank,'opening' event_type,
+                'مانده افتتاحیه (غیرنقدی)' description,o.signed_amount delta
+          FROM ledger_openings o WHERE o.party_kind='$kind' AND o.party_id=$id",
+        "SELECT i.invoice_date occurred_on,l.invoice_id record_id,20 event_rank,'historical' event_type,
+                CONCAT('تسویه تاریخی سند ',i.invoice_number,' (تاریخ واقعی دریافت/پرداخت نامشخص)') description,-l.recognized_paid delta
+          FROM ledger_legacy_invoices l JOIN invoices i ON i.id=l.invoice_id
+          WHERE i.type='$type' AND i.$fk=$id AND l.recognized_paid > 0"
+    ];
+    if($kind==='customer') $events[]="SELECT r.return_date occurred_on,r.id record_id,25 event_rank,'sales_return' event_type,
+                CONCAT('برگشت فروش ',r.return_number) description,-r.payable_amount delta
+          FROM sales_returns r WHERE r.customer_id=$id";
+    $sql='SELECT * FROM ('.implode(' UNION ALL ',$events).') ledger_events ORDER BY occurred_on DESC,event_rank DESC,record_id DESC LIMIT 501';
+    $q=$db->query($sql);if(!$q)throw new RuntimeException('Failed to load account statement.');
+    $rows=$q->fetch_all(MYSQLI_ASSOC);$q->free();
+    $truncated=count($rows)>500;
+    if($truncated)$rows=array_slice($rows,0,500);
+    $ending=$endingBalance ?? ledger_party_summary($db,$kind,$id)['balance'];
+    $balance=$ending;
+    foreach($rows as &$row){
+        $row['running_balance']=$balance;
+        $balance=money_sub($balance,$row['delta']);
+    }
+    unset($row);
+    return ['entries'=>array_reverse($rows),'truncated'=>$truncated,'balance_prior_to_first_event'=>$balance];
 }
