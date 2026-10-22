@@ -1,5 +1,9 @@
 <?php
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/boot.php';
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    respond_error('درخواست فقط با POST مجاز است.', 405);
+}
+require_csrf_or_fail();
 
 header('Content-Type: application/json; charset=UTF-8');
 
