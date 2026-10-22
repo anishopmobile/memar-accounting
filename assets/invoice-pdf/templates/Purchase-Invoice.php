@@ -203,6 +203,16 @@ $mediaSource = !empty($it['media_print_path']) ? $it['media_print_path'] : (__DI
                         <td>مبلغ قابل پرداخت</td>
                         <td class="money strong"><?php echo pdf_currency_money($inv['payable_amount'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td>
                     </tr>
+                    <?php if ((string)($inv['accounting_returns']??'0') !== '0.00' && (string)($inv['accounting_returns']??'0') !== '0'): ?>
+                    <tr><td>جمع برگشت از فروش</td><td class="money"><?php echo pdf_currency_money($inv['accounting_returns']); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td></tr>
+                    <?php endif; ?>
+                    <tr><td>جمع مبالغ تسویه‌شده</td>
+                        <td class="money"><?php echo pdf_currency_money($inv['accounting_settled'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td></tr>
+                    <tr><td>مانده فاکتور</td>
+                        <td class="money"><?php echo pdf_currency_money((string)($inv['accounting_due'] ?? '0')); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td></tr>
+                    <?php if (!empty($inv['accounting_unknown'])): ?>
+                    <tr><td colspan="2">توجه: مبلغ پرداخت‌شده تاریخی این فاکتور هنوز تأیید نشده است.</td></tr>
+                    <?php endif; ?>
                 </table>
             </td>
             <td class="payment-side">
