@@ -13,7 +13,7 @@ $(function () {
         if (res && res.success) {
             var flags = (res.data && res.data.settings) || {};
             mediaImagesEnabled = Number(flags[isSales ? 'sales_ui' : 'purchase_ui']) === 1;
-            $('#invItemsTable .inv-image-col, #invoiceProductTable .invoice-image-col').toggle(mediaImagesEnabled);
+            $('#invItemsTable .inv-image-col, #invoiceProductTable .invoice-image-col, #invoiceServiceTable .invoice-image-col').toggle(mediaImagesEnabled);
         }
     });
     var partyLabel = isSales ? 'مشتری' : 'تامین‌کننده';
@@ -561,7 +561,7 @@ $(function () {
     });
 
     // ---------- مودال انتخاب خدمت (فقط فاکتور فروش) ----------
-    var serviceSearchTimer = null;
+    var serviceSearchTimer = null, serviceRequest = null, serviceSequence = 0;
     function openServiceModal() {
         $('#invoiceServiceTable tbody').html('<tr><td colspan="7" class="empty-state">در حال بارگذاری...</td></tr>');
         loadServices('');
@@ -569,8 +569,12 @@ $(function () {
         $('#invoiceServiceSearch').val('').focus();
     }
     function loadServices(q) {
-        $.getJSON('assets/php/invoice_products.php?media_section=sales&type=service&search=' + encodeURIComponent(q || '')).done(function (res) {
+        if (serviceRequest && serviceRequest.readyState !== 4) serviceRequest.abort();
+        var seq = ++serviceSequence;
+        serviceRequest = $.getJSON('assets/php/invoice_products.php?media_section=sales&type=service&search=' + encodeURIComponent(q || '')).done(function (res) {
+            if (seq !== serviceSequence) return;
             var rows = res.data || [];
+            $('#invoiceServiceTable .invoice-image-col').toggle(mediaImagesEnabled);
             var html = '';
             if (!rows.length) html = '<tr><td colspan="7" class="empty-state">خدمتی یافت نشد.</td></tr>';
             rows.forEach(function (p) {
@@ -582,15 +586,18 @@ $(function () {
                 html += '<tr>'
                     + '<td>' + esc(p.code) + '</td>'
                     + '<td>' + esc(p.barcode) + '</td>'
+                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id) + '</td>'
                     + '<td>' + esc(p.name) + '</td>'
                     + '<td>' + esc(p.unit) + '</td>'
                     + '<td>' + window.Currency.formatNumber(price) + '</td>'
                     + '<td>' + splitNum(Number(p.stock).toString()) + '</td>'
-                    + '<td><button type="button" class="button-secondary small service-pick" data-id="' + escAttr(p.id) + '" data-code="' + escAttr(p.code) + '" data-barcode="' + escAttr(p.barcode) + '" data-name="' + escAttr(p.name) + '" data-price="' + escAttr(price) + '" data-unit="' + escAttr(p.unit) + '" data-units="' + escAttr(unitsJson) + '">انتخاب</button></td>'
+                    + '<td><button type="button" class="button-secondary small service-pick" data-id="' + escAttr(p.id) + '" data-code="' + escAttr(p.code) + '" data-barcode="' + escAttr(p.barcode) + '" data-name="' + escAttr(p.name) + '" data-media-id="' + escAttr(p.media_id === undefined ? '' : p.media_id) + '" data-price="' + escAttr(price) + '" data-unit="' + escAttr(p.unit) + '" data-units="' + escAttr(unitsJson) + '">انتخاب</button></td>'
                     + '</tr>';
             });
             $('#invoiceServiceTable tbody').html(html);
-        }).fail(function () { $('#invoiceServiceTable tbody').html('<tr><td colspan="7" class="empty-state">خطا در جستجوی خدمت.</td></tr>'); });
+        }).fail(function (xhr,status) {
+            if (status !== 'abort' && seq === serviceSequence) $('#invoiceServiceTable tbody').html('<tr><td colspan="8" class="empty-state">خطا در جستجوی خدمت.</td></tr>');
+        });
     }
     // Debounce برای جلوگیری از ارسال درخواست برای تک‌تک کاراکترهای بارکدخوان (HID/USB)
     $(document).on('input', '#invoiceServiceSearch', function () {
@@ -636,7 +643,7 @@ $(function () {
 
         // اگر ردیف مشابه وجود نداشت، ردیف جدید اضافه می‌شود
         if (!found) {
-            addItemRow(p.id, p.name, p.price, 1, 0, p.code, units, firstId);
+            addItemRow(p.id, p.name, p.price, 1, 0, p.code, units, firstId, p.mediaId === '' ? undefined : p.mediaId);
         }
         // مودال باز می‌ماند تا کاربر بتواند چند خدمت اضافه کند
     });
