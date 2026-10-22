@@ -9,6 +9,7 @@
     </div>
     <div id="store-info" class="settings-section">
         <form id="storeSettingsForm" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
             <div class="form-grid">
                 <div class="form-row"><label for="storeName">نام فروشگاه / شخص</label><input type="text" id="storeName" name="store_name" required></div>
                 <div class="form-row"><label for="economicCode">کد اقتصادی</label><input type="text" id="economicCode" name="economic_code"></div>
@@ -39,19 +40,19 @@
                         <div class="upload-preview"><img id="logoPreview" src="" alt="پیش‌نمایش لوگو" hidden></div>
                         <div class="upload-icon">🖼️</div>
                         <div class="upload-label">لوگو فروشگاه</div>
-                        <input type="file" id="logoImage" name="logo_image" accept="image/*" hidden>
+                        <input type="file" id="logoImage" name="logo_image" accept="image/jpeg,image/png,image/webp" hidden>
                     </label>
                     <label class="upload-card image-upload-field" data-input="signatureImage" tabindex="0">
                         <div class="upload-preview"><img id="signaturePreview" src="" alt="پیش‌نمایش امضا" hidden></div>
                         <div class="upload-icon">🖼️</div>
                         <div class="upload-label">امضای فروشنده</div>
-                        <input type="file" id="signatureImage" name="signature_image" accept="image/*" hidden>
+                        <input type="file" id="signatureImage" name="signature_image" accept="image/jpeg,image/png,image/webp" hidden>
                     </label>
                     <label class="upload-card image-upload-field" data-input="stampImage" tabindex="0">
                         <div class="upload-preview"><img id="stampPreview" src="" alt="پیش‌نمایش مهر" hidden></div>
                         <div class="upload-icon">🖼️</div>
                         <div class="upload-label">مهر فروشنده</div>
-                        <input type="file" id="stampImage" name="stamp_image" accept="image/*" hidden>
+                        <input type="file" id="stampImage" name="stamp_image" accept="image/jpeg,image/png,image/webp" hidden>
                     </label>
                 </div>
                 <div class="form-row" style="margin-top: 18px; max-width: 240px;"><label for="defaultSize">اندازه پیش‌فرض مهر و امضاء (٪)</label><input type="number" id="defaultSize" name="default_size_percentage" min="1" max="300" value="80"></div>
