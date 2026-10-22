@@ -37,6 +37,7 @@ try {
         if (is_string($alloc)) $alloc=json_decode($alloc,true,16,JSON_THROW_ON_ERROR);
         $input=[
             'party_kind'=>$_POST['party_kind']??'','party_id'=>$_POST['party_id']??0,
+            'source_proforma_id'=>$_POST['source_proforma_id']??0,
             'amount'=>parseMoneyInput((string)($_POST['amount']??'')),
             'method'=>$_POST['method']??'','cash_account_id'=>$_POST['cash_account_id']??null,'direction'=>$_POST['direction']??'',
             'payment_date'=>$_POST['payment_date']??date('Y-m-d'),
