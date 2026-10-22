@@ -24,6 +24,19 @@ function acct_party_lock(mysqli $db, string $kind, int $id): void {
     $stmt->bind_param('i',$id); $stmt->execute(); $r=$stmt->get_result(); $stmt->close();
     if (!$r || !$r->fetch_assoc()) throw new InvalidArgumentException('طرف حساب یافت نشد.');
 }
+function acct_resolve_cash_account(mysqli $db, string $method, $provided = null): int {
+    $id = ($provided===null || $provided==='') ? 0 : (int)$provided;
+    if ($id>0) {
+        $stmt=$db->prepare('SELECT id FROM accounting_cash_accounts WHERE id=? AND account_type=? AND is_active=1');
+        $stmt->bind_param('is',$id,$method);
+    } else {
+        $stmt=$db->prepare('SELECT id FROM accounting_cash_accounts WHERE account_type=? AND is_active=1 ORDER BY id LIMIT 1');
+        $stmt->bind_param('s',$method);
+    }
+    $stmt->execute();$res=$stmt->get_result();$row=$res?$res->fetch_assoc():null;$stmt->close();
+    if (!$row) throw new InvalidArgumentException('حساب فعال مطابق روش پرداخت یافت نشد.');
+    return (int)$row['id'];
+}
 function acct_invoice_outstanding(mysqli $db, int $id, bool $lock = false): array {
     $stmt=$db->prepare('SELECT * FROM invoices WHERE id=?'.($lock?' FOR UPDATE':''));
     $stmt->bind_param('i',$id);$stmt->execute();$r=$stmt->get_result();
@@ -76,6 +89,7 @@ function acct_record_payment(mysqli $db,array $input): array {
     if (money_cmp($sum,$amount)>0) throw new InvalidArgumentException('مجموع تخصیص‌ها از مبلغ پرداخت بیشتر است.');
     $db->begin_transaction();
     try {
+        $cashAccountId=acct_resolve_cash_account($db,$method,$input['cash_account_id']??null);
         acct_party_lock($db,$kind,$id); // consistent lock order: party then invoice.
         $stmt=$db->prepare('SELECT id FROM account_payments WHERE client_token=?');
         $stmt->bind_param('s',$token);$stmt->execute();$res=$stmt->get_result();$existing=$res?$res->fetch_assoc():null;$stmt->close();
@@ -90,8 +104,8 @@ function acct_record_payment(mysqli $db,array $input): array {
                 throw new InvalidArgumentException('فاکتور متعلق به این طرف حساب نیست.');
             if (money_cmp($value,$v['remaining'])>0) throw new InvalidArgumentException('تخصیص از مانده فاکتور بیشتر است.');
         }
-        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token) VALUES(?,?,?,?,?,?,?,?,?)');
-        $stmt->bind_param('sisssssss',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token);
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token,cash_account_id) VALUES(?,?,?,?,?,?,?,?,?,?)');
+        $stmt->bind_param('sisssssssi',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId);
         $stmt->execute();$paymentId=(int)$stmt->insert_id;$stmt->close();
         foreach ($alloc as $invoiceId=>$value) {
             $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount) VALUES(?,?,?)');
@@ -121,7 +135,7 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
         else $total=money_add($total,$v['remaining']);
     }
     $stmt->close();
-    $stmt=$db->prepare('SELECT p.*, EXISTS(SELECT 1 FROM account_payments rev WHERE rev.reversed_payment_id=p.id) AS is_reversed FROM account_payments p WHERE party_kind=? AND party_id=? ORDER BY payment_date,id');
+    $stmt=$db->prepare('SELECT p.*, ca.name AS cash_account_name, EXISTS(SELECT 1 FROM account_payments rev WHERE rev.reversed_payment_id=p.id) AS is_reversed FROM account_payments p LEFT JOIN accounting_cash_accounts ca ON ca.id=p.cash_account_id WHERE p.party_kind=? AND p.party_id=? ORDER BY p.payment_date,p.id');
     $stmt->bind_param('si',$kind,$partyId);$stmt->execute();$res=$stmt->get_result();$payments=[];$unallocated='0';
     while ($p=$res->fetch_assoc()) {
         $stmt2=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE reversed_at IS NULL AND payment_id=?');
@@ -129,7 +143,7 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
         $left=money_sub($p['amount'],$q['s']);
         $preferredDirection=$kind==='customer'?'in':'out';
         $unallocated=$p['direction']===$preferredDirection ? money_add($unallocated,$left) : money_sub($unallocated,$left);
-        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'allocated'=>$q['s'],'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note'],'is_reversed'=>(bool)$p['is_reversed'],'is_reversal'=>$p['reversed_payment_id']!==null];
+        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'cash_account_name'=>$p['cash_account_name'],'allocated'=>$q['s'],'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note'],'is_reversed'=>(bool)$p['is_reversed'],'is_reversal'=>$p['reversed_payment_id']!==null];
     }
     $stmt->close();
     $stmt=$db->prepare('SELECT amount FROM account_opening_balances WHERE party_kind=? AND party_id=?');
@@ -245,6 +259,7 @@ function acct_record_refund(mysqli $db,array $input): array {
     $direction=$kind==='customer'?'out':'in';
     $db->begin_transaction();
     try {
+        $cashAccountId=acct_resolve_cash_account($db,$method,$input['cash_account_id']??null);
         acct_party_lock($db,$kind,$partyId);
         $stmt=$db->prepare('SELECT id FROM account_payments WHERE client_token=?');
         $stmt->bind_param('s',$token);$stmt->execute();$r=$stmt->get_result();$old=$r?$r->fetch_assoc():null;$stmt->close();
@@ -253,8 +268,8 @@ function acct_record_refund(mysqli $db,array $input): array {
         if (!$statement['balance_final'] || money_cmp($statement['balance'],'0')>=0
             || money_cmp($amount,money_abs($statement['balance']))>0)
             throw new InvalidArgumentException('استرداد فقط تا سقف اعتبار قطعی طرف حساب مجاز است.');
-        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token) VALUES(?,?,?,?,?,?,?,?)');
-        $stmt->bind_param('sissssss',$kind,$partyId,$direction,$amount,$method,$date,$note,$token);
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,cash_account_id) VALUES(?,?,?,?,?,?,?,?,?)');
+        $stmt->bind_param('sissssssi',$kind,$partyId,$direction,$amount,$method,$date,$note,$token,$cashAccountId);
         $stmt->execute();$pid=(int)$stmt->insert_id;$stmt->close();
         $db->commit();
         return ['payment_id'=>$pid,'duplicate'=>false];
@@ -284,9 +299,9 @@ function acct_reverse_payment(mysqli $db,int $paymentId,string $reason,string $t
         foreach($invoiceIds as $invId)acct_invoice_outstanding($db,$invId,true);
         $direction=$p['direction']==='in'?'out':'in';
         $note="ابطال سند مالی #{$paymentId}: ".$reason;
-        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,reversed_payment_id) VALUES(?,?,?,?,?,?,?,?,?)');
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,reversed_payment_id,cash_account_id) VALUES(?,?,?,?,?,?,?,?,?,?)');
         $date=date('Y-m-d');
-        $stmt->bind_param('sissssssi',$p['party_kind'],$p['party_id'],$direction,$p['amount'],$p['method'],$date,$note,$token,$paymentId);
+        $stmt->bind_param('sissssssii',$p['party_kind'],$p['party_id'],$direction,$p['amount'],$p['method'],$date,$note,$token,$paymentId,$p['cash_account_id']);
         $stmt->execute();$reverseId=(int)$stmt->insert_id;$stmt->close();
         $stmt=$db->prepare('UPDATE account_payment_allocations SET reversed_at=NOW() WHERE payment_id=? AND reversed_at IS NULL');
         $stmt->bind_param('i',$paymentId);$stmt->execute();$stmt->close();
