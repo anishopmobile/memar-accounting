@@ -19,7 +19,8 @@ $result = dg_register_defective(
     trim((string) ($_POST['quantity'] ?? '')),
     trim((string) ($_POST['defective_date'] ?? '')),
     trim((string) ($_POST['reason'] ?? '')),
-    trim((string) ($_POST['description'] ?? ''))
+    trim((string) ($_POST['description'] ?? '')),
+    (string) ($_POST['media_ids'] ?? '[]')
 );
 
 if ($result['ok']) {

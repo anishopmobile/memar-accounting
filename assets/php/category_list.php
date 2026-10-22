@@ -1,7 +1,16 @@
 <?php
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/boot.php';
+require_once __DIR__ . '/media_common.php';
 header('Content-Type: application/json; charset=UTF-8');
 
+$categoryImagesEnabled = (int)(media_settings($mysqli)['category_images'] ?? 1) === 1;
+$categoryImages = [];
+if ($categoryImagesEnabled) {
+    $resultImages = $mysqli->query('SELECT category_id,media_id FROM category_media');
+    while ($resultImages && ($image = $resultImages->fetch_assoc())) {
+        $categoryImages[(int)$image['category_id']] = (int)$image['media_id'];
+    }
+}
 $categories = [];
 $result = $mysqli->query('SELECT * FROM product_categories ORDER BY parent_id IS NULL DESC, parent_id, CAST(code AS UNSIGNED)');
 if ($result) {
@@ -50,10 +59,16 @@ function attachChildren(array &$node, array &$children): void
 
 function printCategoryRows(array $nodes, int $level = 0): void
 {
+    global $categoryImagesEnabled, $categoryImages;
     foreach ($nodes as $node) {
         $indent = $level > 0 ? 'padding-right: ' . ($level * 18) . 'px;' : '';
         $parentName = $node['parent_name'] ?? 'اصلی';
         echo '<tr class="category-row" data-id="' . $node['id'] . '" data-code="' . htmlspecialchars($node['code'], ENT_QUOTES, 'UTF-8') . '" data-name="' . htmlspecialchars($node['name'], ENT_QUOTES, 'UTF-8') . '" data-parent-id="' . ($node['parent_id'] !== null ? htmlspecialchars($node['parent_id'], ENT_QUOTES, 'UTF-8') : '') . '" data-level="' . $level . '">';
+        if ($categoryImagesEnabled) {
+            $imageId = (int)($categoryImages[(int)$node['id']] ?? 0);
+            $url = $imageId ? 'assets/php/media_file.php?id=' . $imageId . '&size=thumb' : 'assets/img/product-placeholder.svg';
+            echo '<td class="product-thumb-cell"><img class="media-thumb" width="44" height="44" loading="lazy" decoding="async" data-id="' . $imageId . '" alt="" src="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"></td>';
+        }
         echo '<td>' . htmlspecialchars($node['code']) . '</td>';
         echo '<td><span class="tree-label" style="' . $indent . '">' . htmlspecialchars($node['name']) . '</span></td>';
         echo '<td>' . htmlspecialchars($parentName) . '</td>';
@@ -92,7 +107,7 @@ function renderParentOptions(array $nodes, int $level = 0): void
 $tree = buildCategoryTree($categories);
 ob_start();
 if (count($categories) === 0) {
-    echo '<tr><td colspan="4" class="empty-state">دسته‌بندی‌ای یافت نشد</td></tr>';
+    echo '<tr><td colspan="' . ($categoryImagesEnabled ? 5 : 4) . '" class="empty-state">دسته‌بندی‌ای یافت نشد</td></tr>';
 } else {
     printCategoryRows($tree);
 }

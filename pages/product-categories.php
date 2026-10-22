@@ -1,6 +1,15 @@
 <?php
 require_once __DIR__ . '/../assets/php/db.php';
+require_once __DIR__ . '/../assets/php/media_common.php';
 
+$categoryImagesEnabled = (int)(media_settings($mysqli)['category_images'] ?? 1) === 1;
+$categoryImages = [];
+if ($categoryImagesEnabled) {
+    $resultImages = $mysqli->query('SELECT category_id,media_id FROM category_media');
+    while ($resultImages && ($image = $resultImages->fetch_assoc())) {
+        $categoryImages[(int)$image['category_id']] = (int)$image['media_id'];
+    }
+}
 $categories = [];
 $result = $mysqli->query('SELECT * FROM product_categories ORDER BY parent_id IS NULL DESC, parent_id, CAST(code AS UNSIGNED)');
 if ($result) {
@@ -49,10 +58,16 @@ function attachChildren(array &$node, array &$children): void
 
 function printCategoryRows(array $nodes, int $level = 0): void
 {
+    global $categoryImagesEnabled, $categoryImages;
     foreach ($nodes as $node) {
         $indent = $level > 0 ? 'padding-right: ' . ($level * 18) . 'px;' : '';
         $parentName = $node['parent_name'] ?? 'اصلی';
         echo '<tr class="category-row" data-id="' . $node['id'] . '" data-code="' . htmlspecialchars($node['code'], ENT_QUOTES, 'UTF-8') . '" data-name="' . htmlspecialchars($node['name'], ENT_QUOTES, 'UTF-8') . '" data-parent-id="' . ($node['parent_id'] !== null ? htmlspecialchars($node['parent_id'], ENT_QUOTES, 'UTF-8') : '') . '" data-level="' . $level . '">';
+        if ($categoryImagesEnabled) {
+            $imageId = (int)($categoryImages[(int)$node['id']] ?? 0);
+            $url = $imageId ? 'assets/php/media_file.php?id=' . $imageId . '&size=thumb' : 'assets/img/product-placeholder.svg';
+            echo '<td class="product-thumb-cell"><img class="media-thumb" width="44" height="44" alt="" src="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"></td>';
+        }
         echo '<td>' . htmlspecialchars($node['code']) . '</td>';
         echo '<td><span class="tree-label" style="' . $indent . '">' . htmlspecialchars($node['name']) . '</span></td>';
         echo '<td>' . htmlspecialchars($parentName) . '</td>';
@@ -101,6 +116,7 @@ $tree = buildCategoryTree($categories);
         <table class="action-table" id="categoriesTable">
             <thead>
                 <tr>
+                    <?php if ($categoryImagesEnabled): ?><th>تصویر</th><?php endif; ?>
                     <th>کد گروه</th>
                     <th>نام گروه</th>
                     <th>زیر گروه</th>
@@ -110,7 +126,7 @@ $tree = buildCategoryTree($categories);
             <tbody>
                 <?php if (count($categories) === 0): ?>
                     <tr>
-                        <td colspan="3" class="empty-state">دسته‌بندی‌ای یافت نشد</td>
+                        <td colspan="<?php echo $categoryImagesEnabled ? 5 : 4; ?>" class="empty-state">دسته‌بندی‌ای یافت نشد</td>
                     </tr>
                 <?php else: ?>
                     <?php printCategoryRows($tree); ?>
@@ -155,6 +171,17 @@ $tree = buildCategoryTree($categories);
                             <?php renderParentOptions($tree); ?>
                         </select>
                     </div>
+                    <?php if ($categoryImagesEnabled): ?>
+                    <div class="form-row">
+                      <label>تصویر دسته‌بندی</label>
+                      <input type="hidden" id="categoryMediaId" value="0">
+                      <div class="media-actions">
+                        <img id="categoryMediaPreview" src="assets/img/product-placeholder.svg" width="70" height="70" alt="پیش‌نمایش تصویر" class="media-thumb">
+                        <button type="button" id="categoryMediaButton" class="button-secondary">انتخاب از کتابخانه</button>
+                        <button type="button" id="categoryMediaClear" class="button-secondary">حذف ارتباط تصویر</button>
+                      </div>
+                    </div>
+                    <?php endif; ?>
                     <div class="form-actions modal-actions">
                         <button type="submit" class="button" id="saveCategoryButton">ذخیره</button>
                         <button type="button" class="button-secondary" id="cancelCategoryModal">لغو</button>

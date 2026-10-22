@@ -8,6 +8,7 @@ require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/product_common.php';
 require_once __DIR__ . '/bundle_common.php';
+require_once __DIR__ . '/media_common.php';
 
 $search = trim((string) ($_GET['search'] ?? ''));
 $category = trim((string) ($_GET['category'] ?? ''));
@@ -117,4 +118,14 @@ if (count($products) > 0) {
     unset($p);
 }
 
+$section = (string)($_GET['media_section'] ?? '');
+$settings = media_settings($mysqli);
+$flag = ['sales'=>'sales_ui','purchase'=>'purchase_ui','defective'=>'defective_ui'][$section] ?? null;
+if ($flag && (int)($settings[$flag] ?? 0) === 1) {
+    $images = media_primary_map($mysqli, array_column($products, 'id'));
+    foreach ($products as &$p) {
+        $p['media_id'] = (int)($images[(int)$p['id']]['id'] ?? 0);
+    }
+    unset($p);
+}
 respond_json(true, '', $products);

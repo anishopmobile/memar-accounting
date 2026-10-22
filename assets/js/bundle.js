@@ -148,6 +148,7 @@ $(function () {
         $('#bundlePurchasePrice').val('').removeData('touched');
         $('#bundleSalePrice').val('').removeData('touched');
         $('#bundleComponentsJson').val('');
+        if (window.MediaEditor) window.MediaEditor.reset('bundle');
         var activeCategory = $('#productCategoryFilter').val() || '';
         $('#bundleCategory').val(activeCategory);
         comps = {};
@@ -181,6 +182,7 @@ $(function () {
             var p = data.product || {};
             resetBundleForm();
             $('#bundleId').val(p.id || '');
+            if (window.MediaEditor) window.MediaEditor.prepare('bundle', p.id);
             $('#bundleCode').val(p.code || '');
             $('#bundleBarcode').val(p.barcode || '');
             $('#bundleName').val(p.name || '');
@@ -335,6 +337,8 @@ $(function () {
     /* ---------------- ذخیره بسته ---------------- */
     $('#bundleForm').on('submit', function (e) {
         e.preventDefault();
+        if (window.MediaEditor && !window.MediaEditor.canSave('bundle')) { alert('در حال دریافت تصاویر بسته.'); return; }
+        if ($('#saveBundleButton').prop('disabled')) return;
 
         var name = String($('#bundleName').val() || '').trim();
         if (name === '') {

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/jdf.php';
 require_once __DIR__ . '/invoice_pdf_common.php';
+require_once __DIR__ . '/media_common.php';
 
 /**
  * بارگذاری همه داده‌های موردنیاز قالب‌های فاکتور فروش.
@@ -88,6 +89,9 @@ function getSalesInvoicePrintData(mysqli $mysqli, int $invoiceId): array
         $q->close();
     }
 
+    $mediaEnabled = media_pdf_enabled(media_settings($mysqli), $type);
+    $items = media_pdf_items($mysqli, $items, $mediaEnabled);
+    
     $provinceName = pdf_province_name($store['province_id'] ?? null);
     $cityName = pdf_city_name($store['city_id'] ?? null);
     $loc = pdf_direction_and_footer($settings, $type);
@@ -103,6 +107,7 @@ function getSalesInvoicePrintData(mysqli $mysqli, int $invoiceId): array
         'error' => '',
         'invoice' => $invoice,
         'items' => $items,
+        'media_enabled' => $mediaEnabled,
         'customer' => $customer,
         'store' => $store,
         'settings' => $settings,
@@ -193,6 +198,9 @@ function getPurchaseInvoicePrintData(mysqli $mysqli, int $invoiceId): array
         $q->close();
     }
 
+    $mediaEnabled = media_pdf_enabled(media_settings($mysqli), $type);
+    $items = media_pdf_items($mysqli, $items, $mediaEnabled);
+    
     $provinceName = pdf_province_name($store['province_id'] ?? null);
     $cityName = pdf_city_name($store['city_id'] ?? null);
     $loc = pdf_direction_and_footer($settings, $type);
@@ -206,6 +214,7 @@ function getPurchaseInvoicePrintData(mysqli $mysqli, int $invoiceId): array
         'error' => '',
         'invoice' => $invoice,
         'items' => $items,
+        'media_enabled' => $mediaEnabled,
         'supplier' => $supplier,
         'store' => $store,
         'settings' => $settings,

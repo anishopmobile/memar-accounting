@@ -49,7 +49,8 @@ function countPdfBarcodeInk(pdfPath, pageNumber, prefix) {
 }
 const base = 'http://127.0.0.1:8872';
 const cookie = {name:'PHPSESSID',value:'ci-tabler-browser-123456789',domain:'127.0.0.1',path:'/',sameSite:'Lax',httpOnly:true};
-const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAV4BAX6b7A8AAAAASUVORK5CYII=','base64');
+// Valid 5x5 PNG (not a truncated/broken stream); secure server re-encoding requires decodable pixels.
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAIAAAACDbGyAAAAFElEQVR4nGM0KDjCgASYGFABqXwAbcQBbpO6xs8AAAAASUVORK5CYII=','base64');
 (async function () {
   const rasterDir = fs.mkdtempSync(path.join(os.tmpdir(),'memar-pdf-ink-'));
   const browser = await chromium.launch({headless:true});
@@ -192,6 +193,35 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
       assert.equal(await page.locator('#defSubmit').isVisible(),true);
       assert.equal(await page.locator('#defReportTable').count(),1);
       console.log('PASS defective-goods '+width+'px');
+    }
+    // Account chip is a real dropdown and About Us is absent from top-level routes.
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({width,height:850});
+      await page.goto(base+'/index.php?page=dashboard');
+      assert.equal(await page.locator('.main-nav a[href="?page=about-us"]').count(),0,
+        'About Us must not remain a top-level nav item');
+      if (width < 1025) await page.locator('#sidebarOpen').click();
+      const toggle = page.locator('.account-nav-dropdown > .user-chip');
+      await toggle.click();
+      assert.equal(await toggle.getAttribute('aria-expanded'),'true','account dropdown expanded');
+      assert.equal(await page.locator('#accountNavMenu a[href="?page=account"]').count(),1,
+        'account settings remains reachable');
+      const about = page.locator('#accountNavMenu a[href="?page=about-us"]');
+      assert.equal(await about.isVisible(),true,'About Us is a visible account submenu option');
+      await page.keyboard.press('Escape');
+      assert.equal(await toggle.getAttribute('aria-expanded'),'false','Escape closes account menu');
+      await toggle.click();
+      await about.click();
+      await page.waitForURL('**?page=about-us');
+      assert.equal(await page.locator('h1').first().textContent(),'درباره ما',
+        'About Us remains a functioning authenticated page');
+      if (width < 1025) await page.locator('#sidebarOpen').click();
+      await page.locator('.account-nav-dropdown > .user-chip').click();
+      await page.locator('#accountNavMenu a[href="?page=account"]').click();
+      await page.waitForURL('**?page=account');
+      assert.equal(await page.locator('h1').first().textContent(),'حساب کاربری',
+        'account page remains reachable in account menu');
+      console.log('PASS account dropdown/About Us/navigation '+width+'px');
     }
     await context.close();
   } finally {

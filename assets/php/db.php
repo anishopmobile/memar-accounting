@@ -13,6 +13,10 @@ $mysqli->query("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 
 $mysqli->select_db($dbName);
 $mysqli->set_charset('utf8mb4');
 
+// Authenticated image streaming uses an existing schema and MUST NOT execute
+// migrations / table setup for every thumbnail request.
+if (!defined('MEMAR_DB_READ_ONLY_FASTPATH')) {
+
 $createCustomers = "CREATE TABLE IF NOT EXISTS customers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(120) NOT NULL,
@@ -637,3 +641,99 @@ function migrate_auth_schema(mysqli $mysqli): void
 }
 
 migrate_auth_schema($mysqli);
+
+
+/* ============================================================
+ * Product Media Library — additive, repeatable migration
+ * The original product/financial tables are deliberately unchanged.
+ * ========================================================== */
+function migrate_product_media_schema(mysqli $mysqli): void
+{
+    $mysqli->query("CREATE TABLE IF NOT EXISTS media_folders (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(140) NOT NULL UNIQUE,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $mysqli->query("CREATE TABLE IF NOT EXISTS media (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        original_filename VARCHAR(255) NOT NULL,
+        stored_filename VARCHAR(100) NOT NULL UNIQUE,
+        original_path VARCHAR(255) NOT NULL,
+        thumbnail_path VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(40) NOT NULL,
+        file_size INT UNSIGNED NOT NULL,
+        width SMALLINT UNSIGNED NOT NULL,
+        height SMALLINT UNSIGNED NOT NULL,
+        sha256 CHAR(64) NOT NULL UNIQUE,
+        uploaded_by INT UNSIGNED DEFAULT NULL,
+        folder_id INT UNSIGNED NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_media_created (created_at),
+        INDEX idx_media_folder (folder_id, id),
+        CONSTRAINT fk_media_folder FOREIGN KEY (folder_id) REFERENCES media_folders(id) ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // Existing installations already have media; migrate in-place without data loss.
+    db_ensure_column($mysqli, 'media', 'folder_id', 'folder_id INT UNSIGNED NULL AFTER uploaded_by');
+    if (!db_index_exists($mysqli, 'media', 'idx_media_folder')) {
+        $mysqli->query('ALTER TABLE media ADD KEY idx_media_folder (folder_id, id)');
+    }
+    $fk = $mysqli->query("SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'media'
+          AND CONSTRAINT_NAME = 'fk_media_folder' AND CONSTRAINT_TYPE = 'FOREIGN KEY' LIMIT 1");
+    if ($fk && $fk->num_rows === 0) {
+        $mysqli->query('ALTER TABLE media ADD CONSTRAINT fk_media_folder
+            FOREIGN KEY (folder_id) REFERENCES media_folders(id) ON DELETE RESTRICT');
+    }
+    if ($fk) $fk->free();
+
+    $mysqli->query("CREATE TABLE IF NOT EXISTS product_media (
+        product_id INT NOT NULL,
+        media_id INT UNSIGNED NOT NULL,
+        sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+        PRIMARY KEY (product_id, media_id),
+        KEY idx_pm_product_order (product_id, sort_order),
+        KEY idx_pm_media (media_id),
+        CONSTRAINT fk_pm_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        CONSTRAINT fk_pm_media FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $mysqli->query("CREATE TABLE IF NOT EXISTS category_media (
+        category_id INT NOT NULL PRIMARY KEY,
+        media_id INT UNSIGNED NOT NULL,
+        CONSTRAINT fk_cm_category FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE CASCADE,
+        CONSTRAINT fk_cm_media FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // A defective registration has its own photos; never overwrite product photos.
+    $mysqli->query("CREATE TABLE IF NOT EXISTS defective_media (
+        defective_id INT NOT NULL,
+        media_id INT UNSIGNED NOT NULL,
+        sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+        PRIMARY KEY (defective_id, media_id),
+        INDEX idx_defective_media_order (defective_id, sort_order),
+        CONSTRAINT fk_defective_media_entry FOREIGN KEY (defective_id) REFERENCES defective_goods(id) ON DELETE CASCADE,
+        CONSTRAINT fk_defective_media_file FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $mysqli->query("CREATE TABLE IF NOT EXISTS media_display_settings (
+        id INT PRIMARY KEY,
+        products_list TINYINT(1) NOT NULL DEFAULT 1,
+        sales_ui TINYINT(1) NOT NULL DEFAULT 1,
+        purchase_ui TINYINT(1) NOT NULL DEFAULT 1,
+        sales_returns_ui TINYINT(1) NOT NULL DEFAULT 1,
+        defective_ui TINYINT(1) NOT NULL DEFAULT 1,
+        reports_ui TINYINT(1) NOT NULL DEFAULT 0,
+        category_images TINYINT(1) NOT NULL DEFAULT 1,
+        pdf_sales TINYINT(1) NOT NULL DEFAULT 0,
+        pdf_sales_proforma TINYINT(1) NOT NULL DEFAULT 0,
+        pdf_purchase TINYINT(1) NOT NULL DEFAULT 0,
+        pdf_purchase_proforma TINYINT(1) NOT NULL DEFAULT 0,
+        pdf_sales_return TINYINT(1) NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $mysqli->query("INSERT IGNORE INTO media_display_settings (id) VALUES (1)");
+}
+migrate_product_media_schema($mysqli);
+
+} // End database schema initialization; normal application requests are unchanged.

@@ -22,6 +22,7 @@
 require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/jdf.php';
+require_once __DIR__ . '/media_common.php';
 
 $date_from = trim((string) ($_GET['date_from'] ?? ''));
 $date_to   = trim((string) ($_GET['date_to'] ?? ''));
@@ -116,7 +117,7 @@ if (count($ids) > 0) {
     $detailSql = 'SELECT i.id, i.invoice_number, i.type, i.invoice_date, i.payment_status, i.payable_amount,
                          CONCAT(c.first_name, " ", c.last_name) AS customer_name,
                          ii.id AS item_id, ii.quantity, ii.unit_price, ii.discount, ii.line_total, ii.unit_name,
-                         p.code AS product_code, p.name AS product_name, pu.barcode
+                         p.id AS product_id, p.code AS product_code, p.name AS product_name, pu.barcode
                   ' . $joins . '
                   WHERE i.type IN (\'sales_invoice\',\'sales_proforma\')
                     AND i.id IN (' . $placeholders . ')
@@ -143,6 +144,7 @@ if (count($ids) > 0) {
                 ];
             }
             $invoices[$invId]['items'][] = [
+                'product_id'   => (int)$row['product_id'],
                 'product_code' => $row['product_code'],
                 'product_name' => $row['product_name'],
                 'barcode'      => $row['barcode'],
@@ -156,6 +158,20 @@ if (count($ids) > 0) {
     }
 }
 
+if ((int)(media_settings($mysqli)['reports_ui'] ?? 0) === 1 && $invoices) {
+    $productIds = [];
+    foreach ($invoices as $inv) {
+        foreach ($inv['items'] as $item) $productIds[] = $item['product_id'];
+    }
+    $mediaMap = media_primary_map($mysqli, $productIds);
+    foreach ($invoices as &$inv) {
+        foreach ($inv['items'] as &$item) {
+            $item['media_id'] = (int)($mediaMap[(int)$item['product_id']]['id'] ?? 0);
+        }
+        unset($item);
+    }
+    unset($inv);
+}
 respond_json(true, '', [
     'rows'        => array_values($invoices),
     'total'       => $total,

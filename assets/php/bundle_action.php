@@ -65,6 +65,7 @@ $in = [
     'min_stock'      => trim((string) ($_POST['min_stock'] ?? '0')),
     'description'    => trim((string) ($_POST['description'] ?? '')),
     'components'     => $componentsRaw,
+    'media_ids'      => array_key_exists('media_ids', $_POST) ? (string)$_POST['media_ids'] : null,
 ];
 
 /* The bundle editor sends selected display currency, while component prices stay base. */

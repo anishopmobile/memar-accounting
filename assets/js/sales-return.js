@@ -271,6 +271,12 @@ $(function () {
         recalcs();
     }
 
+    function returnImage(id, productId) {
+        if (id === undefined || id === null) return '';
+        var n = Number(id) || 0;
+        return '<img class="media-thumb" loading="lazy" data-id="' + n + '" data-product-id="' + (Number(productId)||0) + '" width="40" height="40" style="vertical-align:middle;margin-left:6px" alt="" src="' +
+            (n ? 'assets/php/media_file.php?id=' + n + '&size=thumb' : 'assets/img/product-placeholder.svg') + '">';
+    }
     function addItemRow(it, qtyVal) {
         var factor = Number(it.conversion_factor) || 1;
         var hint = 'مبنا: ' + splitNum(it.returnable_base) + (factor === 1 ? '' : '/' + factor);
@@ -279,7 +285,7 @@ $(function () {
             + ' data-factor="' + escAttr(it.conversion_factor != null ? it.conversion_factor : 1) + '"'
             + ' data-sold-qty="' + escAttr(it.quantity) + '" data-price="' + escAttr(it.unit_price) + '"'
             + ' data-disc="' + escAttr(it.discount) + '" data-returnable-base="' + escAttr(it.returnable_base) + '">'
-            + '<td>' + esc((it.product_code ? it.product_code + ' — ' : '') + (it.product_name || '')) + '</td>'
+            + '<td>' + returnImage(it.media_id,it.product_id) + esc((it.product_code ? it.product_code + ' — ' : '') + (it.product_name || '')) + '</td>'
             + '<td>' + esc(unitName) + '</td>'
             + '<td>' + splitNum(it.quantity) + '</td>'
             + '<td>' + splitNum(it.returned_display != null ? it.returned_display : '0') + '</td>'

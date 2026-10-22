@@ -124,16 +124,18 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 
     /* ---------- product picker modal ---------- */
     function loadProducts(q) {
-        $.getJSON('assets/php/invoice_products.php?type=product&search=' + encodeURIComponent(q || ''))
+        $.getJSON('assets/php/invoice_products.php?media_section=defective&type=product&search=' + encodeURIComponent(q || ''))
             .done(function (res) {
                 var rows = res.data || [];
                 var html = '';
                 if (!rows.length) html = '<tr><td colspan="6" class="empty-state">کالایی یافت نشد.</td></tr>';
                 rows.forEach(function (p) {
-                    html += '<tr>'
+                    var img = p.media_id === undefined ? '' : '<img class="media-thumb" loading="lazy" decoding="async" width="38" height="38" data-id="' + Number(p.media_id || 0) + '" data-product-id="' + Number(p.id) + '" alt="" src="' +
+                    (Number(p.media_id) ? 'assets/php/media_file.php?id=' + Number(p.media_id) + '&size=thumb' : 'assets/img/product-placeholder.svg') + '" style="vertical-align:middle;margin-left:5px">';
+                html += '<tr>'
                         + '<td>' + esc(p.code) + '</td>'
                         + '<td dir="ltr">' + esc(p.barcode || '-') + '</td>'
-                        + '<td>' + esc(p.name) + '</td>'
+                        + '<td>' + img + esc(p.name) + '</td>'
                         + '<td>' + esc(p.unit) + '</td>'
                         + '<td>' + splitNum(Number(p.stock).toString()) + '</td>'
                         + '<td><button type="button" class="button-secondary small def-product-pick" data-id="' + escAttr(p.id) + '" data-name="' + escAttr(p.name) + '" data-code="' + escAttr(p.code) + '" data-barcode="' + escAttr(p.barcode || '') + '" data-stock="' + escAttr(p.stock) + '" data-unit="' + escAttr(p.unit) + '">انتخاب</button></td>'
@@ -173,6 +175,9 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
     $(document).on('submit', '#defRegForm', function (e) {
         e.preventDefault();
         var $btn = $('#defSubmit');
+        if (window.MediaEditor && !window.MediaEditor.canSave('defective')) {
+            showResult('آپلود تصاویر هنوز کامل نشده است.', false);return;
+        }
         $btn.prop('disabled', true).text('در حال ثبت...');
         var resetBtn = function () { $btn.prop('disabled', false).text('ثبت کالای معیوب'); };
 
@@ -192,7 +197,8 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
             quantity: qty,
             defective_date: dateIso,
             reason: reason,
-            description: String($('#defDescription').val() || '').trim()
+            description: String($('#defDescription').val() || '').trim(),
+            media_ids: $('[data-media-editor="defective"] input[name="media_ids"]').val() || '[]'
         };
         $.post('assets/php/defective_goods_action.php', payload)
             .done(function (res) {
@@ -201,6 +207,7 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
                     $('#defQuantity').val('');
                     $('#defReason').val('');
                     $('#defDescription').val('');
+                    if (window.MediaEditor) window.MediaEditor.reset('defective');
                     if (res.data) {
                         picked.stock = String(res.data.stock_after);
                         $('#defCurrentStock').text(picked.stock + ' ' + picked.unit);
@@ -236,7 +243,7 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
         var rows = data.rows || [];
         var html;
         if (!rows.length) {
-            html = '<tr class="empty-state-row"><td colspan="9" class="empty-state">رکوردی یافت نشد</td></tr>';
+            html = '<tr class="empty-state-row"><td colspan="10" class="empty-state">رکوردی یافت نشد</td></tr>';
         } else {
             html = '';
             rows.forEach(function (r) {
@@ -244,6 +251,7 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
                     + '<td>' + esc(r.row_no) + '</td>'
                     + '<td>' + esc(r.defective_date_jalali) + '</td>'
                     + '<td>' + esc(r.product_name) + '</td>'
+                    + '<td class="product-thumb-cell"><img class="media-thumb" loading="lazy" decoding="async" width="46" height="46" data-id="' + Number(r.defective_media_id || 0) + '" data-defective-id="' + Number(r.id) + '" src="' + (Number(r.defective_media_id) ? 'assets/php/media_file.php?id=' + Number(r.defective_media_id) + '&size=thumb' : 'assets/img/product-placeholder.svg') + '" alt=""></td>'
                     + '<td dir="ltr">' + esc(r.product_barcode) + '</td>'
                     + '<td dir="ltr">' + esc(r.product_code) + '</td>'
                     + '<td>' + esc(r.quantity_display) + ' ' + esc(r.product_unit) + '</td>'
@@ -372,11 +380,13 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
         $('#defQuantity').val('');
         $('#defReason').val('');
         $('#defDescription').val('');
+        if (window.MediaEditor) window.MediaEditor.reset('defective');
         $('#defDate').val(todayISO());
         $('#defDateDisplay').val(gregInputToJalaliStr(todayISO()));
         $('#defResult').text('').css('color', '');
     });
 
+    if (window.MediaEditor) window.MediaEditor.prepare('defective', 0);
     initRegisterDatePicker();
     initFilterDatePickers();
 });

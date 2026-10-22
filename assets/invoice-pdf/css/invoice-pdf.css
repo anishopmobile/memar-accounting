@@ -362,3 +362,17 @@ body,
 .page-break {
     page-break-before: always;
 }
+/* Optional product picture in print: no selector affects image-free invoices. */
+.items-table .media-pdf-col {
+  width: 12mm;
+  min-width: 12mm;
+  text-align: center;
+  vertical-align: middle;
+  padding: 1mm;
+}
+.items-table .media-pdf-col img {
+  display: inline-block;
+  max-width: 11mm;
+  max-height: 11mm;
+  object-fit: contain;
+}

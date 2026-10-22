@@ -114,20 +114,35 @@ $(function() {
     }
     //  اتمام کد کالای کم موجودی
     // ===== منوی کشویی «فاکتورها» =====
+    // Consistent keyboard-accessible menus: account, invoices, reports and settings.
+    function closeNavDropdowns() {
+        $('.nav-dropdown.open').removeClass('open');
+        $('.nav-dropdown-toggle').attr('aria-expanded', 'false');
+    }
     $(document).on('click', '.nav-dropdown-toggle', function(e) {
         e.preventDefault();
         var $dd = $(this).closest('.nav-dropdown');
         var wasOpen = $dd.hasClass('open');
-        $('.nav-dropdown.open').removeClass('open');
+        closeNavDropdowns();
         if (!wasOpen) {
             $dd.addClass('open');
+            $(this).attr('aria-expanded', 'true');
         }
     });
 
     $(document).on('click', function(e) {
-        if (!$(e.target).closest('.nav-dropdown').length) {
-            $('.nav-dropdown').removeClass('open');
-        }
+        if (!$(e.target).closest('.nav-dropdown').length) closeNavDropdowns();
+    });
+    $(document).on('keydown', function(e) {
+        if (e.key !== 'Escape' || !$('.nav-dropdown.open').length) return;
+        // Prevent the separate mobile-sidebar Escape handler from closing the
+        // entire navigation on the same key press.
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        var $toggle = $('.nav-dropdown.open').last().find('> .nav-dropdown-toggle').first();
+        closeNavDropdowns();
+        // Do not steal Escape from another modal; the user remains on the page.
+        if ($toggle.length) $toggle.trigger('focus');
     });
 
     var selectedCategoryId = '';
@@ -547,12 +562,26 @@ $(function() {
         return $item.length ? String($item.data('code')) : '';
     }
 
+    function loadCategoryMedia(categoryId) {
+        if (!$('#categoryMediaId').length) return;
+        $('#saveCategoryButton').prop('disabled', true);
+        $.getJSON('assets/php/media_api.php', {action:'category',category_id:categoryId}).done(function(res) {
+            if (!res || !res.success) { alert('خطا در دریافت تصویر دسته‌بندی'); return; }
+            var id = Number((res.data || {}).media_id) || 0;
+            $('#categoryMediaId').val(id).data('original', String(id));
+            $('#categoryMediaPreview').attr('src', id ? 'assets/php/media_file.php?id=' + id + '&size=thumb' : 'assets/img/product-placeholder.svg');
+        }).fail(function(){ alert('خطای دریافت تصویر دسته‌بندی'); })
+          .always(function(){ $('#saveCategoryButton').prop('disabled', false); });
+    }
+
     function resetCategoryForm() {
         $('#categoryForm')[0].reset();
         $('#categoryMode').val('add-root');
         $('#categoryId').val('');
         $('#categoryCode').val('');
         $('#categoryCodeHidden').val('');
+        $('#categoryMediaId').val('0').data('original','0');
+        $('#categoryMediaPreview').attr('src','assets/img/product-placeholder.svg');
         $('#categoryName').prop('disabled', true);
         $('#categoryParent').prop('disabled', true).val('');
     }
@@ -646,6 +675,7 @@ $(function() {
         resetCategoryForm();
         $('#categoryMode').val('edit');
         $('#categoryId').val(selectedCategoryId);
+        loadCategoryMedia(selectedCategoryId);
         $('#categoryCode').val(selectedCategoryData.code);
         $('#categoryCodeHidden').val(selectedCategoryData.code);
         $('#categoryName').prop('disabled', false).val(selectedCategoryData.name).focus();
@@ -682,7 +712,7 @@ $(function() {
         if (!confirm('آیا از حذف این دسته‌بندی مطمئن هستید؟')) {
             return;
         }
-        $.post('assets/php/category_action.php', {mode: 'delete', category_id: categoryIdToDelete}, function(response) {
+        $.post('assets/php/category_action.php', {mode: 'delete', category_id: categoryIdToDelete, csrf_token:window.APP_CSRF_TOKEN}, function(response) {
             if (response.success) {
                 refreshCategories();
             } else {
@@ -703,7 +733,8 @@ $(function() {
         }
         var formData = {
             mode: 'delete',
-            category_id: selectedCategoryId
+            category_id: selectedCategoryId,
+            csrf_token: window.APP_CSRF_TOKEN
         };
         $.post('assets/php/category_action.php', formData, function(response) {
             if (response.success) {
@@ -734,7 +765,8 @@ $(function() {
             category_id: $('#categoryId').val(),
             code: $('#categoryCodeHidden').val(),
             name: $('#categoryName').val(),
-            parent_id: $('#categoryParent').prop('disabled') ? '' : $('#categoryParent').val()
+            parent_id: $('#categoryParent').prop('disabled') ? '' : $('#categoryParent').val(),
+            csrf_token: window.APP_CSRF_TOKEN
         };
         if (formData.mode !== 'delete' && formData.name.trim() === '') {
             alert('نام گروه نمی‌تواند خالی باشد.');
@@ -742,6 +774,18 @@ $(function() {
         }
         $.post('assets/php/category_action.php', formData, function(response) {
             if (response.success) {
+                var imageId = $('#categoryMediaId').length ? String($('#categoryMediaId').val() || '0') : '0';
+                var previousImageId = $('#categoryMediaId').length ? String($('#categoryMediaId').data('original') || '0') : '0';
+                var categoryId = response.category ? response.category.id : '';
+                if (categoryId && imageId !== previousImageId) {
+                    $.post('assets/php/media_api.php', {
+                        action:'category_set',category_id:categoryId,media_id:imageId,
+                        csrf_token:window.APP_CSRF_TOKEN
+                    }, function(mediaResponse){
+                        if(!mediaResponse || !mediaResponse.success) alert(mediaResponse.message || 'دسته ذخیره شد اما ثبت تصویر ناموفق بود.');
+                        refreshCategories();
+                    },'json').fail(function(){alert('دسته ذخیره شد؛ ثبت تصویر با خطای ارتباط مواجه شد.');});
+                }
                 $('#categoryModal').removeClass('open');
                 $('body').removeClass('modal-open');
                 resetCategoryForm();
@@ -871,6 +915,7 @@ $(function() {
         $('#productUnitsTable tbody').html('');
         productsEditOriginal = null;
         productsUnitsOriginalJson = '';
+        if (window.MediaEditor) window.MediaEditor.reset('product');
     }
 
     function productModalState(mode, data) {
@@ -932,6 +977,7 @@ $(function() {
             };
         }
         renderProductUnits(units);
+        if (window.MediaEditor) window.MediaEditor.prepare('product', mode === 'edit' && data ? data.id : 0);
         $('#productModal').addClass('open');
         $('body').addClass('modal-open');
     }
@@ -945,6 +991,7 @@ $(function() {
         direction: 'asc'
     };
     var productSearchTimer = null;
+    var productListRequest = null, productListSequence = 0;
 
     function refreshProducts() {
         if ($('#products-list').length === 0) {
@@ -954,7 +1001,10 @@ $(function() {
         productListState.perPage = (isNaN(perPage) || perPage < 10) ? 25 : perPage;
         var term = $('#productSearch').val() || '';
         var category = $('#productCategoryFilter').val() || '';
-        $.getJSON('assets/php/product_list.php', {
+        // Prevent an older search response from hiding a newly added image/product.
+        if (productListRequest && productListRequest.readyState !== 4) productListRequest.abort();
+        var sequence = ++productListSequence;
+        productListRequest = $.getJSON('assets/php/product_list.php', {
             search: term,
             category: category,
             page: productListState.page,
@@ -962,6 +1012,7 @@ $(function() {
             sort: productListState.sort,
             direction: productListState.direction
         }, function(response) {
+            if (sequence !== productListSequence) return;
             if (response && response.success) {
                 $('#products-list tbody').html(response.tableBody);
                 $('#inventoryValue').text(response.inventoryValue);
@@ -1069,6 +1120,10 @@ $(function() {
 
     $('#productForm').on('submit', function(e) {
         e.preventDefault();
+        if (window.MediaEditor && !window.MediaEditor.canSave('product')) {
+            alert('ابتدا بارگذاری تصاویر قبلی محصول کامل شود.'); return;
+        }
+        if ($('#saveProductButton').prop('disabled')) return;
         if ($('#productName').val().trim() === '') {
             alert('نام کالا نمی‌تواند خالی باشد.');
             return;
@@ -1106,7 +1161,7 @@ $(function() {
                     break;
                 }
             }
-            if (!changed && productsUnitsOriginalJson === JSON.stringify(unitsList)) {
+            if (!changed && productsUnitsOriginalJson === JSON.stringify(unitsList) && !(window.MediaEditor && window.MediaEditor.isDirty('product'))) {
                 closeProductModal();
                 return;
             }
@@ -1116,6 +1171,7 @@ $(function() {
         var priceDisplay = { pp: $('#productPurchasePrice').val(), sp: $('#productSalePrice').val() };
         $('#productPurchasePrice').val(unformatPrice(priceDisplay.pp));
         $('#productSalePrice').val(unformatPrice(priceDisplay.sp));
+        $('#saveProductButton').prop('disabled', true);
         $.post($form.attr('action'), $form.serialize(), function(response) {
             if (response.success) {
                 var isAddMode = $('#productId').val() === '';
@@ -1125,6 +1181,7 @@ $(function() {
                 } else {
                     // حالت افزودن: مودال باز می‌ماند و فرم برای کالای بعدی آماده می‌شود
                     $('#productForm')[0].reset();
+                    if (window.MediaEditor) window.MediaEditor.reset('product');
                     $('#productId').val('');
                     $('#productCodeHidden').val('');
                     $('#productUnitsJson').val('');
@@ -1154,8 +1211,10 @@ $(function() {
                 alert(response.message || 'خطا در ذخیره‌سازی کالا.');
             }
         }, 'json').fail(function() {
+            $('#productPurchasePrice').val(priceDisplay.pp);
+            $('#productSalePrice').val(priceDisplay.sp);
             alert('خطا در ارتباط با سرور.');
-        });
+        }).always(function() { $('#saveProductButton').prop('disabled', false); });
     });
 
     $('#productSearch').on('input', function() {
@@ -1900,7 +1959,7 @@ $('#productImportSubmit').on('click', function() {
             return;
         }
         showBackupMsg(msg, 'در حال ذخیره...');
-        $.post('assets/php/db_backup.php', { action: 'save_dir', backup_dir: dir }, function(response) {
+        $.post('assets/php/db_backup.php', { action: 'save_dir', backup_dir: dir, csrf_token: window.APP_CSRF_TOKEN }, function(response) {
             if (response.success) {
                 showBackupMsg(msg, response.message || 'آدرس پوشه پشتیبان ذخیره شد.', 'var(--accent)');
                 loadDbBackup();
@@ -1920,7 +1979,7 @@ $('#productImportSubmit').on('click', function() {
             return;
         }
         showBackupMsg(msg, 'در حال تهیه نسخه پشتیبان...');
-        $.post('assets/php/db_backup.php', { action: 'backup' }, function(response) {
+        $.post('assets/php/db_backup.php', { action: 'backup', csrf_token: window.APP_CSRF_TOKEN }, function(response) {
             if (response.success) {
                 var filename = (response.data && response.data.filename) ? response.data.filename : '';
                 var location = (response.data && response.data.path) ? ' (' + response.data.path + ')' : '';
@@ -1941,7 +2000,7 @@ $('#productImportSubmit').on('click', function() {
             return;
         }
         showBackupMsg(msg, 'در حال تهیه نسخه پشتیبان از تمام فایل‌ها...');
-        $.post('assets/php/db_backup.php', { action: 'backup_files' }, function(response) {
+        $.post('assets/php/db_backup.php', { action: 'backup_files', csrf_token: window.APP_CSRF_TOKEN }, function(response) {
             if (response.success) {
                 var location = (response.data && response.data.path) ? ' (' + response.data.path + ')' : '';
                 showBackupMsg(msg, 'پشتیبان‌گیری از تمام فایل‌ها با موفقیت انجام شد' + location, 'var(--accent)');
@@ -1978,6 +2037,7 @@ $('#productImportSubmit').on('click', function() {
         msg.text('در حال بازیابی...');
         var fd = new FormData();
         fd.append('action', 'restore');
+        fd.append('csrf_token', window.APP_CSRF_TOKEN);
         fd.append('backup_file', fileInput.files[0]);
         $.ajax({
             url: 'assets/php/db_backup.php',
@@ -1999,6 +2059,40 @@ $('#productImportSubmit').on('click', function() {
         }).fail(function() {
             msg.css('color', 'var(--danger)').text('خطا در ارتباط با سرور.');
         });
+    });
+
+
+    $('#createFullBackup').on('click', function() {
+        var $msg = $('.backup-message');
+        if (!$('#backupDirInput').val().trim()) {
+            showBackupMsg($msg, 'ابتدا آدرس ذخیره پشتیبان را تنظیم کنید.', 'var(--danger)');return;
+        }
+        $('#createFullBackup').prop('disabled',true);
+        showBackupMsg($msg, 'در حال ایجاد پشتیبان کامل شامل SQL و تصاویر...');
+        $.post('assets/php/db_backup.php',{
+            action:'backup_full',csrf_token:window.APP_CSRF_TOKEN
+        },function(res){
+            showBackupMsg($msg,res.message+(res.success && res.data ? ' — '+res.data.path : ''),
+                res.success?'var(--accent)':'var(--danger)');
+        },'json').fail(function(){showBackupMsg($msg,'پشتیبان کامل با خطا مواجه شد.','var(--danger)');})
+          .always(function(){$('#createFullBackup').prop('disabled',false);});
+    });
+    $('#restoreFullBackup').on('click',function(){
+        var file=$('#restoreFullFile')[0].files[0];
+        if(!file){alert('فایل ZIP پشتیبان کامل انتخاب نشده است.');return;}
+        if(!confirm('بازیابی کامل، دیتابیس فعلی را جایگزین می‌کند. قبل از ادامه از نسخه فعلی پشتیبان بگیرید. ادامه می‌دهید؟'))return;
+        var fd=new FormData();
+        fd.append('action','restore_full');
+        fd.append('csrf_token',window.APP_CSRF_TOKEN);
+        fd.append('backup_file',file);
+        $('#restoreFullBackup').prop('disabled',true);
+        $('#restoreFullMessage').text('در حال اعتبارسنجی و بازیابی بسته کامل...');
+        $.ajax({url:'assets/php/db_backup.php',type:'POST',data:fd,contentType:false,
+            processData:false,dataType:'json'
+        }).done(function(res){$('#restoreFullMessage').text(res.message || (res.success?'بازیابی شد':'خطا'));
+            if(res.success)location.reload();
+        }).fail(function(x){$('#restoreFullMessage').text((x.responseJSON&&x.responseJSON.message)||'خطای سرور');})
+          .always(function(){$('#restoreFullBackup').prop('disabled',false);});
     });
 
     loadTaxSettings();

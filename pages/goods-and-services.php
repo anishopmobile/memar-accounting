@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../assets/php/product_common.php';
+require_once __DIR__ . '/../assets/php/media_common.php';
+$mediaSettings = media_settings($mysqli);
 
 $summary = getInventorySummary($mysqli);
 $categoryOptions = buildCategoryOptionsHtml($mysqli);
@@ -12,6 +14,7 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
         <a href="#" id="new-products" class="button">+ کالای جدید</a>
         <button type="button" class="button button-success" id="openPriceIncreaseModal">افزایش قیمت</button>
         <button type="button" class="button button-success" id="openBundleModal">بسته‌بندی کالا</button>
+        <a class="button-secondary" href="index.php?page=media-library">کتابخانه تصاویر</a>
         <a href="index.php?page=defective-goods" class="button-secondary" id="registerDefectiveLink">ثبت کالای معیوب</a>
         <a href="assets/php/export_products.php" class="button-secondary">خروجی اکسل</a>
         <button type="button" class="button-secondary" id="openProductImportModal">ورود از اکسل</button>
@@ -39,6 +42,7 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
         <table id="products-list" class="action-table">
             <thead>
                 <tr>
+                    <?php if ((int)$mediaSettings['products_list'] === 1): ?><th>تصویر</th><?php endif; ?>
                     <th><button type="button" class="th-sort" data-sort="code">کد</button></th>
                     <th><button type="button" class="th-sort" data-sort="barcode">بارکد</button></th>
                     <th><button type="button" class="th-sort" data-sort="name">نام</button></th>
@@ -52,7 +56,7 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
             </thead>
             <tbody>
                 <tr class="empty-state-row">
-                    <td colspan="9" class="empty-state">در حال دریافت اطلاعات...</td>
+                    <td colspan="<?php echo (int)$mediaSettings['products_list'] === 1 ? 10 : 9; ?>" class="empty-state">در حال دریافت اطلاعات...</td>
                 </tr>
             </tbody>
         </table>
@@ -129,6 +133,7 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
                 <button type="button" class="button-secondary small" id="addProductUnitRow">+ افزودن واحد</button>
                 <span class="units-error" id="productUnitsError"></span>
             </div>
+            <?php $mediaWidgetPrefix = 'product'; include __DIR__ . '/../assets/php/media_product_widget.php'; ?>
             <div class="form-actions modal-actions">
                 <button type="submit" class="button" id="saveProductButton">ذخیره</button>
                 <button type="button" class="button-secondary" id="cancelProductModal">لغو</button>
@@ -328,6 +333,7 @@ $categoryOptions = buildCategoryOptionsHtml($mysqli);
                 </div>
             </div>
 
+            <?php $mediaWidgetPrefix = 'bundle'; include __DIR__ . '/../assets/php/media_product_widget.php'; ?>
             <div class="form-actions modal-actions">
                 <button type="submit" class="button" id="saveBundleButton">ذخیره</button>
                 <button type="button" class="button-secondary" id="cancelBundleModal">لغو</button>

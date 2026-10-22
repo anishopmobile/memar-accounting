@@ -9,6 +9,7 @@
     </div>
     <div id="store-info" class="settings-section">
         <form id="storeSettingsForm" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
             <div class="form-grid">
                 <div class="form-row"><label for="storeName">نام فروشگاه / شخص</label><input type="text" id="storeName" name="store_name" required></div>
                 <div class="form-row"><label for="economicCode">کد اقتصادی</label><input type="text" id="economicCode" name="economic_code"></div>
@@ -39,19 +40,19 @@
                         <div class="upload-preview"><img id="logoPreview" src="" alt="پیش‌نمایش لوگو" hidden></div>
                         <div class="upload-icon">🖼️</div>
                         <div class="upload-label">لوگو فروشگاه</div>
-                        <input type="file" id="logoImage" name="logo_image" accept="image/*" hidden>
+                        <input type="file" id="logoImage" name="logo_image" accept="image/jpeg,image/png,image/webp" hidden>
                     </label>
                     <label class="upload-card image-upload-field" data-input="signatureImage" tabindex="0">
                         <div class="upload-preview"><img id="signaturePreview" src="" alt="پیش‌نمایش امضا" hidden></div>
                         <div class="upload-icon">🖼️</div>
                         <div class="upload-label">امضای فروشنده</div>
-                        <input type="file" id="signatureImage" name="signature_image" accept="image/*" hidden>
+                        <input type="file" id="signatureImage" name="signature_image" accept="image/jpeg,image/png,image/webp" hidden>
                     </label>
                     <label class="upload-card image-upload-field" data-input="stampImage" tabindex="0">
                         <div class="upload-preview"><img id="stampPreview" src="" alt="پیش‌نمایش مهر" hidden></div>
                         <div class="upload-icon">🖼️</div>
                         <div class="upload-label">مهر فروشنده</div>
-                        <input type="file" id="stampImage" name="stamp_image" accept="image/*" hidden>
+                        <input type="file" id="stampImage" name="stamp_image" accept="image/jpeg,image/png,image/webp" hidden>
                     </label>
                 </div>
                 <div class="form-row" style="margin-top: 18px; max-width: 240px;"><label for="defaultSize">اندازه پیش‌فرض مهر و امضاء (٪)</label><input type="number" id="defaultSize" name="default_size_percentage" min="1" max="300" value="80"></div>
@@ -61,6 +62,34 @@
                 <span class="settings-save-message" aria-live="polite"></span>
             </div>
         </form>
+        <section class="media-settings-section" aria-labelledby="mediaSettingsTitle">
+            <h2 id="mediaSettingsTitle">تنظیمات نمایش تصاویر محصولات</h2>
+            <p class="setting-note">نمایش در محیط حسابداری و چاپ PDF کاملاً مستقل است. تصاویر چاپ به‌صورت پیش‌فرض غیرفعال‌اند تا قالب چاپ قبلی تغییر نکند.</p>
+            <form id="mediaSettingsForm">
+                <h3>نمایش تصاویر در محیط مدیریت</h3>
+                <div class="media-settings-grid">
+                    <label><input type="checkbox" data-media-setting="products_list"><span>نمایش تصویر در جدول کالاها و خدمات</span></label>
+                    <label><input type="checkbox" data-media-setting="sales_ui"><span>تصویر در انتخاب و اقلام فاکتور و پیش‌فاکتور فروش</span></label>
+                    <label><input type="checkbox" data-media-setting="purchase_ui"><span>تصویر در انتخاب و اقلام فاکتور و پیش‌فاکتور خرید</span></label>
+                    <label><input type="checkbox" data-media-setting="sales_returns_ui"><span>تصویر در اقلام برگشت از فروش</span></label>
+                    <label><input type="checkbox" data-media-setting="defective_ui"><span>تصویر هنگام انتخاب کالای معیوب</span></label>
+                    <label><input type="checkbox" data-media-setting="reports_ui"><span>تصویر در گزارش‌های منتخب انبار و فروش</span></label>
+                    <label><input type="checkbox" data-media-setting="category_images"><span>فعال‌سازی تصاویر دسته‌بندی‌ها</span></label>
+                </div>
+                <h3 style="margin-top:18px">نمایش تصاویر در چاپ PDF</h3>
+                <div class="media-settings-grid">
+                    <label><input type="checkbox" data-media-setting="pdf_sales"><span>تصاویر PDF فاکتور فروش</span></label>
+                    <label><input type="checkbox" data-media-setting="pdf_sales_proforma"><span>تصاویر PDF پیش‌فاکتور فروش</span></label>
+                    <label><input type="checkbox" data-media-setting="pdf_purchase"><span>تصاویر PDF فاکتور خرید</span></label>
+                    <label><input type="checkbox" data-media-setting="pdf_purchase_proforma"><span>تصاویر PDF پیش‌فاکتور خرید</span></label>
+                    <label><input type="checkbox" data-media-setting="pdf_sales_return"><span>تصاویر PDF برگشت از فروش</span></label>
+                </div>
+                <div class="form-actions" style="margin-top:16px">
+                    <button class="button" type="submit" id="mediaSettingsSave">ذخیره تنظیمات تصاویر</button>
+                    <span id="mediaSettingsMessage" role="status" aria-live="polite"></span>
+                </div>
+            </form>
+        </section>
         <section class="brand-settings-section" aria-labelledby="brandSettingsTitle">
             <div class="brand-settings-heading">
                 <div>
@@ -198,10 +227,18 @@
                 <button class="button-secondary" type="button" id="saveBackupDir">ذخیره آدرس</button>
                 <button class="button" type="button" id="createBackup">تهیه نسخه پشتیبان</button>
                 <button class="button-secondary" type="button" id="createFilesBackup">🗂️ تهیه نسخه پشتیبان از تمام فایل‌ها</button>
+                <button class="button" type="button" id="createFullBackup">پشتیبان کامل حسابداری و تصاویر (ZIP)</button>
                 <span class="backup-message" aria-live="polite"></span>
             </div>
         </div>
 
+        <div class="card panel" style="margin-top:14px">
+          <h3>بازیابی کامل دیتابیس و کتابخانه تصاویر</h3>
+          <p class="setting-note">فقط فایل ZIP تولیدشده توسط پشتیبان کامل سیستم؛ پیش از جایگزینی داده‌ها، اعتبارسنجی فایل‌ها انجام می‌شود.</p>
+          <input type="file" accept=".zip,application/zip" id="restoreFullFile">
+          <button type="button" class="button" id="restoreFullBackup">بازیابی پشتیبان کامل</button>
+          <span id="restoreFullMessage" role="status" aria-live="polite"></span>
+        </div>
         <h2 style="margin-top: 28px;">بازیابی نسخه پشتیبان</h2>
         <div class="card panel" style="margin-top: 12px;">
             <div class="form-row">

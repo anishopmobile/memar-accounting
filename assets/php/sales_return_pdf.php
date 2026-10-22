@@ -53,6 +53,7 @@ $view = [
     'ret' => $data['ret'],
     'invoice' => $data['ret'],
     'items' => $data['items'],
+    'media_enabled' => $data['media_enabled'] ?? false,
     'customer' => $data['customer'],
     'store' => $data['store'],
     'settings' => $data['settings'],

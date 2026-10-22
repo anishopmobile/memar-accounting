@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../assets/php/product_common.php';
+require_once __DIR__ . '/../assets/php/media_common.php';
 
 $rows = [];
 $result = $mysqli->query("
@@ -21,6 +22,8 @@ if ($result) {
     }
     $result->free();
 }
+$showReportImages = (int)(media_settings($mysqli)['reports_ui'] ?? 0) === 1;
+$reportImageMap = $showReportImages ? media_primary_map($mysqli, array_column($rows,'id')) : [];
 ?>
 <div class="card">
     <div class="page-actions">
@@ -43,6 +46,7 @@ if ($result) {
         <table class="action-table" id="inventoryReportTable">
             <thead>
                 <tr>
+                    <?php if ($showReportImages): ?><th>تصویر</th><?php endif; ?>
                     <th><button type="button" class="th-sort" data-sort="name">نام کالا</button></th>
                     <th><button type="button" class="th-sort" data-sort="category">نام دسته‌بندی</button></th>
                     <th><button type="button" class="th-sort" data-sort="type">نوع</button></th>
@@ -54,7 +58,7 @@ if ($result) {
             </thead>
             <tbody>
                 <?php if (count($rows) === 0): ?>
-                    <tr class="empty-state-row"><td colspan="7" class="empty-state">کالایی یافت نشد</td></tr>
+                    <tr class="empty-state-row"><td colspan="<?php echo $showReportImages ? 8 : 7; ?>" class="empty-state">کالایی یافت نشد</td></tr>
                 <?php else: ?>
                     <?php foreach ($rows as $r): ?>
                         <?php $cat = $r['category_name'] !== null ? $r['category_name'] : '-'; ?>
@@ -69,6 +73,12 @@ if ($result) {
                             data-purchase-price="<?php echo htmlspecialchars($r['purchase_price'], ENT_QUOTES, 'UTF-8'); ?>"
                             data-sale-price="<?php echo htmlspecialchars($r['sale_price'], ENT_QUOTES, 'UTF-8'); ?>"
                             data-stock="<?php echo htmlspecialchars($r['unit_stock'], ENT_QUOTES, 'UTF-8'); ?>">
+                            <?php if ($showReportImages):
+                                $mediaId = (int)($reportImageMap[(int)$r['id']]['id'] ?? 0);
+                                $src = $mediaId ? media_image_url($mediaId) : media_default_url();
+                            ?>
+                            <td class="product-thumb-cell"><img class="media-thumb" width="40" height="40" loading="lazy" decoding="async" data-id="<?php echo $mediaId; ?>" data-product-id="<?php echo (int)$r['id']; ?>" src="<?php echo htmlspecialchars($src, ENT_QUOTES, 'UTF-8'); ?>" alt=""></td>
+                            <?php endif; ?>
                             <td><?php echo htmlspecialchars($r['name'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars($cat, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo $r['type'] === 'service' ? 'خدمت' : 'محصول'; ?></td>

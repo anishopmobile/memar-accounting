@@ -1,5 +1,6 @@
 <?php
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/boot.php';
+require_once __DIR__ . '/media_common.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -70,8 +71,10 @@ $result = $stmt->get_result();
 $tableBody = '';
 
 if ($result && $result->num_rows > 0) {
-
-    while ($row = $result->fetch_assoc()) {
+    $reportRows = $result->fetch_all(MYSQLI_ASSOC);
+    $showImages = (int)(media_settings($mysqli)['reports_ui'] ?? 0) === 1;
+    $imageMap = $showImages ? media_primary_map($mysqli, array_column($reportRows,'id')) : [];
+    foreach ($reportRows as $row) {
 
         $name = htmlspecialchars(
             (string) ($row['name'] ?? ''),
@@ -92,7 +95,11 @@ if ($result && $result->num_rows > 0) {
         );
 
         $tableBody .= '<tr>';
-        $tableBody .= '<td>' . $name . '</td>';
+        $mediaId = (int)($imageMap[(int)$row['id']]['id'] ?? 0);
+        $mediaUrl = $mediaId ? media_image_url($mediaId) : media_default_url();
+        $mediaHtml = $showImages ? '<img class="media-thumb" width="36" height="36" loading="lazy" decoding="async" data-id="' . $mediaId . '" data-product-id="' . (int)$row['id'] . '" alt="" style="vertical-align:middle;margin-left:6px" src="' .
+            htmlspecialchars($mediaUrl, ENT_QUOTES, 'UTF-8') . '">' : '';
+        $tableBody .= '<td>' . $mediaHtml . $name . '</td>';
         $tableBody .= '<td>' . $stock . ' ' . $unit . '</td>';
         $tableBody .= '</tr>';
     }

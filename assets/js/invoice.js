@@ -8,6 +8,14 @@ $(function () {
 
     var csrf = String($('#invoiceCsrfToken').val() || '');
     var isSales = mode === 'sales';
+    var mediaImagesEnabled = false;
+    $.getJSON('assets/php/media_settings.php').done(function(res) {
+        if (res && res.success) {
+            var flags = (res.data && res.data.settings) || {};
+            mediaImagesEnabled = Number(flags[isSales ? 'sales_ui' : 'purchase_ui']) === 1;
+            $('#invItemsTable .inv-image-col, #invoiceProductTable .invoice-image-col, #invoiceServiceTable .invoice-image-col').toggle(mediaImagesEnabled);
+        }
+    });
     var partyLabel = isSales ? 'مشتری' : 'تامین‌کننده';
     var partyType = isSales ? 'customer' : 'supplier';
     var partyField = isSales ? 'customer_id' : 'supplier_id';
@@ -306,7 +314,7 @@ $(function () {
             + '<div class="products-section">'
             + '<div class="page-actions"><button type="button" class="button" id="invAddProduct">+ افزودن کالا</button>' + (isSales ? ' <button type="button" class="button-secondary" id="invAddService">+ افزودن خدمت</button>' : '') + '</div>'
             + '<div class="table-wrapper"><table class="action-table" id="invItemsTable">'
-            + '<thead><tr><th>کالا</th><th>واحد</th><th>قیمت واحد</th><th>تعداد</th><th>تخفیف</th><th>مبلغ ردیف</th><th></th></tr></thead>'
+            + '<thead><tr><th class="inv-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">تصویر</th><th>کالا</th><th>واحد</th><th>قیمت واحد</th><th>تعداد</th><th>تخفیف</th><th>مبلغ ردیف</th><th></th></tr></thead>'
             + '<tbody></tbody></table></div>'
             + '</div>'
             + '<div class="calculation-section form-grid">'
@@ -332,7 +340,7 @@ $(function () {
         if (data && data.payment_status) $('#invPaymentStatus').val(data.payment_status);
         if (data && data.items) {
             data.items.forEach(function (it) {
-                addItemRow(it.product_id, it.product_name, it.unit_price, it.quantity, it.discount, it.product_code, it.units || [], it.unit_id);
+                addItemRow(it.product_id, it.product_name, it.unit_price, it.quantity, it.discount, it.product_code, it.units || [], it.unit_id, it.media_id);
             });
         }
         recalcs();
@@ -358,7 +366,13 @@ $(function () {
         });
     }
 
-    function addItemRow(pid, name, price, qty, disc, pcode, units, selUnitId) {
+    function invoiceImageHtml(id, productId) {
+        if (id === undefined || id === null || id === '') return '';
+        var n = Number(id) || 0;
+        var src = n ? 'assets/php/media_file.php?id=' + n + '&size=thumb' : 'assets/img/product-placeholder.svg';
+        return '<img loading="lazy" decoding="async" data-id="' + n + '" data-product-id="' + (Number(productId)||0) + '" class="media-thumb" width="40" height="40" src="' + src + '" alt="">';
+    }
+    function addItemRow(pid, name, price, qty, disc, pcode, units, selUnitId, mediaId) {
         units = units || [];
         var isEditPick = (selUnitId !== undefined && selUnitId !== null && selUnitId !== '');
         var opts = '';
@@ -372,6 +386,7 @@ $(function () {
             opts = '<option value="">' + esc('عدد') + '</option>';
         }
         var tr = '<tr data-pid="' + escAttr(pid) + '">'
+            + '<td class="inv-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(mediaId,pid) + '</td>'
             + '<td>' + esc((pcode ? pcode + ' — ' : '') + (name || '')) + '</td>'
             + '<td><select class="ii-unit">' + opts + '</select></td>'
             + '<td><input type="number" class="ii-price" min="0" step="1" value="' + escAttr(showBase(price)) + '"></td>'
@@ -445,7 +460,7 @@ $(function () {
 
     // ---------- مودال انتخاب کالا ----------
     var pickedScheduled = true;
-    var productSearchTimer = null;
+    var productSearchTimer = null, productRequest = null, productRequestSeq = 0;
     function openProductModal() {
         $('#invoiceProductTable tbody').html('<tr><td colspan="7" class="empty-state">در حال بارگذاری...</td></tr>');
         loadProducts('');
@@ -453,16 +468,20 @@ $(function () {
         $('#invoiceProductSearch').val('').focus();
     }
     function loadProducts(q) {
-        var url = 'assets/php/invoice_products.php?search=' + encodeURIComponent(q || '');
+        var url = 'assets/php/invoice_products.php?media_section=' + (isSales ? 'sales' : 'purchase') + '&search=' + encodeURIComponent(q || '');
         if (isSales) {
             url += '&in_stock=1'; // فاکتور فروش: فقط کالاهای «محصول» با موجودی فعلی > 0 (+ بسته‌های دارای موجودی مشتق‌شده)
         } else {
             url += '&exclude_bundles=1'; // فاکتور خرید: بسته (کالای مجازی فروش) در انتخاب کالا نمایش داده نمی‌شود
         }
-        $.getJSON(url).done(function (res) {
+        if (productRequest && productRequest.readyState !== 4) productRequest.abort();
+        var requestId = ++productRequestSeq;
+        productRequest = $.getJSON(url).done(function (res) {
+            if (requestId !== productRequestSeq) return;
             var rows = res.data || [];
+            $('#invoiceProductTable .invoice-image-col').toggle(mediaImagesEnabled);
             var html = '';
-            if (!rows.length) html = '<tr><td colspan="7" class="empty-state">کالایی یافت نشد.</td></tr>';
+            if (!rows.length) html = '<tr><td colspan="8" class="empty-state">کالایی یافت نشد.</td></tr>';
             rows.forEach(function (p) {
                 var units = p.units || [];
                 var price = (units.length)
@@ -470,17 +489,20 @@ $(function () {
                     : (p[priceKey] || 0);
                 var unitsJson = JSON.stringify(units);
                 html += '<tr>'
+                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id,p.id) + '</td>'
                     + '<td>' + esc(p.code) + '</td>'
                     + '<td>' + esc(p.barcode) + '</td>'
                     + '<td>' + esc(p.name) + '</td>'
                     + '<td>' + esc(p.unit) + '</td>'
                     + '<td>' + window.Currency.formatNumber(price) + '</td>'
                     + '<td>' + splitNum(Number(p.stock).toString()) + '</td>'
-                    + '<td><button type="button" class="button-secondary small product-pick" data-id="' + escAttr(p.id) + '" data-code="' + escAttr(p.code) + '" data-barcode="' + escAttr(p.barcode) + '" data-name="' + escAttr(p.name) + '" data-price="' + escAttr(price) + '" data-unit="' + escAttr(p.unit) + '" data-units="' + escAttr(unitsJson) + '">انتخاب</button></td>'
+                    + '<td><button type="button" class="button-secondary small product-pick" data-id="' + escAttr(p.id) + '" data-code="' + escAttr(p.code) + '" data-barcode="' + escAttr(p.barcode) + '" data-name="' + escAttr(p.name) + '" data-media-id="' + escAttr(p.media_id === undefined ? '' : p.media_id) + '" data-price="' + escAttr(price) + '" data-unit="' + escAttr(p.unit) + '" data-units="' + escAttr(unitsJson) + '">انتخاب</button></td>'
                     + '</tr>';
             });
             $('#invoiceProductTable tbody').html(html);
-        }).fail(function () { $('#invoiceProductTable tbody').html('<tr><td colspan="7" class="empty-state">خطا در جستجوی کالا.</td></tr>'); });
+        }).fail(function (xhr, status) {
+            if (status !== 'abort' && requestId === productRequestSeq) $('#invoiceProductTable tbody').html('<tr><td colspan="8" class="empty-state">خطا در جستجوی کالا.</td></tr>');
+        });
     }
     // Debounce برای جلوگیری از ارسال درخواست برای تک‌تک کاراکترهای بارکدخوان (HID/USB)
     $(document).on('input', '#invoiceProductSearch', function () {
@@ -527,7 +549,7 @@ $(function () {
 
         // If not found, add as new row
         if (!found) {
-            addItemRow(p.id, p.name, p.price, 1, 0, p.code, units, firstId);
+            addItemRow(p.id, p.name, p.price, 1, 0, p.code, units, firstId, p.mediaId === '' ? undefined : p.mediaId);
         }
         // Modal stays open so user can add multiple products
 		const searchInput = document.getElementById('invoiceProductSearch');
@@ -539,18 +561,22 @@ $(function () {
     });
 
     // ---------- مودال انتخاب خدمت (فقط فاکتور فروش) ----------
-    var serviceSearchTimer = null;
+    var serviceSearchTimer = null, serviceRequest = null, serviceSequence = 0;
     function openServiceModal() {
-        $('#invoiceServiceTable tbody').html('<tr><td colspan="7" class="empty-state">در حال بارگذاری...</td></tr>');
+        $('#invoiceServiceTable tbody').html('<tr><td colspan="8" class="empty-state">در حال بارگذاری...</td></tr>');
         loadServices('');
         openModal('invoiceServiceModal');
         $('#invoiceServiceSearch').val('').focus();
     }
     function loadServices(q) {
-        $.getJSON('assets/php/invoice_products.php?type=service&search=' + encodeURIComponent(q || '')).done(function (res) {
+        if (serviceRequest && serviceRequest.readyState !== 4) serviceRequest.abort();
+        var seq = ++serviceSequence;
+        serviceRequest = $.getJSON('assets/php/invoice_products.php?media_section=sales&type=service&search=' + encodeURIComponent(q || '')).done(function (res) {
+            if (seq !== serviceSequence) return;
             var rows = res.data || [];
+            $('#invoiceServiceTable .invoice-image-col').toggle(mediaImagesEnabled);
             var html = '';
-            if (!rows.length) html = '<tr><td colspan="7" class="empty-state">خدمتی یافت نشد.</td></tr>';
+            if (!rows.length) html = '<tr><td colspan="8" class="empty-state">خدمتی یافت نشد.</td></tr>';
             rows.forEach(function (p) {
                 var units = p.units || [];
                 var price = (units.length)
@@ -558,17 +584,20 @@ $(function () {
                     : (p[priceKey] || 0);
                 var unitsJson = JSON.stringify(units);
                 html += '<tr>'
+                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id,p.id) + '</td>'
                     + '<td>' + esc(p.code) + '</td>'
                     + '<td>' + esc(p.barcode) + '</td>'
                     + '<td>' + esc(p.name) + '</td>'
                     + '<td>' + esc(p.unit) + '</td>'
                     + '<td>' + window.Currency.formatNumber(price) + '</td>'
                     + '<td>' + splitNum(Number(p.stock).toString()) + '</td>'
-                    + '<td><button type="button" class="button-secondary small service-pick" data-id="' + escAttr(p.id) + '" data-code="' + escAttr(p.code) + '" data-barcode="' + escAttr(p.barcode) + '" data-name="' + escAttr(p.name) + '" data-price="' + escAttr(price) + '" data-unit="' + escAttr(p.unit) + '" data-units="' + escAttr(unitsJson) + '">انتخاب</button></td>'
+                    + '<td><button type="button" class="button-secondary small service-pick" data-id="' + escAttr(p.id) + '" data-code="' + escAttr(p.code) + '" data-barcode="' + escAttr(p.barcode) + '" data-name="' + escAttr(p.name) + '" data-media-id="' + escAttr(p.media_id === undefined ? '' : p.media_id) + '" data-price="' + escAttr(price) + '" data-unit="' + escAttr(p.unit) + '" data-units="' + escAttr(unitsJson) + '">انتخاب</button></td>'
                     + '</tr>';
             });
             $('#invoiceServiceTable tbody').html(html);
-        }).fail(function () { $('#invoiceServiceTable tbody').html('<tr><td colspan="7" class="empty-state">خطا در جستجوی خدمت.</td></tr>'); });
+        }).fail(function (xhr,status) {
+            if (status !== 'abort' && seq === serviceSequence) $('#invoiceServiceTable tbody').html('<tr><td colspan="8" class="empty-state">خطا در جستجوی خدمت.</td></tr>');
+        });
     }
     // Debounce برای جلوگیری از ارسال درخواست برای تک‌تک کاراکترهای بارکدخوان (HID/USB)
     $(document).on('input', '#invoiceServiceSearch', function () {
@@ -614,7 +643,7 @@ $(function () {
 
         // اگر ردیف مشابه وجود نداشت، ردیف جدید اضافه می‌شود
         if (!found) {
-            addItemRow(p.id, p.name, p.price, 1, 0, p.code, units, firstId);
+            addItemRow(p.id, p.name, p.price, 1, 0, p.code, units, firstId, p.mediaId === '' ? undefined : p.mediaId);
         }
         // مودال باز می‌ماند تا کاربر بتواند چند خدمت اضافه کند
     });

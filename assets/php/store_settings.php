@@ -1,5 +1,6 @@
 <?php
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/boot.php';
+require_once __DIR__ . '/safe_store_image.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -26,6 +27,9 @@ if ($settingsResult) {
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     respond(true, '', ['settings' => $currentSettings ?: []]);
 }
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') respond(false, 'روش درخواست معتبر نیست.');
+require_csrf_or_fail();
 
 $store_name = trim($_POST['store_name'] ?? '');
 $economic_code = trim($_POST['economic_code'] ?? '');
@@ -56,41 +60,33 @@ $province_id = $province_id === '' ? null : (int)$province_id;
 $city_id = $city_id === '' ? null : (int)$city_id;
 $default_size_percentage = $default_size_percentage === '' ? null : (int)$default_size_percentage;
 
-$uploadBaseDir = realpath(__DIR__ . '/..') . '/uploads';
-if (!is_dir($uploadBaseDir)) {
-    mkdir($uploadBaseDir, 0755, true);
-}
-
-function handleUpload($fieldName, $existingPath)
+$newStoreImageFiles = [];
+function handleUpload(string $fieldName, ?string $existingPath): ?string
 {
-    global $uploadBaseDir;
-    if (empty($_FILES[$fieldName]) || $_FILES[$fieldName]['error'] !== UPLOAD_ERR_OK) {
+    global $newStoreImageFiles;
+    if (!isset($_FILES[$fieldName])
+        || (int)($_FILES[$fieldName]['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
         return $existingPath;
     }
-    $file = $_FILES[$fieldName];
-    $validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!in_array($file['type'], $validTypes, true)) {
-        return $existingPath;
-    }
-    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    if (!in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
-        return $existingPath;
-    }
-    $fileName = sprintf('%s_%s.%s', $fieldName, time(), $extension);
-    $targetPath = $uploadBaseDir . '/' . $fileName;
-    if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
-        return $existingPath;
-    }
-    return 'assets/uploads/' . $fileName;
+    $file = store_image_save($_FILES[$fieldName], $fieldName, 5 * 1024 * 1024);
+    $newStoreImageFiles[] = $file['absolute'];
+    return $file['path'];
 }
 
 $logo_path = $currentSettings['logo_path'] ?? null;
 $signature_path = $currentSettings['signature_path'] ?? null;
 $stamp_path = $currentSettings['stamp_path'] ?? null;
 
-$logo_path = handleUpload('logo_image', $logo_path);
-$signature_path = handleUpload('signature_image', $signature_path);
-$stamp_path = handleUpload('stamp_image', $stamp_path);
+try {
+    $logo_path = handleUpload('logo_image', $logo_path);
+    $signature_path = handleUpload('signature_image', $signature_path);
+    $stamp_path = handleUpload('stamp_image', $stamp_path);
+} catch (Throwable $e) {
+    foreach ($newStoreImageFiles as $created) @unlink($created);
+    if (!($e instanceof InvalidArgumentException)) error_log('store image upload: ' . $e->getMessage());
+    respond(false, $e instanceof InvalidArgumentException
+        ? $e->getMessage() : 'ذخیره تصویر فروشگاه امکان‌پذیر نیست.');
+}
 
 if ($currentSettings) {
     $stmt = $mysqli->prepare('UPDATE store_settings SET store_name = ?, economic_code = ?, national_code = ?, registration_number = ?, province_id = ?, city_id = ?, postal_code = ?, phone = ?, address = ?, logo_path = ?, signature_path = ?, stamp_path = ?, default_size_percentage = ? WHERE id = 1');
