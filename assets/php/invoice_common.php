@@ -1250,6 +1250,11 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         $stmtAcct->execute();
         $acctRow = $stmtAcct->get_result()->fetch_assoc();
         $stmtAcct->close();
+        $sourceRef=$mysqli->prepare('SELECT 1 FROM account_payments WHERE source_proforma_id=? LIMIT 1');
+        $sourceRef->bind_param('i',$invoiceId);$sourceRef->execute();$sourceRef->store_result();
+        $hasPrepaymentSource=$sourceRef->num_rows>0;$sourceRef->close();
+        if ($hasPrepaymentSource && (($old['customer_id'] ?? null) != $customerId || ($old['supplier_id'] ?? null) != $supplierId))
+            throw new Exception('طرف حساب پیش‌فاکتور دارای پیش‌پرداخت قابل تغییر نیست.');
         $allocated = (string) ($acctRow['s'] ?? '0');
         $stmtAcct=$mysqli->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_return_allocations WHERE invoice_id=?');
         $stmtAcct->bind_param('i',$invoiceId);$stmtAcct->execute();
@@ -1349,6 +1354,14 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
     }
     $allPids = array_map('intval', array_column($oldItems, 'product_id'));
     $deleteKindMap = bundleKindMap($mysqli, $allPids);
+
+    $hasSourceStmt=$mysqli->prepare('SELECT 1 FROM account_payments WHERE source_proforma_id=? LIMIT 1');
+    $hasSourceStmt->bind_param('i',$invoiceId);$hasSourceStmt->execute();$hasSourceStmt->store_result();
+    $hasSourcePayments=$hasSourceStmt->num_rows>0;$hasSourceStmt->close();
+    if($hasSourcePayments) {
+        $mysqli->rollback();
+        return ['ok'=>false,'message'=>'پیش‌فاکتور دارای پیش‌دریافت یا پیش‌پرداخت مستند قابل حذف نیست؛ ابتدا اسناد مالی را تعیین تکلیف کنید.'];
+    }
 
     /* ترکیب تاریخی بسته‌ها (هرگز از ترکیب فعلی برای معکوس‌سازی استفاده نمی‌کنیم) */
     $oldItemsAttached = bundleAttachSnapshots($mysqli, $oldItems, $deleteKindMap);
