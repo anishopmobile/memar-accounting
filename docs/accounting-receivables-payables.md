@@ -17,12 +17,14 @@ Invoices are sales/purchase documents; actual receipt/payment is an independent,
 
 ## Data model
 
-* `account_payments` — amount, direction, cash/POS/bank method and account, party, date, reference, idempotency hash, reversal link.
-* `account_payment_allocations` — amount linked to a final invoice, with an auditable reversal flag.
+* `account_payments` — amount, direction, cash/POS/bank method and account, party, date, linked originating proforma (where applicable), idempotency hash, reversal link and operator ID.
+* `account_payment_batches` — one atomic, idempotent posting for mixed cash/POS/transfer methods. Its child payments and allocations either all commit or all roll back.
+* `account_payment_allocations` — amount linked to a final invoice, with auditable reversal flag. Allocation rows are append-only to preserve reversed history.
 * `account_return_allocations` — explicit assignment of verified sales-return credit.
-* `account_opening_balances` — one opening balance per party, with an explanation; positive debt / negative credit.
+* `account_opening_balances` — one opening balance per party, with an explanation and author; positive debt / negative credit.
+* `account_legacy_reconciliations` — one-time old partial invoice settlement correction, with reason, original status, author and timestamp.
 * `accounting_cash_accounts` — named active cash register, POS, or bank account.
-* `accounting_migrations` — idempotent migration registry.
+* `accounting_migrations` — idempotent migration registry. A MySQL advisory lock serializes schema upgrades; subsequent requests use a fast revision check.
 * `invoices.legacy_paid_amount` — **historical non-cash snapshot**, initialized once.
 
 ## Legacy migration
@@ -31,15 +33,15 @@ Do a production backup and take a restore checkpoint **before** loading the feat
 
 Migration runs once and does not alter existing stock quantities, unit prices, invoice totals or the unrelated online payment module.
 
-After deployment, locate every invoice flagged «تطبیق پرداخت تاریخی». Reconcile only based on documented received/sent amounts; do not enter an estimate merely to clear the warning. Opening balances represent external pre-system liabilities/credits, never duplicated debts already represented by migrated invoices.
+After deployment, locate every invoice flagged «تطبیق پرداخت تاریخی». Reconcile only based on documented received/sent amounts and a mandatory source/reason; the operator and date are audited. Do not enter an estimate merely to clear the warning. Opening balances represent external pre-system liabilities/credits, never duplicated debts already represented by migrated invoices.
 
 ## Operational workflow
 
-1. Create a final invoice or proforma. After saving, the financial dialog opens. Enter **actual** paid amount (not full invoice value by default), date, method, and cash/POS/bank account.
-2. The selected final invoice is automatically assigned up to its remaining value. Staff may manually spread a larger payment across earlier invoices in the same statement. Excess money becomes visible account credit.
+1. Create a final invoice or proforma. After saving, the financial dialog opens. Enter **actual** paid amount (not full invoice value by default), date, method, and cash/POS/bank account. The financial dialog is a separate confirmation step, so do not assume an invoice save also saves a payment.
+2. The selected final invoice is automatically assigned up to its remaining value. Staff may add up to 12 cash/POS/bank rows to one **atomic** receipt/remittance and manually distribute the summed amount across earlier invoices. Excess money becomes visible account credit.
 3. On later installments, open «دریافت/پرداخت و صورت‌حساب» from the invoice. New payments append history and update statuses atomically.
 4. When an existing payment has unused credit, use «تخصیص اعتبار» to clear a later invoice. Customer return credits have their own explicitly separate allocation action.
-5. From Customers/Suppliers, open «صورت حساب / دریافت و پرداخت». A documented opening balance may be entered **once**. A credit refund is limited to a verified credit amount.
+5. From Customers/Suppliers, open «صورت حساب / دریافت و پرداخت» to view the chronological running balance and export it to currency-aware Excel. A documented opening balance may be entered **once**. A credit refund is limited to a verified credit amount.
 6. To correct an erroneous entry, use «ثبت سند اصلاحی» with a reason. Original and reversing rows both remain visible.
 7. Payments must never be recorded through the online gateway module as though they had been received by this ledger; the modules are intentionally separate.
 
@@ -67,6 +69,6 @@ After deployment, locate every invoice flagged «تطبیق پرداخت تار�
 
 ## Automated testing and review
 
-Run GitHub Actions `Accounting Ledger CI` on the feature branch. It covers PHP and JavaScript syntax, isolated MySQL settlement/return/credit/refund/reversal tests, existing invoice and stock regressions, auth/CSRF smoke tests, and desktop/mobile RTL browser regressions.
+Run GitHub Actions `Accounting Ledger CI` on the feature branch. It covers PHP and JavaScript syntax, isolated MySQL settlement/return/credit/refund/reversal/atomic mixed-payment tests, existing invoice and stock regressions, auth/CSRF smoke tests, desktop/mobile RTL browser regressions, and an actual Playwright customer/supplier settlement journey.
 
 Do not merge to `main` before a copy of production-like data is backed up, historical partials are reconciled as needed, CI passes for the final SHA, and the shop owner completes manual acceptance. Production payment gateway files are not part of this feature.
