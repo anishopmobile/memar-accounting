@@ -159,6 +159,7 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
     $stmt=$db->prepare('SELECT amount FROM account_opening_balances WHERE party_kind=? AND party_id=?');
     $stmt->bind_param('si',$kind,$partyId);$stmt->execute();$res=$stmt->get_result();$row=$res?$res->fetch_assoc():null;$stmt->close();
     $opening=$row['amount']??'0';
+    $hasOpening=$row!==null;
     $returnCredits='0';$returns=[];
     if ($kind==='customer') {
         $stmt=$db->prepare('SELECT r.id,r.return_number,r.return_date,r.payable_amount,
@@ -175,7 +176,7 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
         $stmt->close();
     }
     $balance=money_sub(money_add($total,$opening),money_add($unallocated,$returnCredits));
-    return ['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'has_opening_balance'=>$row!==null,'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'return_credit'=>$returnCredits,'returns'=>$returns,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
+    return ['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'has_opening_balance'=>$hasOpening,'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'return_credit'=>$returnCredits,'returns'=>$returns,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
 }
 
 /** Apply existing unallocated credit to one final invoice. */
