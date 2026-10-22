@@ -34,12 +34,17 @@ function migrate_accounting_ledger(mysqli $db): void
         payment_id BIGINT UNSIGNED NOT NULL,
         invoice_id INT NOT NULL,
         amount DECIMAL(14,2) NOT NULL,
+        reversed_at DATETIME NULL,
         UNIQUE KEY uq_apa_pair(payment_id,invoice_id),
         KEY idx_apa_invoice(invoice_id),
         CONSTRAINT fk_apa_payment FOREIGN KEY(payment_id) REFERENCES account_payments(id) ON DELETE RESTRICT,
         CONSTRAINT fk_apa_invoice FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
         CONSTRAINT chk_apa_amount CHECK (amount > 0)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $allocationCol=$db->query("SHOW COLUMNS FROM account_payment_allocations LIKE 'reversed_at'");
+    if ($allocationCol && $allocationCol->num_rows===0) {
+        $db->query("ALTER TABLE account_payment_allocations ADD COLUMN reversed_at DATETIME NULL");
+    }
     $db->query("CREATE TABLE IF NOT EXISTS account_opening_balances (
         party_kind ENUM('customer','supplier') NOT NULL,
         party_id INT NOT NULL,
