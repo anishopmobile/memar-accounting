@@ -47,6 +47,11 @@ try {
     unset($item);
     $documentDiscount = trim((string) ($_POST['discount'] ?? '0'));
     $documentDiscount = parseMoneyInput($documentDiscount === '' ? '0' : $documentDiscount);
+    $initialPayment = parseMoneyInput(trim((string)($_POST['initial_payment'] ?? '0')) ?: '0');
+    if (bccomp($initialPayment, '0', 2) < 0) throw new InvalidArgumentException('مبلغ پرداخت نمی‌تواند منفی باشد.');
+    if ($invoiceId !== '' && bccomp($initialPayment, '0', 2) !== 0) {
+        throw new InvalidArgumentException('برای دریافت یا پرداخت بعدی از ثبت تراکنش مستقل استفاده کنید.');
+    }
 } catch (InvalidArgumentException $e) {
     respond_error($e->getMessage(), 422);
 }
@@ -56,9 +61,10 @@ $in = [
     'type'           => $type,
     'party_id'       => (int) ($_POST[$partyField] ?? 0),
     'payment_type'   => trim((string) ($_POST['payment_type'] ?? 'pos')),
-    'payment_status' => trim((string) ($_POST['payment_status'] ?? 'unpaid')),
+    'payment_status' => 'unpaid', // Derived from allocations by accounting/ledger.php.
     'invoice_date'   => trim((string) ($_POST['invoice_date'] ?? '')),
     'discount'       => $documentDiscount,
+    'initial_payment' => $initialPayment,
     'note'           => trim((string) ($_POST['note'] ?? '')),
     'client_token'   => trim((string) ($_POST['client_token'] ?? '')),
     'tax_rate'       => isset($_POST['tax_rate']) ? trim((string) $_POST['tax_rate']) : null,
