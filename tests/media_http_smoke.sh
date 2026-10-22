@@ -190,5 +190,5 @@ curl -sS -b "$tmp/cookies" -o "$tmp/second-full-backup.json" \
 second_archive="$(php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"]))exit(1);echo $j["data"]["path"];' "$tmp/second-full-backup.json")"
 curl -sS -b "$tmp/cookies" -o "$tmp/second-full-restore.json" \
   -F action=restore_full -F "csrf_token=$token" -F "backup_file=@$second_archive" "$base/assets/php/db_backup.php"
-php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||(int)($j["data"]["new_media_files"]??-1)!==0) {fwrite(STDERR,json_encode($j).PHP_EOL);exit(1);}' "$tmp/second-full-restore.json"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||(int)($j["data"]["new_media_files"]??-1)!==0||empty($j["data"]["sql_skipped_identical"])) {fwrite(STDERR,json_encode($j).PHP_EOL);exit(1);}' "$tmp/second-full-restore.json"
 echo 'PASS repeat restoration without re-extracting identical media'
