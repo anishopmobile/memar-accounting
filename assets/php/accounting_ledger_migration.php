@@ -33,6 +33,7 @@ function migrate_accounting_ledger(mysqli $db): void
         reference_no VARCHAR(120) NULL,
         note TEXT NULL,
         client_token VARCHAR(64) NOT NULL,
+        request_hash CHAR(64) NULL,
         cash_account_id INT NULL,
         reversed_payment_id BIGINT UNSIGNED NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -44,6 +45,9 @@ function migrate_accounting_ledger(mysqli $db): void
         CONSTRAINT chk_ap_amount CHECK (amount > 0),
         CONSTRAINT fk_ap_reversal FOREIGN KEY (reversed_payment_id) REFERENCES account_payments(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $requestHashCol=$db->query("SHOW COLUMNS FROM account_payments LIKE 'request_hash'");
+    if ($requestHashCol && $requestHashCol->num_rows===0)
+        $db->query("ALTER TABLE account_payments ADD COLUMN request_hash CHAR(64) NULL");
     $cashColumn=$db->query("SHOW COLUMNS FROM account_payments LIKE 'cash_account_id'");
     if ($cashColumn && $cashColumn->num_rows===0) {
         $db->query("ALTER TABLE account_payments ADD COLUMN cash_account_id INT NULL,
