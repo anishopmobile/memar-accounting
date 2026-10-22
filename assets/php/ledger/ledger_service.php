@@ -103,8 +103,8 @@ function ledger_record_payment(mysqli $db,array $in): array {
             if($bal['legacy_classification']==='requires_reconciliation')throw new DomainException('ابتدا پرداخت جزئی تاریخی فاکتور تعیین تکلیف شود.');
             if(money_cmp($value,$bal['due'])>0)throw new DomainException('مبلغ تخصیص از مانده فاکتور بیشتر است.');
         }
-        $note=trim((string)($in['note']??''));$note=mb_substr($note,0,3000);
-        $ref=trim((string)($in['reference_no']??''));$ref=mb_substr($ref,0,120);
+        $note=trim((string)($in['note']??''));$note=substr($note,0,3000);
+        $ref=trim((string)($in['reference_no']??''));$ref=substr($ref,0,120);
         $s=$db->prepare('INSERT INTO ledger_payments(party_kind,party_id,direction,amount,method,paid_on,reference_no,note,request_token) VALUES(?,?,?,?,?,?,?,?,?)');
         $s->bind_param('sisssssss',$kind,$pid,$direction,$amount,$method,$date,$ref,$note,$token);$s->execute();
         $paymentId=(int)$db->insert_id;$s->close();
