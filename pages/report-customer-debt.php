@@ -20,14 +20,23 @@ $query = "
 $result = $mysqli->query($query);
 if ($result) {
     while ($row = $result->fetch_assoc()) {
-        $ledger=acct_party_summary($mysqli,'customer',(int)$row['id']);
-        $row['debt']=$ledger['debt'];
-        $row['credit']=$ledger['credit'];
-        $row['pending_legacy']=$ledger['pending_legacy'];
+                
         $rows[] = $row;
     }
     $result->free();
 }
+
+// Resolve all party balances in one aggregate query, avoiding per-row SQL.
+$ledgerBalances = acct_party_summaries($mysqli, 'customer', array_column($rows, 'id'));
+foreach ($rows as &$entry) {
+    $ledger = $ledgerBalances[(int)$entry['id']] ?? ['debt'=>'0.00','credit'=>'0.00','pending_legacy'=>0,'invoiced'=>'0.00'];
+    $entry['debt'] = $ledger['debt'];
+    $entry['credit'] = $ledger['credit'];
+    $entry['pending_legacy'] = $ledger['pending_legacy'];
+    $entry['total_purchases'] = $ledger['invoiced'];
+}
+unset($entry);
+
 ?>
 <div class="card">
     <div class="page-actions">
