@@ -140,7 +140,7 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
         $stmt->bind_param('i',$partyId);$stmt->execute();$returnCredits=$stmt->get_result()->fetch_assoc()['s'];$stmt->close();
     }
     $balance=money_sub(money_add($total,$opening),money_add($unallocated,$returnCredits));
-    return ['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'return_credit'=>$returnCredits,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
+    return ['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'has_opening_balance'=>$row!==null,'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'return_credit'=>$returnCredits,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
 }
 
 /** Apply existing unallocated credit to one final invoice. */
