@@ -225,10 +225,10 @@ if (!array_key_exists($page, $pages)) {
                 <?php endforeach; ?>
             </nav>
             <?php $accountMenuActive = in_array($page, ['account', 'about-us'], true); ?>
-            <div class="nav-dropdown account-nav-dropdown<?php echo $accountMenuActive ? ' open' : ''; ?>">
+            <div class="nav-dropdown account-nav-dropdown">
                 <button type="button" class="user-chip nav-dropdown-toggle<?php echo $accountMenuActive ? ' active' : ''; ?>"
                     title="حساب کاربری" aria-label="منوی حساب کاربری"
-                    aria-expanded="<?php echo $accountMenuActive ? 'true' : 'false'; ?>"
+                    aria-expanded="false"
                     aria-haspopup="true" aria-controls="accountNavMenu">
                     <span class="user-chip-avatar" aria-hidden="true">
                         <?php if ($authAvatarPath !== ''): ?>
