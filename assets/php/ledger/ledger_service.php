@@ -192,7 +192,7 @@ function ledger_party_details(mysqli $db,string $kind,int $id): array {
            'total'=>$v['total'],'returned'=>$v['returned'],'effective_total'=>$v['effective_total'],'paid'=>$v['paid'],'due'=>$v['due'],'status'=>$v['status'],
            'legacy_classification'=>$v['legacy_classification']];
     }
-    $s=$db->prepare('SELECT p.id,p.direction,p.amount,p.method,p.paid_on,p.reference_no,p.note,p.voided_at, CASE WHEN p.direction=? THEN p.amount-COALESCE((SELECT SUM(a.amount) FROM ledger_allocations a WHERE a.payment_id=p.id),0)-COALESCE((SELECT SUM(a.amount) FROM ledger_credit_allocations a WHERE a.payment_id=p.id),0) ELSE 0 END AS unapplied FROM ledger_payments p WHERE p.party_kind=? AND p.party_id=? ORDER BY p.id DESC LIMIT 150');
+    $s=$db->prepare('SELECT p.id,p.direction,p.amount,p.method,p.paid_on,p.reference_no,p.note,p.voided_at,p.void_reason, CASE WHEN p.direction=? THEN p.amount-COALESCE((SELECT SUM(a.amount) FROM ledger_allocations a WHERE a.payment_id=p.id),0)-COALESCE((SELECT SUM(a.amount) FROM ledger_credit_allocations a WHERE a.payment_id=p.id),0) ELSE 0 END AS unapplied FROM ledger_payments p WHERE p.party_kind=? AND p.party_id=? ORDER BY p.id DESC LIMIT 150');
     $expected=$kind==='customer'?'receipt':'disbursement';
     $s->bind_param('ssi',$expected,$kind,$id);$s->execute();$payments=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
     $statement=ledger_party_statement($db,$kind,$id,$summary['balance']);
