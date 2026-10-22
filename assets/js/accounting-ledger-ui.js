@@ -7,7 +7,7 @@ $(function() {
   if (!isInvoicePage && !isPartyPage) return;
   var kind=(isInvoicePage ? $('#invoiceMode').val()==='sales' : $('body').is('#customers'))?'customer':'supplier';
   var csrf=window.APP_CSRF_TOKEN;
-  var partyId=0, selectedInvoice=0, statement=null, posting=false, paymentToken='';
+  var partyId=0, selectedInvoice=0, statement=null, posting=false, paymentToken='', cashAccounts=[];
   var html='<div class="modal" id="accountingModal"><div class="modal-backdrop" data-close="accountingModal"></div>'
     +'<div class="modal-content" style="max-width:900px;max-height:90vh;overflow:auto">'
     +'<div class="modal-header"><h2>دریافت‌ها، پرداخت‌ها و صورت‌حساب</h2><button type="button" class="modal-close" id="acctClose">×</button></div>'
@@ -44,6 +44,7 @@ $(function() {
     out+='</tbody></table></div>';
     out+='<div class="form-grid"><div class="form-row"><label>مبلغ کل دریافت/پرداخت ('+safe(window.Currency.label)+')</label><input id="acctAmount" type="number" min="0" step="0.01"></div>'
       +'<div class="form-row"><label>روش</label><select id="acctMethod"><option value="pos">کارت‌خوان</option><option value="cash">نقدی</option><option value="bank_transfer">انتقال بانکی</option></select></div>'
+      +'<div class="form-row"><label>صندوق / کارت‌خوان / حساب بانکی</label><select id="acctCashAccount"></select><button type="button" class="button-secondary small" id="acctCreateCashAccount">+ حساب جدید</button></div>'
       +'<div class="form-row"><label>تاریخ میلادی ثبت مالی</label><input id="acctDate" type="date"></div>'
       +'<div class="form-row"><label>شماره پیگیری (اختیاری)</label><input id="acctRef" maxlength="120"></div>'
       +'<div class="form-row"><label>توضیحات</label><input id="acctNote" maxlength="2000"></div></div>'
@@ -58,8 +59,21 @@ $(function() {
     out+='</tbody></table></div>';
     $('#acctContent').html(out);
     $('#acctDate').val(new Date().toLocaleDateString('en-CA'));
-    updateTotals();
+    loadCashAccounts();updateTotals();
   }
+  function loadCashAccounts(){
+    $.getJSON('assets/php/accounting_ledger_action.php',{action:'accounts'}).done(function(r){cashAccounts=(r.data&&r.data.accounts)||[];renderCashAccounts();}).fail(fail);
+  }
+  function renderCashAccounts(){
+    var method=$('#acctMethod').val();var options='';
+    cashAccounts.forEach(function(a){if(a.account_type===method)options+='<option value="'+Number(a.id)+'">'+safe(a.name)+'</option>';});
+    $('#acctCashAccount').html(options);
+  }
+  $(document).on('change','#acctMethod',renderCashAccounts);
+  $(document).on('click','#acctCreateCashAccount',function(){
+    var method=$('#acctMethod').val();var name=prompt('نام حساب جدید:');if(name===null)return;
+    $.post('assets/php/accounting_ledger_action.php',{action:'create_account',csrf_token:csrf,name:name,account_type:method}).done(loadCashAccounts).fail(fail);
+  });
   function updateTotals(){
     var sum=0, invalid=false;
     $('#acctContent .acctAlloc').each(function(){
@@ -83,7 +97,7 @@ $(function() {
     posting=true;updateTotals();
     $.post('assets/php/accounting_ledger_action.php',{
       action:'payment',csrf_token:csrf,party_kind:kind,party_id:partyId,direction:kind==='customer'?'in':'out',
-      amount:$('#acctAmount').val(),method:$('#acctMethod').val(),payment_date:$('#acctDate').val(),
+      amount:$('#acctAmount').val(),method:$('#acctMethod').val(),cash_account_id:$('#acctCashAccount').val(),payment_date:$('#acctDate').val(),
       reference_no:$('#acctRef').val(),note:$('#acctNote').val(),allocations:JSON.stringify(allocations),client_token:paymentToken
     }).done(function(){posting=false;selectedInvoice=0;paymentToken='acct_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);load();if(typeof window.refreshInvoiceAccountingList==='function')window.refreshInvoiceAccountingList();})
       .fail(function(e){posting=false;updateTotals();fail(e);});
