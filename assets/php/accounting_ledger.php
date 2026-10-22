@@ -123,9 +123,10 @@ function acct_record_payment(mysqli $db,array $input,bool $insideTransaction=fal
             if (money_cmp($value,$v['remaining'])>0) throw new InvalidArgumentException('تخصیص از مانده فاکتور بیشتر است.');
         }
         $batchToken=$input['batch_token']??null;
-        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token,cash_account_id,source_proforma_id,request_hash,batch_token) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)');
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token,cash_account_id,source_proforma_id,request_hash,batch_token,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
         $sourceDbId = $sourceId ?: null;
-        $stmt->bind_param('sisssssssiiss',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId,$sourceDbId,$requestHash,$batchToken);
+        $createdBy=function_exists('auth_user_id')?auth_user_id():null;
+        $stmt->bind_param('sisssssssiissi',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId,$sourceDbId,$requestHash,$batchToken,$createdBy);
         $stmt->execute();$paymentId=(int)$stmt->insert_id;$stmt->close();
         foreach ($alloc as $invoiceId=>$value) {
             $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount) VALUES(?,?,?)');
@@ -313,8 +314,9 @@ function acct_record_refund(mysqli $db,array $input): array {
         if (!$statement['balance_final'] || money_cmp($statement['balance'],'0')>=0
             || money_cmp($amount,money_abs($statement['balance']))>0)
             throw new InvalidArgumentException('استرداد فقط تا سقف اعتبار قطعی طرف حساب مجاز است.');
-        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,cash_account_id,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?)');
-        $stmt->bind_param('sissssssis',$kind,$partyId,$direction,$amount,$method,$date,$note,$token,$cashAccountId,$requestHash);
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,cash_account_id,request_hash,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
+        $createdBy=function_exists('auth_user_id')?auth_user_id():null;
+        $stmt->bind_param('sissssssisi',$kind,$partyId,$direction,$amount,$method,$date,$note,$token,$cashAccountId,$requestHash,$createdBy);
         $stmt->execute();$pid=(int)$stmt->insert_id;$stmt->close();
         $db->commit();
         return ['payment_id'=>$pid,'duplicate'=>false];
@@ -344,9 +346,10 @@ function acct_reverse_payment(mysqli $db,int $paymentId,string $reason,string $t
         foreach($invoiceIds as $invId)acct_invoice_outstanding($db,$invId,true);
         $direction=$p['direction']==='in'?'out':'in';
         $note="ابطال سند مالی #{$paymentId}: ".$reason;
-        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,reversed_payment_id,cash_account_id) VALUES(?,?,?,?,?,?,?,?,?,?)');
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,reversed_payment_id,cash_account_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
         $date=date('Y-m-d');
-        $stmt->bind_param('sissssssii',$p['party_kind'],$p['party_id'],$direction,$p['amount'],$p['method'],$date,$note,$token,$paymentId,$p['cash_account_id']);
+        $createdBy=function_exists('auth_user_id')?auth_user_id():null;
+        $stmt->bind_param('sissssssiii',$p['party_kind'],$p['party_id'],$direction,$p['amount'],$p['method'],$date,$note,$token,$paymentId,$p['cash_account_id'],$createdBy);
         $stmt->execute();$reverseId=(int)$stmt->insert_id;$stmt->close();
         $stmt=$db->prepare('UPDATE account_payment_allocations SET reversed_at=NOW() WHERE payment_id=? AND reversed_at IS NULL');
         $stmt->bind_param('i',$paymentId);$stmt->execute();$stmt->close();
@@ -377,8 +380,9 @@ function acct_allocate_return_credit(mysqli $db,int $returnId,int $invoiceId,$ra
         if(money_cmp($amount,money_sub($ret['payable_amount'],$used))>0 ||
            money_cmp($amount,$v['remaining'])>0)
             throw new InvalidArgumentException('مبلغ تخصیص از اعتبار برگشت یا مانده فاکتور بیشتر است.');
-        $stmt=$db->prepare('INSERT INTO account_return_allocations(return_id,invoice_id,amount) VALUES(?,?,?) ON DUPLICATE KEY UPDATE amount=amount+VALUES(amount)');
-        $stmt->bind_param('iis',$returnId,$invoiceId,$amount);$stmt->execute();$stmt->close();
+        $stmt=$db->prepare('INSERT INTO account_return_allocations(return_id,invoice_id,amount,created_by) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE amount=amount+VALUES(amount)');
+        $createdBy=function_exists('auth_user_id')?auth_user_id():null;
+        $stmt->bind_param('iisi',$returnId,$invoiceId,$amount,$createdBy);$stmt->execute();$stmt->close();
         acct_update_status($db,$invoiceId);
         $db->commit();
         return ['return_id'=>$returnId,'invoice_id'=>$invoiceId];
