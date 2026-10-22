@@ -29,6 +29,36 @@
       <p id="ledgerAllocationSummary" aria-live="polite"></p>
       <button type="submit" class="button" id="ledgerSubmit">ثبت نهایی تراکنش</button>
     </form>
+    <h3>تخصیص اعتبار واریز قبلی</h3>
+    <p class="setting-note">وقتی مبلغی قبلاً دریافت یا پرداخت شده و هنوز به فاکتوری تخصیص نیافته، می‌توان بدون جابجایی دوباره پول آن را به یکی از فاکتورها تخصیص داد.</p>
+    <form id="ledgerCreditForm">
+      <div class="form-grid">
+        <div class="form-row"><label>تراکنش دارای اعتبار</label><select required id="ledgerCreditPayment"></select></div>
+        <div class="form-row"><label>فاکتور تسویه‌نشده</label><select required id="ledgerCreditInvoice"></select></div>
+        <div class="form-row"><label>مبلغ تخصیص</label><input required id="ledgerCreditAmount" type="number" step="0.01" min="0.01"></div>
+      </div>
+      <button class="button-secondary" type="submit">اعمال اعتبار بدون واریز مجدد</button>
+    </form>
+    <h3>ثبت مانده افتتاحیه</h3>
+    <p class="setting-note">برای بدهی یا اعتبار مربوط به قبل از ثبت اطلاعات در نرم‌افزار است. مثبت یعنی بدهی طرف حساب / بدهی فروشگاه به تأمین‌کننده؛ منفی یعنی بستانکاری. فقط یک بار قابل ثبت است.</p>
+    <form id="ledgerOpeningForm">
+      <div class="form-grid">
+        <div class="form-row"><label>مانده اولیه (+ بدهی، − اعتبار)</label><input type="number" step="0.01" id="ledgerOpeningAmount" required></div>
+        <div class="form-row"><label>تاریخ میلادی</label><input type="date" id="ledgerOpeningDate" required></div>
+        <div class="form-row"><label>مستندات / علت</label><input type="text" id="ledgerOpeningNote" maxlength="2000" minlength="8" required></div>
+      </div>
+      <button class="button-secondary" type="submit">ثبت مانده افتتاحیه (غیرقابل تغییر)</button>
+    </form>
+    <h3>اصلاح پرداخت جزئی فاکتورهای تاریخی</h3>
+    <p class="setting-note">این اصلاح یک رویداد واقعی دریافت وجه نیست؛ صرفاً مقدار تسویه‌شده فاکتور قدیمی را مستند می‌کند.</p>
+    <form id="ledgerReconcileForm">
+      <div class="form-grid">
+        <div class="form-row"><label>فاکتور با مبلغ نامشخص</label><select required id="ledgerReconcileInvoice"></select></div>
+        <div class="form-row"><label>مبلغ پرداخت‌شده واقعی در گذشته</label><input type="number" step="0.01" min="0" id="ledgerReconcileAmount" required></div>
+        <div class="form-row"><label>سند و علت تعیین مبلغ تاریخی</label><input type="text" minlength="8" maxlength="2000" id="ledgerReconcileExplanation" required></div>
+      </div>
+      <button class="button-secondary" type="submit">ثبت اصلاح تاریخی یک‌باره</button>
+    </form>
     <h3>تاریخچه دریافت / پرداخت</h3>
     <div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>مبلغ</th><th>شماره پیگیری</th><th>توضیح</th></tr></thead><tbody id="ledgerPayments"></tbody></table></div>
   </div>
