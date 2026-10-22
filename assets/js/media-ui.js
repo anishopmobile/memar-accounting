@@ -348,31 +348,122 @@
         }
         renderEditor(name);
     });
-    $(document).on('click','.media-preview,.media-thumb',function () {
-        // Never confuse a parent product ID with the thumbnail's media ID.
+    // A product's image is a gallery, not just its primary thumbnail. Fetch
+    // at most the ten linked IDs; full-size originals load only on navigation.
+    var galleryOpen = null, galleryRequest = null;
+    function closeGallery() {
+        if (galleryRequest && galleryRequest.readyState !== 4) galleryRequest.abort();
+        galleryRequest = null;
+        if (!galleryOpen) return;
+        $(document).off('.mediaGallery');
+        galleryOpen.root.remove();
+        if (galleryOpen.focus && document.body.contains(galleryOpen.focus)) galleryOpen.focus.focus();
+        galleryOpen = null;
+    }
+    function gallerySelect(index) {
+        var g = galleryOpen;
+        if (!g || !g.items.length) return;
+        g.index = (index + g.items.length) % g.items.length;
+        var item = g.items[g.index], mid = Number(item.id);
+        g.root.find('.media-gallery-count').text((g.index + 1) + ' / ' + g.items.length);
+        g.root.find('.media-gallery-name').text(item.original_filename || '');
+        g.root.find('.media-gallery-prev,.media-gallery-next').toggle(g.items.length > 1);
+        var strip = '';
+        g.items.forEach(function(m, n) {
+            strip += '<button type="button" data-index="' + n + '" class="media-gallery-thumb'
+                + (n === g.index ? ' active' : '') + '" aria-label="تصویر ' + (n + 1)
+                + '" aria-pressed="' + (n === g.index ? 'true' : 'false') + '">'
+                + '<img loading="lazy" decoding="async" width="56" height="56" src="'
+                + escapeHtml(mediaUrl(m.id)) + '" alt=""></button>';
+        });
+        g.root.find('.media-gallery-strip').html(strip).toggle(g.items.length > 1);
+        var image = g.root.find('.media-gallery-image'), progress = g.root.find('.media-lightbox-status');
+        image.attr('src', mediaUrl(mid));
+        progress.text('در حال دریافت تصویر اصلی…').show();
+        var seq = ++g.seq;
+        var full = new Image();
+        full.onload = function() {
+            if (!galleryOpen || galleryOpen !== g || seq !== g.seq) return;
+            image.attr('src',full.src);
+            progress.hide();
+        };
+        full.onerror = function() {
+            if (!galleryOpen || galleryOpen !== g || seq !== g.seq) return;
+            progress.text('تصویر اصلی در دسترس نیست؛ تصویر کوچک نمایش داده می‌شود.');
+        };
+        full.src = mediaUrl(mid,'original');
+    }
+    function openGallery(clickedId, items, focus) {
+        closeGallery();
+        items = (items || []).filter(function(m){return Number(m.id)>0;});
+        if (!items.length) items = [{id:clickedId,original_filename:''}];
+        var overlay = $('<div class="media-lightbox media-gallery" role="dialog" aria-modal="true" aria-label="گالری تصاویر محصول" tabindex="-1">'
+            + '<button type="button" class="media-gallery-close" aria-label="بستن گالری">×</button>'
+            + '<div class="media-gallery-stage">'
+            + '<button type="button" class="media-gallery-prev" aria-label="تصویر قبلی">❮</button>'
+            + '<img class="media-gallery-image" alt="تصویر محصول">'
+            + '<button type="button" class="media-gallery-next" aria-label="تصویر بعدی">❯</button></div>'
+            + '<span class="media-lightbox-status" role="status"></span>'
+            + '<div class="media-gallery-footer"><span class="media-gallery-count"></span>'
+            + '<span class="media-gallery-name"></span>'
+            + '<div class="media-gallery-strip" role="group" aria-label="تصاویر دیگر"></div></div></div>');
+        $(document.body).append(overlay);
+        galleryOpen = {root:overlay,items:items,index:0,seq:0,focus:focus};
+        overlay.on('click','.media-gallery-close',closeGallery);
+        overlay.on('click','.media-gallery-prev',function(){gallerySelect(galleryOpen.index-1);});
+        overlay.on('click','.media-gallery-next',function(){gallerySelect(galleryOpen.index+1);});
+        overlay.on('click','.media-gallery-thumb',function(){gallerySelect(Number($(this).attr('data-index')));});
+        overlay.on('click',function(e){if(e.target===overlay[0])closeGallery();});
+        $(document).on('keydown.mediaGallery',function(e){
+            if (!galleryOpen) return;
+            if (e.key === 'Escape') {e.preventDefault();closeGallery();}
+            if (e.key === 'ArrowLeft') {e.preventDefault();gallerySelect(galleryOpen.index+1);}
+            if (e.key === 'ArrowRight') {e.preventDefault();gallerySelect(galleryOpen.index-1);}
+        });
+        var x0 = null;
+        overlay.on('touchstart',function(e){
+            if (e.originalEvent.touches.length===1) x0=e.originalEvent.touches[0].clientX;
+        });
+        overlay.on('touchend',function(e){
+            if (x0===null || !e.originalEvent.changedTouches.length) return;
+            var dx=e.originalEvent.changedTouches[0].clientX-x0;
+            x0=null;
+            if(Math.abs(dx)>60 && galleryOpen && galleryOpen.items.length>1)
+                gallerySelect(galleryOpen.index+(dx>0?1:-1));
+        });
+        gallerySelect(Math.max(0,items.findIndex(function(m){return Number(m.id)===clickedId;})));
+        overlay.find('.media-gallery-close').trigger('focus');
+    }
+    $(document).on('click','.media-preview,.media-thumb',function() {
         var id = Number($(this).attr('data-id') || 0);
         if (!id) return;
-        $('.media-lightbox').remove();
-        var overlay = $('<div class="media-lightbox" role="dialog" aria-modal="true">'
-            + '<button type="button" aria-label="بستن تصویر">×</button>'
-            + '<span class="media-lightbox-status" role="status">در حال دریافت تصویر اصلی…</span>'
-            + '<img alt="تصویر بزرگ"></div>');
-        var img = overlay.find('img').attr('src',mediaUrl(id,'thumb'));
-        var full = new Image();
-        full.onload = function () {
-            if (!document.body.contains(overlay[0])) return;
-            img.attr('src', full.src);
-            overlay.find('.media-lightbox-status').remove();
-        };
-        full.onerror = function () {
-            if (document.body.contains(overlay[0])) overlay.find('.media-lightbox-status')
-                .text('تصویر اصلی در دسترس نیست؛ پیش‌نمایش کوچک نمایش داده می‌شود.');
-        };
-        full.src = mediaUrl(id,'original');
-        overlay.on('click',function(e){if(e.target===overlay[0] || $(e.target).is('button'))overlay.remove();});
-        overlay.on('keydown',function(e){if(e.key==='Escape')overlay.remove();});
-        $(document.body).append(overlay);
-        overlay.find('button').trigger('focus');
+        var source = this, $source = $(source);
+        var $owner = $source.closest('[data-media-editor]'),
+            ownerName = $owner.attr('data-media-editor'),
+            productId = Number($source.attr('data-product-id') || 0),
+            defectiveId = Number($source.attr('data-defective-id') || 0);
+        if (ownerName && state(ownerName).items.length) {
+            openGallery(id,state(ownerName).items.slice(),source);
+            return;
+        }
+        if (!productId && !defectiveId) {
+            // A single library/category image has no unambiguous product gallery.
+            openGallery(id,[{id:id}],source);
+            return;
+        }
+        // A thumbnail responds immediately even if gallery metadata is slow.
+        openGallery(id,[{id:id}],source);
+        var mode = defectiveId ? 'defective' : 'product';
+        galleryRequest = $.getJSON('assets/php/media_api.php',defectiveId
+            ? {action:mode,defective_id:defectiveId}
+            : {action:mode,product_id:productId}).done(function(res){
+            if (!galleryOpen || galleryOpen.focus!==source || !res || !res.success) return;
+            var items=(res.data && res.data.items) || [];
+            if (items.length) {
+                galleryOpen.items=items;
+                gallerySelect(Math.max(0,items.findIndex(function(m){return Number(m.id)===id;})));
+            }
+        });
     });
 
     // Full-page library manager shares the same API and picker.
