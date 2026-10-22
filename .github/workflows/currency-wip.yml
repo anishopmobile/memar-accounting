@@ -4,6 +4,7 @@ on:
     branches:
       - 'feature/currency-toman-irr-wip-*'
       - main
+      - security/hardening-review-20261022
   pull_request:
     branches:
       - main
