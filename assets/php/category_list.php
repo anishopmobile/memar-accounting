@@ -67,7 +67,7 @@ function printCategoryRows(array $nodes, int $level = 0): void
         if ($categoryImagesEnabled) {
             $imageId = (int)($categoryImages[(int)$node['id']] ?? 0);
             $url = $imageId ? 'assets/php/media_file.php?id=' . $imageId . '&size=thumb' : 'assets/img/product-placeholder.svg';
-            echo '<td class="product-thumb-cell"><img class="media-thumb" width="44" height="44" alt="" src="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"></td>';
+            echo '<td class="product-thumb-cell"><img class="media-thumb" width="44" height="44" loading="lazy" decoding="async" data-id="' . $imageId . '" alt="" src="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"></td>';
         }
         echo '<td>' . htmlspecialchars($node['code']) . '</td>';
         echo '<td><span class="tree-label" style="' . $indent . '">' . htmlspecialchars($node['name']) . '</span></td>';
