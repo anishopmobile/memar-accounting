@@ -69,7 +69,7 @@ function ledger_migrate(mysqli $db): void {
                 $db->query("INSERT INTO accounting_legacy_settlements (invoice_id,amount,needs_review,source_status)
                   SELECT id, CASE WHEN payment_status='paid' THEN payable_amount ELSE 0 END,
                          CASE WHEN payment_status='partial' THEN 1 ELSE 0 END, payment_status
-                  FROM invoices WHERE type IN ('sales_invoice','purchase_invoice')");
+                  FROM invoices WHERE type IN ('sales_invoice','purchase_invoice') AND payment_status IN ('paid','partial')");
                 $db->query("INSERT INTO accounting_schema_versions (version_key) VALUES ('legacy_settlement_v1')");
                 $db->commit();
             } catch (Throwable $e) { $db->rollback(); throw $e; }
