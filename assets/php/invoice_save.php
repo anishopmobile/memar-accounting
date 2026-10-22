@@ -47,6 +47,7 @@ try {
     unset($item);
     $documentDiscount = trim((string) ($_POST['discount'] ?? '0'));
     $documentDiscount = parseMoneyInput($documentDiscount === '' ? '0' : $documentDiscount);
+    $initialPayment = parseMoneyInput(trim((string)($_POST['initial_payment_amount'] ?? '0')) ?: '0');
 } catch (InvalidArgumentException $e) {
     respond_error($e->getMessage(), 422);
 }
@@ -56,7 +57,8 @@ $in = [
     'type'           => $type,
     'party_id'       => (int) ($_POST[$partyField] ?? 0),
     'payment_type'   => trim((string) ($_POST['payment_type'] ?? 'pos')),
-    'payment_status' => trim((string) ($_POST['payment_status'] ?? 'unpaid')),
+    'payment_status' => 'unpaid',
+    'initial_payment_amount' => $initialPayment,
     'invoice_date'   => trim((string) ($_POST['invoice_date'] ?? '')),
     'discount'       => $documentDiscount,
     'note'           => trim((string) ($_POST['note'] ?? '')),
