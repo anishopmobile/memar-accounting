@@ -49,8 +49,8 @@ function ledger_party_summary(mysqli $db,string $kind,int $id): array {
     $s->bind_param('si',$type,$id);$s->execute();$invoices=$s->get_result()->fetch_assoc()['v'];$s->close();
     $s=$db->prepare('SELECT COALESCE(SUM(recognized_paid),0) v FROM ledger_legacy_invoices l JOIN invoices i ON i.id=l.invoice_id WHERE i.type=? AND '.($kind==='customer'?'i.customer_id':'i.supplier_id').'=?');
     $s->bind_param('si',$type,$id);$s->execute();$legacy=$s->get_result()->fetch_assoc()['v'];$s->close();
-    $s=$db->prepare('SELECT COALESCE(SUM(amount),0) v FROM ledger_payments WHERE party_kind=? AND party_id=? AND voided_at IS NULL AND direction=?');
-    $dir=$kind==='customer'?'receipt':'disbursement';$s->bind_param('sis',$kind,$id,$dir);
+    $s=$db->prepare('SELECT COALESCE(SUM(CASE WHEN direction=? THEN amount ELSE -amount END),0) v FROM ledger_payments WHERE party_kind=? AND party_id=? AND voided_at IS NULL');
+    $dir=$kind==='customer'?'receipt':'disbursement';$s->bind_param('ssi',$dir,$kind,$id);
     $s->execute();$payments=$s->get_result()->fetch_assoc()['v'];$s->close();
     $s=$db->prepare('SELECT signed_amount FROM ledger_openings WHERE party_kind=? AND party_id=?');
     $s->bind_param('si',$kind,$id);$s->execute();$opening=$s->get_result()->fetch_assoc()['signed_amount']??'0';$s->close();
@@ -96,8 +96,12 @@ function ledger_record_payment(mysqli $db,array $in,bool $insideExistingTransact
     }
     if(money_cmp($sum,$amount)>0)throw new InvalidArgumentException('تخصیص بیشتر از مبلغ پرداخت است.');
     ksort($mapped,SORT_NUMERIC);
-    $direction=$kind==='customer'?'receipt':'disbursement';
+    $expectedDirection=$kind==='customer'?'receipt':'disbursement';
+    $direction=(string)($in['direction']??$expectedDirection);
+    if(!in_array($direction,['receipt','disbursement'],true))throw new InvalidArgumentException('جهت تراکنش معتبر نیست.');
     $note=trim((string)($in['note']??''));$note=substr($note,0,3000);
+    if($direction!==$expectedDirection && ($mapped || strlen($note)<8))
+        throw new InvalidArgumentException('استرداد وجه باید بدون تخصیص به فاکتور و با توضیح مستند ثبت شود.');
     $ref=trim((string)($in['reference_no']??''));$ref=substr($ref,0,120);
     $requestHash=hash('sha256',json_encode([$kind,$pid,$direction,$amount,$method,$date,$ref,$note,$mapped],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
     $table=$kind==='customer'?'customers':'suppliers';
@@ -183,8 +187,9 @@ function ledger_party_details(mysqli $db,string $kind,int $id): array {
            'total'=>$v['total'],'returned'=>$v['returned'],'effective_total'=>$v['effective_total'],'paid'=>$v['paid'],'due'=>$v['due'],'status'=>$v['status'],
            'legacy_classification'=>$v['legacy_classification']];
     }
-    $s=$db->prepare('SELECT p.id,p.direction,p.amount,p.method,p.paid_on,p.reference_no,p.note,p.voided_at, (p.amount-COALESCE((SELECT SUM(a.amount) FROM ledger_allocations a WHERE a.payment_id=p.id),0)-COALESCE((SELECT SUM(a.amount) FROM ledger_credit_allocations a WHERE a.payment_id=p.id),0)) AS unapplied FROM ledger_payments p WHERE p.party_kind=? AND p.party_id=? ORDER BY p.id DESC LIMIT 150');
-    $s->bind_param('si',$kind,$id);$s->execute();$payments=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
+    $s=$db->prepare('SELECT p.id,p.direction,p.amount,p.method,p.paid_on,p.reference_no,p.note,p.voided_at, CASE WHEN p.direction=? THEN p.amount-COALESCE((SELECT SUM(a.amount) FROM ledger_allocations a WHERE a.payment_id=p.id),0)-COALESCE((SELECT SUM(a.amount) FROM ledger_credit_allocations a WHERE a.payment_id=p.id),0) ELSE 0 END AS unapplied FROM ledger_payments p WHERE p.party_kind=? AND p.party_id=? ORDER BY p.id DESC LIMIT 150');
+    $expected=$kind==='customer'?'receipt':'disbursement';
+    $s->bind_param('ssi',$expected,$kind,$id);$s->execute();$payments=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
     $statement=ledger_party_statement($db,$kind,$id,$summary['balance']);
     return ['party'=>$party,'summary'=>$summary,'invoices'=>$invoices,'payments'=>$payments,'statement'=>$statement];
 }
@@ -317,7 +322,8 @@ function ledger_party_statement(mysqli $db,string $kind,int $id,?string $endingB
                 CONCAT('فاکتور ',i.invoice_number) description,i.payable_amount delta
           FROM invoices i WHERE i.type='$type' AND i.$fk=$id",
         "SELECT p.paid_on occurred_on,p.id record_id,30 event_rank,'payment' event_type,
-                CONCAT('دریافت / پرداخت شماره ',p.id,' - ',p.method) description,-p.amount delta
+                CONCAT(IF(p.direction='$direction','دریافت / پرداخت شماره ','استرداد وجه شماره '),p.id,' - ',p.method) description,
+                IF(p.direction='$direction',-p.amount,p.amount) delta
           FROM ledger_payments p WHERE p.party_kind='$kind' AND p.direction='$direction' AND p.party_id=$id AND p.voided_at IS NULL",
         "SELECT o.effective_on occurred_on,o.id record_id,0 event_rank,'opening' event_type,
                 'مانده افتتاحیه (غیرنقدی)' description,o.signed_amount delta
