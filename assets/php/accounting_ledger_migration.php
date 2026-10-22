@@ -10,6 +10,21 @@ function migrate_accounting_ledger(mysqli $db): void
         migration_key VARCHAR(80) PRIMARY KEY,
         applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Schema work runs once per revision, not for every invoice/image request.
+    $schemaRevision='ledger_schema_v3_20261022';
+    $ready=$db->prepare('SELECT 1 FROM accounting_migrations WHERE migration_key=? LIMIT 1');
+    $ready->bind_param('s',$schemaRevision);$ready->execute();
+    $exists=$ready->get_result()->fetch_assoc();$ready->close();
+    if($exists)return;
+    $lock=$db->query("SELECT GET_LOCK('memar_ledger_schema',30) AS acquired");
+    if(!$lock || (int)($lock->fetch_assoc()['acquired']??0)!==1)
+        throw new RuntimeException('Accounting migration lock unavailable');
+    try {
+        // The second check prevents concurrent requests from applying the same DDL.
+        $ready=$db->prepare('SELECT 1 FROM accounting_migrations WHERE migration_key=? LIMIT 1');
+        $ready->bind_param('s',$schemaRevision);$ready->execute();
+        $exists=$ready->get_result()->fetch_assoc();$ready->close();
+        if($exists)return;
     $db->query("CREATE TABLE IF NOT EXISTS accounting_cash_accounts (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(120) NOT NULL,
@@ -152,5 +167,10 @@ function migrate_accounting_ledger(mysqli $db): void
             $db->rollback();
             throw $e;
         }
+    }
+    $finish=$db->prepare('INSERT INTO accounting_migrations(migration_key) VALUES(?)');
+    $finish->bind_param('s',$schemaRevision);$finish->execute();$finish->close();
+    } finally {
+        $db->query("SELECT RELEASE_LOCK('memar_ledger_schema')");
     }
 }
