@@ -3,13 +3,14 @@
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
 const base='http://127.0.0.1:8872';
-const customerId=Number(process.env.ACCOUNTING_CUSTOMER_ID);
-const supplierId=Number(process.env.ACCOUNTING_SUPPLIER_ID);
-assert.ok(customerId>0 && supplierId>0);
+const pairs=(process.env.ACCOUNTING_PARTY_PAIRS||'').split(',').map(x=>x.split(':').map(Number));
+assert.equal(pairs.length,2);
+for (const pair of pairs) assert.ok(pair[0]>0 && pair[1]>0);
 (async()=>{
  const browser=await chromium.launch({headless:true});
  try {
   for (const width of [1440,390]) {
+   const [customerId,supplierId]=pairs[width===1440?0:1];
    const context=await browser.newContext({viewport:{width,height:850},locale:'fa-IR'});
    await context.addCookies([{name:'PHPSESSID',value:'ci-tabler-browser-123456789',domain:'127.0.0.1',path:'/',sameSite:'Lax',httpOnly:true}]);
    const page=await context.newPage(), errors=[];
