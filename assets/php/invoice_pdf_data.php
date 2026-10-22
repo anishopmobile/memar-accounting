@@ -1,5 +1,4 @@
 <?php
-require_once __DIR__ . '/accounting/ledger.php';
 
 /**
  * invoice_pdf_data.php — Data Provider فقط‌خواندنی برای PDF فاکتور فروش
@@ -9,6 +8,8 @@ require_once __DIR__ . '/accounting/ledger.php';
  */
 
 declare(strict_types=1);
+
+require_once __DIR__ . '/accounting/ledger.php';
 
 require_once __DIR__ . '/jdf.php';
 require_once __DIR__ . '/invoice_pdf_common.php';
