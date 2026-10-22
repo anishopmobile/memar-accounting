@@ -1,0 +1,120 @@
+/* Accounting entry and statement UI for sales and purchase invoices. */
+(function($) {
+'use strict';
+$(function() {
+  if ($('#invoiceMode').length===0) return;
+  var kind=$('#invoiceMode').val()==='sales'?'customer':'supplier';
+  var csrf=$('#invoiceCsrfToken').val();
+  var partyId=0, selectedInvoice=0, statement=null, posting=false;
+  var html='<div class="modal" id="accountingModal"><div class="modal-backdrop" data-close="accountingModal"></div>'
+    +'<div class="modal-content" style="max-width:900px;max-height:90vh;overflow:auto">'
+    +'<div class="modal-header"><h2>دریافت‌ها، پرداخت‌ها و صورت‌حساب</h2><button type="button" class="modal-close" id="acctClose">×</button></div>'
+    +'<div id="acctContent">در حال دریافت اطلاعات...</div></div></div>';
+  $('body').append(html);
+  var $modal=$('#accountingModal');
+  function safe(v){return $('<div>').text(v==null?'':String(v)).html();}
+  function fmt(v){return window.Currency.format(v);}
+  function input(v){return window.Currency.fromBase(v);}
+  function raw(v){return window.Currency.toBase(v);}
+  function zero(v){return Number(v||0)<=0;}
+  function show(){ $modal.addClass('open');$('body').addClass('modal-open');}
+  function close(){$modal.removeClass('open');$('body').removeClass('modal-open');}
+  $('#acctClose').on('click',close);
+  $modal.find('.modal-backdrop').on('click',close);
+  function fail(err) {alert(err.responseJSON&&err.responseJSON.message?err.responseJSON.message:'خطا در دریافت یا ثبت اطلاعات مالی.');}
+  function load(){
+    $('#acctContent').text('در حال دریافت اطلاعات...');
+    $.getJSON('assets/php/accounting_ledger_action.php',{action:'statement',party_kind:kind,party_id:partyId})
+    .done(function(r){statement=r.data||{};render();}).fail(fail);
+  }
+  function render(){
+    var s=statement, b=Number(s.balance), out='';
+    out+='<p><strong>مانده حساب: '+(s.balance_final?fmt(Math.abs(b))+(b>=0?' بدهکار':' بستانکار'):'نیازمند تعیین وضعیت فاکتورهای قدیمی')+'</strong></p>';
+    out+='<p>اعتبار تخصیص‌نیافته: '+fmt(s.unallocated_credit||0)+' | اعتبار برگشت از فروش: '+fmt(s.return_credit||0)+'</p>';
+    out+='<h3>فاکتورها و مانده‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>فاکتور</th><th>تاریخ</th><th>مبلغ</th><th>تسویه</th><th>مانده</th><th>تخصیص پرداخت جدید</th></tr></thead><tbody>';
+    (s.invoices||[]).forEach(function(i){
+      out+='<tr><td>'+safe(i.number)+'</td><td>'+safe(i.date)+'</td><td>'+fmt(i.total)+'</td><td>'+fmt(i.paid)+'</td><td>'
+      +(i.unreconciled?'<button type="button" class="button-secondary small acctReconcile" data-id="'+i.id+'" data-total="'+safe(i.total)+'">تطبیق پرداخت تاریخی</button>':fmt(i.remaining))
+      +'</td><td>'+(!i.unreconciled&&!zero(i.remaining)?'<input class="acctAlloc" type="number" min="0" step="0.01" data-id="'+i.id+'" data-max="'+safe(i.remaining)+'" value="'+(i.id===selectedInvoice?safe(input(i.remaining)):'0')+'" style="width:150px">':'—')+'</td></tr>';
+    });
+    out+='</tbody></table></div>';
+    out+='<div class="form-grid"><div class="form-row"><label>مبلغ کل دریافت/پرداخت ('+safe(window.Currency.label)+')</label><input id="acctAmount" type="number" min="0" step="0.01"></div>'
+      +'<div class="form-row"><label>روش</label><select id="acctMethod"><option value="pos">کارت‌خوان</option><option value="cash">نقدی</option><option value="bank_transfer">انتقال بانکی</option></select></div>'
+      +'<div class="form-row"><label>تاریخ میلادی ثبت مالی</label><input id="acctDate" type="date"></div>'
+      +'<div class="form-row"><label>شماره پیگیری (اختیاری)</label><input id="acctRef" maxlength="120"></div>'
+      +'<div class="form-row"><label>توضیحات</label><input id="acctNote" maxlength="2000"></div></div>'
+      +'<p id="acctAllocationTotal"></p><p class="setting-note">مبلغ اضافه بر تخصیص‌ها به اعتبار طرف حساب تبدیل می‌شود. مبلغ این فرم پرداخت واقعی است؛ تغییر وضعیت بدون ثبت وجه مجاز نیست.</p>'
+      +'<button id="acctSubmit" type="button" class="button">ثبت دریافت/پرداخت</button>';
+    out+='<h3>سوابق پرداخت‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>کل</th><th>تخصیص</th><th>اعتبار آزاد</th><th>عملیات</th></tr></thead><tbody>';
+    (s.payments||[]).forEach(function(p){
+      out+='<tr><td>'+safe(p.date)+'</td><td>'+safe(p.method)+'</td><td>'+fmt(p.amount)+'</td><td>'+fmt(p.allocated)+'</td><td>'+fmt(p.unallocated)+'</td>'
+        +'<td>'+(!zero(p.unallocated)?'<button type="button" class="button-secondary small acctUseCredit" data-id="'+p.id+'" data-available="'+safe(p.unallocated)+'">تخصیص اعتبار</button>':'—')+'</td></tr>';
+    });
+    out+='</tbody></table></div>';
+    $('#acctContent').html(out);
+    $('#acctDate').val(new Date().toLocaleDateString('en-CA'));
+    updateTotals();
+  }
+  function updateTotals(){
+    var sum=0, invalid=false;
+    $('#acctContent .acctAlloc').each(function(){
+      try{var value=raw($(this).val()||'0');if(Number(value)<0||Number(value)>Number($(this).data('max')))invalid=true;sum+=Number(value);}catch(e){invalid=true;}
+    });
+    var total=0;
+    try{total=Number(raw($('#acctAmount').val()||'0'));}catch(e){invalid=true;}
+    if(total<sum)invalid=true;
+    $('#acctAllocationTotal').text('تخصیص به فاکتورها: '+fmt(String(sum))+' | اعتبار آزاد جدید: '+(total>=sum?fmt(String(total-sum)):'نامعتبر')+(invalid?' | مقادیر نامعتبر هستند.':''));
+    $('#acctSubmit').prop('disabled',invalid||posting||total<=0);
+  }
+  $(document).on('input','#acctContent .acctAlloc,#acctAmount',updateTotals);
+  $(document).on('click','#acctSubmit',function(){
+    if(posting)return;
+    var allocations=[],sum=0,amount;
+    try{
+      amount=raw($('#acctAmount').val());
+      $('#acctContent .acctAlloc').each(function(){var v=raw($(this).val()||'0');if(Number(v)>0){allocations.push({invoice_id:$(this).data('id'),amount:$(this).val()});sum+=Number(v);}});
+      if(Number(amount)<=0||sum>Number(amount)+0.00001) throw Error('invalid');
+    }catch(e){alert('مبالغ ثبت‌شده نامعتبر هستند.');return;}
+    posting=true;updateTotals();
+    var token='acct_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+    $.post('assets/php/accounting_ledger_action.php',{
+      action:'payment',csrf_token:csrf,party_kind:kind,party_id:partyId,direction:kind==='customer'?'in':'out',
+      amount:$('#acctAmount').val(),method:$('#acctMethod').val(),payment_date:$('#acctDate').val(),
+      reference_no:$('#acctRef').val(),note:$('#acctNote').val(),allocations:JSON.stringify(allocations),client_token:token
+    }).done(function(){posting=false;selectedInvoice=0;load();if(typeof window.refreshInvoiceAccountingList==='function')window.refreshInvoiceAccountingList();})
+      .fail(function(e){posting=false;updateTotals();fail(e);});
+  });
+  $(document).on('click','.acctReconcile',function(){
+    var id=$(this).data('id'),value=prompt('مبلغ واقعی پرداخت‌شده قبلی را وارد کنید ('+window.Currency.label+'). از حدس زدن خودداری کنید.','0');
+    if(value===null)return;
+    $.post('assets/php/accounting_ledger_action.php',{action:'reconcile_legacy',csrf_token:csrf,invoice_id:id,historical_paid:value})
+      .done(load).fail(fail);
+  });
+  $(document).on('click','.acctUseCredit',function(){
+    var paymentId=$(this).data('id'),available=$(this).data('available');
+    var targets=(statement.invoices||[]).filter(function(i){return !i.unreconciled&&!zero(i.remaining);});
+    if(!targets.length){alert('فاکتور تسویه‌نشده‌ای وجود ندارد.');return;}
+    var invoiceId=prompt('شناسه فاکتور مقصد: '+targets.map(function(i){return i.id+' ('+i.number+')';}).join('،'),String(targets[0].id));
+    if(invoiceId===null)return;
+    if(!targets.some(function(i){return String(i.id)===invoiceId})){alert('فاکتور انتخاب‌شده معتبر نیست.');return;}
+    var amount=prompt('مبلغ تخصیص از اعتبار آزاد ('+window.Currency.label+')',input(available));
+    if(amount===null)return;
+    $.post('assets/php/accounting_ledger_action.php',{action:'apply_credit',csrf_token:csrf,payment_id:paymentId,invoice_id:invoiceId,amount:amount})
+      .done(load).fail(fail);
+  });
+  window.AccountingLedger={
+    openInvoice:function(i){
+      if(!i || !i.id || /proforma/.test(i.type))return;
+      partyId=Number(kind==='customer'?i.customer_id:i.supplier_id);
+      selectedInvoice=Number(i.id);show();load();
+    }
+  };
+  $(document).on('click','.invoice-accounting',function(){
+    var id=$(this).data('id');
+    $.getJSON('assets/php/invoice_get.php',{id:id}).done(function(r){
+      var inv=r.data&&r.data.invoice?r.data.invoice:r.data;
+      if(inv)window.AccountingLedger.openInvoice(inv);
+    }).fail(fail);
+  });
+});
+})(jQuery);
