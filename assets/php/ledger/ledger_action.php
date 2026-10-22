@@ -32,7 +32,7 @@ try {
         ledger_respond(200,['success'=>true,'data'=>ledger_record_payment($mysqli,$input)]);
     }
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') ledger_respond(405,['success'=>false,'message'=>'Method not allowed']);
-    ledger_migrate($mysqli);
+    ledger_initialize_legacy($mysqli);
     if(isset($_GET['invoice_id'])) {
         $id=filter_var($_GET['invoice_id'],FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         if(!$id)throw new InvalidArgumentException('فاکتور نامعتبر است.');
