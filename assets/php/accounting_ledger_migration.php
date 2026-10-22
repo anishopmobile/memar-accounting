@@ -11,7 +11,7 @@ function migrate_accounting_ledger(mysqli $db): void
         applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     // Schema work runs once per revision, not for every invoice/image request.
-    $schemaRevision='ledger_schema_v6_20261022';
+    $schemaRevision='ledger_schema_v7_20261022';
     $ready=$db->prepare('SELECT 1 FROM accounting_migrations WHERE migration_key=? LIMIT 1');
     $ready->bind_param('s',$schemaRevision);$ready->execute();
     $exists=$ready->get_result()->fetch_assoc();$ready->close();
@@ -165,6 +165,20 @@ function migrate_accounting_ledger(mysqli $db): void
     $openingActorCol=$db->query("SHOW COLUMNS FROM account_opening_balances LIKE 'created_by'");
     if ($openingActorCol && $openingActorCol->num_rows===0)
         $db->query("ALTER TABLE account_opening_balances ADD COLUMN created_by INT NULL");
+    $db->query("CREATE TABLE IF NOT EXISTS account_invoice_revisions (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        invoice_id INT NULL,
+        invoice_number VARCHAR(40) NOT NULL,
+        previous_total DECIMAL(14,2) NOT NULL,
+        new_total DECIMAL(14,2) NOT NULL,
+        previous_status VARCHAR(20) NOT NULL,
+        new_status VARCHAR(20) NOT NULL,
+        performed_by INT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_air_invoice(invoice_id),
+        KEY idx_air_number(invoice_number),
+        CONSTRAINT fk_air_invoice FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $db->query("CREATE TABLE IF NOT EXISTS account_legacy_reconciliations (
         invoice_id INT PRIMARY KEY,
         historical_paid_amount DECIMAL(14,2) NOT NULL,
