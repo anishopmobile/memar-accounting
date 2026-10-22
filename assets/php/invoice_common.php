@@ -1297,6 +1297,17 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         );
         $stmt->execute();
         $stmt->close();
+        // Once an invoice amount changes, preserve both financial versions.
+        if (money_cmp($old['payable_amount'],$totals['payable_amount'])!==0
+            || $old['payment_status']!==$savedStatus) {
+            $actor=function_exists('auth_user_id')?auth_user_id():null;
+            $previousAmount=(string)$old['payable_amount'];
+            $updatedAmount=(string)$totals['payable_amount'];
+            $prevStatus=(string)$old['payment_status'];
+            $revision=$mysqli->prepare('INSERT INTO account_invoice_revisions(invoice_id,invoice_number,previous_total,new_total,previous_status,new_status,performed_by) VALUES(?,?,?,?,?,?,?)');
+            $revision->bind_param('isssssi',$invoiceId,$old['invoice_number'],$previousAmount,$updatedAmount,$prevStatus,$savedStatus,$actor);
+            $revision->execute();$revision->close();
+        }
 
         $mysqli->commit();
         return ['ok' => true, 'message' => 'فاکتور با موفقیت ویرایش شد.', 'invoice_id' => $invoiceId];
