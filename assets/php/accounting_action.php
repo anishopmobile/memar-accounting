@@ -30,6 +30,11 @@ try {
         $r=ledger_post($mysqli,$record);
         respond_json(true,'دریافت/پرداخت ثبت شد.',$r);
     }
+    if ($action==='allocate') {
+        $value=parseMoneyInput((string)($_POST['amount']??''));
+        ledger_allocate_existing($mysqli,(int)($_POST['receipt_id']??0),(int)($_POST['invoice_id']??0),$value);
+        respond_json(true,'اعتبار به فاکتور تخصیص یافت.');
+    }
     if ($action==='opening') {
         $amount=parseMoneyInput((string)($_POST['amount']??'0'));
         ledger_set_opening($mysqli,(string)($_POST['party_kind']??''),(int)($_POST['party_id']??0),$amount,(string)($_POST['note']??''));
