@@ -114,20 +114,31 @@ $(function() {
     }
     //  اتمام کد کالای کم موجودی
     // ===== منوی کشویی «فاکتورها» =====
+    // Consistent keyboard-accessible menus: account, invoices, reports and settings.
+    function closeNavDropdowns() {
+        $('.nav-dropdown.open').removeClass('open');
+        $('.nav-dropdown-toggle').attr('aria-expanded', 'false');
+    }
     $(document).on('click', '.nav-dropdown-toggle', function(e) {
         e.preventDefault();
         var $dd = $(this).closest('.nav-dropdown');
         var wasOpen = $dd.hasClass('open');
-        $('.nav-dropdown.open').removeClass('open');
+        closeNavDropdowns();
         if (!wasOpen) {
             $dd.addClass('open');
+            $(this).attr('aria-expanded', 'true');
         }
     });
 
     $(document).on('click', function(e) {
-        if (!$(e.target).closest('.nav-dropdown').length) {
-            $('.nav-dropdown').removeClass('open');
-        }
+        if (!$(e.target).closest('.nav-dropdown').length) closeNavDropdowns();
+    });
+    $(document).on('keydown', function(e) {
+        if (e.key !== 'Escape' || !$('.nav-dropdown.open').length) return;
+        var $toggle = $('.nav-dropdown.open').last().find('> .nav-dropdown-toggle').first();
+        closeNavDropdowns();
+        // Do not steal Escape from another modal; the user remains on the page.
+        if ($toggle.length) $toggle.trigger('focus');
     });
 
     var selectedCategoryId = '';
