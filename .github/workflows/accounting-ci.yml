@@ -54,4 +54,4 @@ jobs:
           php assets/php/tests/currency_mysql_test.php
           php assets/php/tests/sales_return_test.php
           php assets/php/tests/multi_unit_inventory_test.php
-          php assets/php/tests/dashboard_sales_metrics_test.php
+          php assets/php/tests/accounting_dashboard_test.php
