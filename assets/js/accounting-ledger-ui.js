@@ -33,6 +33,7 @@ $(function() {
     var s=statement, b=Number(s.balance), out='';
     out+='<p><strong>مانده حساب: '+(s.balance_final?fmt(Math.abs(b))+(b>=0?' بدهکار':' بستانکار'):'نیازمند تعیین وضعیت فاکتورهای قدیمی')+'</strong></p>';
     if(!s.has_opening_balance)out+='<button type="button" class="button-secondary small" id="acctOpening">ثبت مانده افتتاحیه</button>';
+    if(s.balance_final&&b<0)out+='<button type="button" class="button-secondary small" id="acctRefund">استرداد اعتبار طرف حساب</button>';
     out+='<p>اعتبار تخصیص‌نیافته: '+fmt(s.unallocated_credit||0)+' | اعتبار برگشت از فروش: '+fmt(s.return_credit||0)+'</p>';
     out+='<h3>فاکتورها و مانده‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>فاکتور</th><th>تاریخ</th><th>مبلغ</th><th>تسویه</th><th>مانده</th><th>تخصیص پرداخت جدید</th></tr></thead><tbody>';
     (s.invoices||[]).forEach(function(i){
@@ -51,7 +52,8 @@ $(function() {
     out+='<h3>سوابق پرداخت‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>کل</th><th>تخصیص</th><th>اعتبار آزاد</th><th>عملیات</th></tr></thead><tbody>';
     (s.payments||[]).forEach(function(p){
       out+='<tr><td>'+safe(p.date)+'</td><td>'+safe(p.method)+'</td><td>'+fmt(p.amount)+'</td><td>'+fmt(p.allocated)+'</td><td>'+fmt(p.unallocated)+'</td>'
-        +'<td>'+(!zero(p.unallocated)?'<button type="button" class="button-secondary small acctUseCredit" data-id="'+p.id+'" data-available="'+safe(p.unallocated)+'">تخصیص اعتبار</button>':'—')+'</td></tr>';
+        +'<td>'+(!p.is_reversal&&!p.is_reversed&&!zero(p.unallocated)&&p.direction===(kind==='customer'?'in':'out')?'<button type="button" class="button-secondary small acctUseCredit" data-id="'+p.id+'" data-available="'+safe(p.unallocated)+'">تخصیص اعتبار</button>':'')+'
+         '+(!p.is_reversal&&!p.is_reversed?'<button type="button" class="button-secondary small acctReverse" data-id="'+p.id+'">ثبت سند اصلاحی</button>':'ابطال‌شده')+'</td></tr>';
     });
     out+='</tbody></table></div>';
     $('#acctContent').html(out);
@@ -113,6 +115,26 @@ $(function() {
     });
     $(document).on('click','.acctPartyOpen',function(){partyId=Number($(this).data('id'));selectedInvoice=0;show();load();});
   }
+  $(document).on('click','#acctRefund',function(){
+    var amount=prompt('مبلغ استرداد از اعتبار ('+window.Currency.label+')',input(String(Math.abs(Number(statement.balance)))));
+    if(amount===null)return;
+    var reason=prompt('دلیل استرداد را ثبت کنید (حداقل ۵ نویسه)','استرداد اعتبار به طرف حساب');
+    if(reason===null)return;
+    var method=prompt('روش استرداد: cash / pos / bank_transfer','bank_transfer');
+    if(method===null)return;
+    $.post('assets/php/accounting_ledger_action.php',{action:'refund',csrf_token:csrf,party_kind:kind,party_id:partyId,
+       amount:amount,method:method,note:reason,client_token:'refund_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)})
+       .done(load).fail(fail);
+  });
+  $(document).on('click','.acctReverse',function(){
+    var id=$(this).data('id');
+    var reason=prompt('دلیل اصلاح سند شماره '+id+' (حداقل ۵ نویسه):');
+    if(reason===null)return;
+    if(!confirm('با این عملیات یک سند معکوس ثبت می‌شود و تخصیص‌های قبلی آزاد می‌شوند. تأیید می‌کنید؟'))return;
+    $.post('assets/php/accounting_ledger_action.php',{action:'reverse',csrf_token:csrf,payment_id:id,reason:reason,
+       client_token:'reverse_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)})
+       .done(load).fail(fail);
+  });
   $(document).on('click','#acctOpening',function(){
     var entered=prompt('مانده افتتاحیه طرف حساب را وارد کنید. مقدار مثبت: بدهی؛ مقدار منفی: بستانکاری. واحد: '+window.Currency.label,'0');
     if(entered===null)return;
