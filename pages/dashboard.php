@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../assets/php/db.php';
 require_once __DIR__ . '/../assets/php/jdf.php';
+require_once __DIR__ . '/../assets/php/ledger/ledger_reports.php';
 
 /*
  * ناحیه زمانی و مرزهای «امروز / ماه جاری» بر اساس تقویم شمسی برنامه.
@@ -117,60 +118,10 @@ if ($stmt) {
     $stmt->close();
 }
 
-// ۵. محاسبه مبلغ پرداخت نشده فروش امروز
-// منطق «بدهی» مطابق بقیه برنامه: payment_status در حالت unpaid|partial
-// کل مبلغ قابل پرداخت به‌عنوان مانده شمرده می‌شود (مثل گزارش بدهی مشتریان).
-$todayUnpaid = 0;
-$stmt = $mysqli->prepare(
-    "SELECT COALESCE(
-         SUM(
-             CASE
-                 WHEN payment_status IN ('unpaid', 'partial')
-                 THEN payable_amount
-                 ELSE 0
-             END
-         ),
-         0
-     ) AS total
-     FROM invoices
-     WHERE type = 'sales_invoice'
-       AND invoice_date = ?"
-);
-if ($stmt) {
-    $stmt->bind_param('s', $todayGreg);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result ? $result->fetch_assoc() : null;
-    $todayUnpaid = (float) ($row['total'] ?? 0);
-    $stmt->close();
-}
+// Ledger source of truth: partial payments and returns reduce true outstanding.
+$todayUnpaid = ledger_outstanding_for_period($mysqli,$todayGreg,$todayGreg);
+$monthlyUnpaid = ledger_outstanding_for_period($mysqli,$monthStartGreg,$monthEndGreg);
 
-// ۶. محاسبه مبلغ پرداخت نشده فروش ماه جاری
-$monthlyUnpaid = 0;
-$stmt = $mysqli->prepare(
-    "SELECT COALESCE(
-         SUM(
-             CASE
-                 WHEN payment_status IN ('unpaid', 'partial')
-                 THEN payable_amount
-                 ELSE 0
-             END
-         ),
-         0
-     ) AS total
-     FROM invoices
-     WHERE type = 'sales_invoice'
-       AND invoice_date BETWEEN ? AND ?"
-);
-if ($stmt) {
-    $stmt->bind_param('ss', $monthStartGreg, $monthEndGreg);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result ? $result->fetch_assoc() : null;
-    $monthlyUnpaid = (float) ($row['total'] ?? 0);
-    $stmt->close();
-}
-// ═══════════════════════════════════════════════════════════════════
 //  بخش جدید: محاسبه داده‌های نمودار فروش ماهانه (۳۰ روز گذشته)
 //  فقط فاکتورهای فروش قطعی (sales_invoice)
 // ═══════════════════════════════════════════════════════════════════
@@ -273,9 +224,9 @@ foreach ($salesByDay as $date => $amount) {
             </div>
         </div>
         <div class="metric-value-large"><?php echo formatMoney(number_format($todaySales, 2, '.', '')); ?></div>
-        <?php if ($todayUnpaid > 0): ?>
+        <?php if (money_cmp($todayUnpaid, '0') > 0): ?>
         <div class="metric-unpaid-amount">
-            مبلغ پرداخت نشده: <?php echo formatMoney(number_format($todayUnpaid, 2, '.', '')); ?>
+            مبلغ پرداخت نشده: <?php echo formatMoney($todayUnpaid); ?>
         </div>
         <?php endif; ?>
     </div>
@@ -287,9 +238,9 @@ foreach ($salesByDay as $date => $amount) {
             </div>
         </div>
         <div class="metric-value-large"><?php echo formatMoney(number_format($monthlySales, 2, '.', '')); ?></div>
-        <?php if ($monthlyUnpaid > 0): ?>
+        <?php if (money_cmp($monthlyUnpaid, '0') > 0): ?>
         <div class="metric-unpaid-amount">
-            مبلغ پرداخت نشده: <?php echo formatMoney(number_format($monthlyUnpaid, 2, '.', '')); ?>
+            مبلغ پرداخت نشده: <?php echo formatMoney($monthlyUnpaid); ?>
         </div>
         <?php endif; ?>
     </div>
