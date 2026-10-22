@@ -189,6 +189,13 @@ function acct_apply_credit(mysqli $db, int $paymentId, int $invoiceId, $rawAmoun
         acct_party_lock($db,$p['party_kind'],(int)$p['party_id']);
         $stmt=$db->prepare('SELECT * FROM account_payments WHERE id=? FOR UPDATE');
         $stmt->bind_param('i',$paymentId);$stmt->execute();$p=$stmt->get_result()->fetch_assoc();$stmt->close();
+        $validDirection=$p['party_kind']==='customer'?'in':'out';
+        if ($p['direction']!==$validDirection || $p['reversed_payment_id']!==null)
+            throw new InvalidArgumentException('سند مالی برگشتی یا استرداد اعتبار قابل تخصیص نیست.');
+        $stmt=$db->prepare('SELECT 1 FROM account_payments WHERE reversed_payment_id=? LIMIT 1');
+        $stmt->bind_param('i',$paymentId);$stmt->execute();$res=$stmt->get_result();
+        $wasReversed=$res && $res->fetch_assoc();$stmt->close();
+        if ($wasReversed) throw new InvalidArgumentException('پرداخت باطل‌شده قابل تخصیص نیست.');
         $v=acct_invoice_outstanding($db,$invoiceId,true);
         if ($v['unreconciled']) throw new InvalidArgumentException('فاکتور تاریخی باید ابتدا تطبیق داده شود.');
         $inv=$v['invoice'];$kind=$p['party_kind'];
