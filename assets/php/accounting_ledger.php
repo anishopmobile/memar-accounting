@@ -154,25 +154,41 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
     if (!$ok) throw new InvalidArgumentException('طرف حساب یافت نشد.');
     $col=$kind==='customer'?'customer_id':'supplier_id';
     $typ=$kind==='customer'?'sales_invoice':'purchase_invoice';
-    $stmt=$db->prepare("SELECT id,invoice_number,invoice_date,payable_amount,legacy_paid_amount FROM invoices WHERE {$col}=? AND type=? ORDER BY invoice_date,id");
+    $returnAllocated=$kind==='customer'
+      ? '(SELECT COALESCE(SUM(r.amount),0) FROM account_return_allocations r WHERE r.invoice_id=i.id)'
+      : '0';
+    $stmt=$db->prepare("SELECT i.id,i.invoice_number,i.invoice_date,i.payable_amount,i.legacy_paid_amount,
+        (SELECT COALESCE(SUM(a.amount),0) FROM account_payment_allocations a
+         WHERE a.invoice_id=i.id AND a.reversed_at IS NULL) AS payment_applied,
+        {$returnAllocated} AS return_applied
+        FROM invoices i WHERE i.{$col}=? AND i.type=? ORDER BY i.invoice_date,i.id");
     $stmt->bind_param('is',$partyId,$typ);$stmt->execute();$res=$stmt->get_result();
     $invoices=[];$total='0';$uncertain=0;
     while ($row=$res->fetch_assoc()) {
-        $v=acct_invoice_outstanding($db,(int)$row['id']);
-        $invoices[]=['id'=>(int)$row['id'],'number'=>$row['invoice_number'],'date'=>$row['invoice_date'],'total'=>$row['payable_amount'],'historical_paid'=>$row['legacy_paid_amount'],'paid'=>$v['paid'],'remaining'=>$v['remaining'],'unreconciled'=>$row['legacy_paid_amount']===null];
+        $paid=money_add(money_add($row['legacy_paid_amount']??'0',$row['payment_applied']),$row['return_applied']);
+        $remaining=money_sub($row['payable_amount'],$paid);
+        $invoices[]=['id'=>(int)$row['id'],'number'=>$row['invoice_number'],'date'=>$row['invoice_date'],'total'=>$row['payable_amount'],'historical_paid'=>$row['legacy_paid_amount'],'paid'=>$paid,'remaining'=>$remaining,'unreconciled'=>$row['legacy_paid_amount']===null];
         if ($row['legacy_paid_amount']===null) $uncertain++;
-        else $total=money_add($total,$v['remaining']);
+        else $total=money_add($total,$remaining);
     }
     $stmt->close();
-    $stmt=$db->prepare('SELECT p.*, ca.name AS cash_account_name, TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) AS operator_name, EXISTS(SELECT 1 FROM account_payments rev WHERE rev.reversed_payment_id=p.id) AS is_reversed FROM account_payments p LEFT JOIN accounting_cash_accounts ca ON ca.id=p.cash_account_id LEFT JOIN users u ON u.id=p.created_by WHERE p.party_kind=? AND p.party_id=? ORDER BY p.payment_date,p.id');
+    $stmt=$db->prepare("SELECT p.*,ca.name AS cash_account_name,
+        TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))) AS operator_name,
+        EXISTS(SELECT 1 FROM account_payments rev WHERE rev.reversed_payment_id=p.id) AS is_reversed,
+        (SELECT COALESCE(SUM(a.amount),0) FROM account_payment_allocations a
+         WHERE a.payment_id=p.id AND a.reversed_at IS NULL) AS used_allocation
+        FROM account_payments p
+        LEFT JOIN accounting_cash_accounts ca ON ca.id=p.cash_account_id
+        LEFT JOIN users u ON u.id=p.created_by
+        WHERE p.party_kind=? AND p.party_id=? ORDER BY p.payment_date,p.id");
     $stmt->bind_param('si',$kind,$partyId);$stmt->execute();$res=$stmt->get_result();$payments=[];$unallocated='0';
     while ($p=$res->fetch_assoc()) {
-        $stmt2=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE reversed_at IS NULL AND payment_id=?');
-        $pid=(int)$p['id'];$stmt2->bind_param('i',$pid);$stmt2->execute();$q=$stmt2->get_result()->fetch_assoc();$stmt2->close();
-        $left=money_sub($p['amount'],$q['s']);
+        $pid=(int)$p['id'];
+        $applied=$p['used_allocation'];
+        $left=money_sub($p['amount'],$applied);
         $preferredDirection=$kind==='customer'?'in':'out';
         $unallocated=$p['direction']===$preferredDirection ? money_add($unallocated,$left) : money_sub($unallocated,$left);
-        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'cash_account_name'=>$p['cash_account_name'],'operator_name'=>$p['operator_name'],'allocated'=>$q['s'],'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note'],'source_proforma_id'=>$p['source_proforma_id'],'is_reversed'=>(bool)$p['is_reversed'],'is_reversal'=>$p['reversed_payment_id']!==null];
+        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'cash_account_name'=>$p['cash_account_name'],'operator_name'=>$p['operator_name'],'allocated'=>$applied,'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note'],'source_proforma_id'=>$p['source_proforma_id'],'is_reversed'=>(bool)$p['is_reversed'],'is_reversal'=>$p['reversed_payment_id']!==null];
     }
     $stmt->close();
     $stmt=$db->prepare('SELECT amount FROM account_opening_balances WHERE party_kind=? AND party_id=?');
