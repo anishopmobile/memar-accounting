@@ -36,6 +36,31 @@ try {
         }
         respond_json(true,'پرداخت ثبت شد.',acct_record_payment($mysqli,$input));
     }
+    if ($action==='apply_credit') {
+        $paymentId=filter_var($_POST['payment_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        $invoiceId=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if (!$paymentId || !$invoiceId) throw new InvalidArgumentException('پرداخت یا فاکتور نامعتبر است.');
+        $amount=parseMoneyInput((string)($_POST['amount']??''));
+        respond_json(true,'اعتبار به فاکتور تخصیص داده شد.',acct_apply_credit($mysqli,(int)$paymentId,(int)$invoiceId,$amount));
+    }
+    if ($action==='opening_balance') {
+        $kind=acct_party_kind((string)($_POST['party_kind']??''));
+        $id=filter_var($_POST['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if (!$id) throw new InvalidArgumentException('طرف حساب نامعتبر است.');
+        $raw=trim((string)($_POST['amount']??''));
+        $base=parseMoneyInput($raw);
+        if (!preg_match('/^-?\\d{1,12}(?:\\.\\d{1,2})?$/D',$base)) throw new InvalidArgumentException('مانده افتتاحیه نامعتبر است.');
+        $note=trim((string)($_POST['note']??''));
+        if (mb_strlen($note)>2000) throw new InvalidArgumentException('توضیح بیش از حد مجاز است.');
+        $mysqli->begin_transaction();
+        try {
+            acct_party_lock($mysqli,$kind,(int)$id);
+            $stmt=$mysqli->prepare('INSERT INTO account_opening_balances(party_kind,party_id,amount,note) VALUES(?,?,?,?)');
+            $stmt->bind_param('siss',$kind,$id,$base,$note);$stmt->execute();$stmt->close();
+            $mysqli->commit();
+        } catch (Throwable $e) {$mysqli->rollback();throw $e;}
+        respond_json(true,'مانده افتتاحیه ثبت شد.',['party_id'=>(int)$id]);
+    }
     if ($action==='reconcile_legacy') {
         $invoiceId=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         $amount=acct_decimal(parseMoneyInput((string)($_POST['historical_paid']??'')));
