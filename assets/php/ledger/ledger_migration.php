@@ -51,6 +51,14 @@ function ledger_migrate(mysqli $db): void {
             CONSTRAINT fk_ledger_credit_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
             CHECK (amount > 0)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS ledger_proforma_deposits (
+            payment_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+            proforma_invoice_id INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_ledger_proforma (proforma_invoice_id),
+            CONSTRAINT fk_ledger_deposit_payment FOREIGN KEY (payment_id) REFERENCES ledger_payments(id) ON DELETE RESTRICT,
+            CONSTRAINT fk_ledger_deposit_invoice FOREIGN KEY (proforma_invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         "CREATE TABLE IF NOT EXISTS ledger_openings (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             party_kind ENUM('customer','supplier') NOT NULL,
