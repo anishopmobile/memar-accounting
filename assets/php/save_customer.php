@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/accounting_ledger.php';
+require_once __DIR__ . '/currency.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -31,12 +33,10 @@ if ($customer_id !== '') {
         $id = (int) $customer_id;
         $stmt->close();
 
-        $result = $mysqli->prepare('SELECT total_spent, debt FROM customers WHERE id = ?');
-        $result->bind_param('i', $id);
-        $result->execute();
-        $result->bind_result($total_spent, $debt);
-        $result->fetch();
-        $result->close();
+        $stmtTotal=$mysqli->prepare("SELECT COALESCE(SUM(payable_amount),0) amount FROM invoices WHERE customer_id=? AND type='sales_invoice'");
+        $stmtTotal->bind_param('i',$id);$stmtTotal->execute();
+        $total_spent=$stmtTotal->get_result()->fetch_assoc()['amount'];$stmtTotal->close();
+        $debt=ledger_party_balance($mysqli,'customer',$id)['debt'];
 
         $customer = [
             'id' => $id,
@@ -50,8 +50,8 @@ if ($customer_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_spent' => number_format($total_spent ?? 0),
-            'debt' => number_format($debt ?? 0),
+            'total_spent' => formatMoneyNumber((string)($total_spent ?? '0')),
+            'debt' => formatMoneyNumber((string)($debt ?? '0')),
         ];
         echo json_encode(['success' => true, 'customer' => $customer]);
     } else {
@@ -74,8 +74,8 @@ if ($customer_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_spent' => number_format(0),
-            'debt' => number_format(0),
+            'total_spent' => formatMoneyNumber('0'),
+            'debt' => formatMoneyNumber('0'),
         ];
         echo json_encode(['success' => true, 'customer' => $customer]);
     } else {
