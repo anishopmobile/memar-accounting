@@ -1,0 +1,11 @@
+# Apache defense-in-depth; for Nginx use the equivalent location rules.
+<IfModule mod_authz_core.c>
+  <FilesMatch "(?i)\.(sql|sqlite|db|bak|backup|zip|env|ini|log)$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+</IfModule>
