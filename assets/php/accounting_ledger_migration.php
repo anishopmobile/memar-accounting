@@ -11,7 +11,7 @@ function migrate_accounting_ledger(mysqli $db): void
         applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     // Schema work runs once per revision, not for every invoice/image request.
-    $schemaRevision='ledger_schema_v7_20261022';
+    $schemaRevision='ledger_schema_v8_20261022';
     $ready=$db->prepare('SELECT 1 FROM accounting_migrations WHERE migration_key=? LIMIT 1');
     $ready->bind_param('s',$schemaRevision);$ready->execute();
     $exists=$ready->get_result()->fetch_assoc();$ready->close();
@@ -152,6 +152,20 @@ function migrate_accounting_ledger(mysqli $db): void
     $returnActorCol=$db->query("SHOW COLUMNS FROM account_return_allocations LIKE 'created_by'");
     if ($returnActorCol && $returnActorCol->num_rows===0)
         $db->query("ALTER TABLE account_return_allocations ADD COLUMN created_by INT NULL");
+    // Refunds consume documented credit sources. Otherwise refunded credit
+    // could still be allocated to a later invoice and counted twice.
+    $db->query("CREATE TABLE IF NOT EXISTS account_refund_sources (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        refund_payment_id BIGINT UNSIGNED NOT NULL,
+        source_kind ENUM('payment','return','opening') NOT NULL,
+        source_id BIGINT UNSIGNED NOT NULL,
+        amount DECIMAL(14,2) NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_refund_source(refund_payment_id,source_kind,source_id),
+        KEY idx_refund_source(source_kind,source_id),
+        CONSTRAINT fk_refund_payment FOREIGN KEY(refund_payment_id) REFERENCES account_payments(id) ON DELETE RESTRICT,
+        CONSTRAINT chk_refund_source_amount CHECK(amount>0)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $db->query("CREATE TABLE IF NOT EXISTS account_opening_balances (
         party_kind ENUM('customer','supplier') NOT NULL,
         party_id INT NOT NULL,
