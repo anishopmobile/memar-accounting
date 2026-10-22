@@ -20,6 +20,7 @@ function ledger_migrate(mysqli $db): void {
       reversal_of BIGINT UNSIGNED NULL,
       source_proforma_id INT NULL,
       request_key VARCHAR(80) NULL UNIQUE,
+      request_fingerprint CHAR(64) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       KEY idx_ar_party (party_kind,party_id,payment_date),
       UNIQUE KEY uq_ar_reversal (reversal_of),
