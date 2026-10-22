@@ -140,4 +140,28 @@ ck($n===1,'proforma deposit link exists before conversion');
 $converted=convertInvoice($mysqli,$proId);
 ck($converted['ok'],'proforma conversion successful');
 ck(ledger_invoice_balance($mysqli,$proId)['due']==='10000000.00','deposit applied to converted purchase invoice');
+// One source of truth across party pages, exports and dashboard.
+require_once dirname(__DIR__).'/ledger/ledger_reports.php';
+$customers=ledger_parties_report($mysqli,'customer');
+$ourCustomer=array_values(array_filter($customers,fn($row)=>(int)$row['id']===$customer))[0]??null;
+ck($ourCustomer!==null,'ledger customer appears in account reports');
+ck((string)$ourCustomer['debt']===ledger_party_summary($mysqli,'customer',$customer)['debt'],'customer reports equal ledger balance');
+ck((int)$ourCustomer['requires_reconciliation']===0,'reconciled old partial invoice not falsely uncertain');
+$suppliers=ledger_parties_report($mysqli,'supplier');
+$ourSupplier=array_values(array_filter($suppliers,fn($row)=>(int)$row['id']===$supplier))[0]??null;
+ck($ourSupplier!==null,'ledger supplier appears in supplier reports');
+ck((string)$ourSupplier['unpaid']==='60000000.00','supplier report reflects existing opening and new 15m proforma conversion minus 5m deposit');
+$overall=ledger_outstanding_for_period($mysqli,date('Y-m-d'),date('Y-m-d'));
+ck(money_cmp($overall,'0')>=0,'dashboard outstanding query returns nonnegative decimal');
+$voidParty=addParty($mysqli,'customer');
+$voidInvoice=addInvoice($mysqli,'customer',$voidParty,'500');
+$voidPayment=makePayment($mysqli,'customer',$voidParty,'200',[['invoice_id'=>$voidInvoice,'amount'=>'200']]);
+ck(ledger_invoice_balance($mysqli,$voidInvoice)['due']==='300.00','payment before void');
+$voided=ledger_void_payment($mysqli,'customer',$voidParty,(int)$voidPayment['payment_id'],'Confirmed mistaken duplicate till receipt');
+ck($voided['voided_payment_id']===$voidPayment['payment_id'],'void leaves transaction with audit history');
+ck(ledger_invoice_balance($mysqli,$voidInvoice)['due']==='500.00','void restores invoice due');
+$now=$mysqli->query('SELECT void_reason FROM ledger_payments WHERE id='.(int)$voidPayment['payment_id'])->fetch_assoc();
+ck(str_contains($now['void_reason'],'mistaken'),'documented void explanation survives');
+try{ledger_void_payment($mysqli,'customer',$voidParty,(int)$voidPayment['payment_id'],'Attempt to void same payment a second time');throw new RuntimeException('double void accepted');}
+catch(DomainException $e){ck(true,'duplicate void rejected');}
 echo "ALL ACCOUNTING LEDGER MYSQL INTEGRATION CHECKS PASSED\n";
