@@ -31,7 +31,7 @@ function acct_invoice_outstanding(mysqli $db, int $id, bool $lock = false): arra
     if (!$inv || !in_array($inv['type'],['sales_invoice','purchase_invoice'],true))
         throw new InvalidArgumentException('فقط فاکتور قطعی قابل تسویه است.');
     $unreconciled = $inv['legacy_paid_amount'] === null;
-    $stmt=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE invoice_id=?');
+    $stmt=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE reversed_at IS NULL AND invoice_id=?');
     $stmt->bind_param('i',$id);$stmt->execute();$r=$stmt->get_result();
     $paid=money_add($inv['legacy_paid_amount'] ?? '0',($r?$r->fetch_assoc()['s']:'0'));
     $stmt->close();
@@ -124,11 +124,12 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
     $stmt=$db->prepare('SELECT * FROM account_payments WHERE party_kind=? AND party_id=? ORDER BY payment_date,id');
     $stmt->bind_param('si',$kind,$partyId);$stmt->execute();$res=$stmt->get_result();$payments=[];$unallocated='0';
     while ($p=$res->fetch_assoc()) {
-        $stmt2=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE payment_id=?');
+        $stmt2=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE reversed_at IS NULL AND payment_id=?');
         $pid=(int)$p['id'];$stmt2->bind_param('i',$pid);$stmt2->execute();$q=$stmt2->get_result()->fetch_assoc();$stmt2->close();
         $left=money_sub($p['amount'],$q['s']);
-        $unallocated=money_add($unallocated,$left);
-        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'method'=>$p['method'],'allocated'=>$q['s'],'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note']];
+        $preferredDirection=$kind==='customer'?'in':'out';
+        $unallocated=$p['direction']===$preferredDirection ? money_add($unallocated,$left) : money_sub($unallocated,$left);
+        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'allocated'=>$q['s'],'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note']];
     }
     $stmt->close();
     $stmt=$db->prepare('SELECT amount FROM account_opening_balances WHERE party_kind=? AND party_id=?');
@@ -160,7 +161,7 @@ function acct_apply_credit(mysqli $db, int $paymentId, int $invoiceId, $rawAmoun
         if (($kind==='customer' && ($inv['type']!=='sales_invoice'||(int)$inv['customer_id']!==(int)$p['party_id']))
             || ($kind==='supplier' && ($inv['type']!=='purchase_invoice'||(int)$inv['supplier_id']!==(int)$p['party_id'])))
             throw new InvalidArgumentException('طرف حساب فاکتور و پرداخت متفاوت است.');
-        $stmt=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE payment_id=?');
+        $stmt=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE reversed_at IS NULL AND payment_id=?');
         $stmt->bind_param('i',$paymentId);$stmt->execute();$used=$stmt->get_result()->fetch_assoc()['s'];$stmt->close();
         if (money_cmp($amount,money_sub($p['amount'],$used))>0 || money_cmp($amount,$v['remaining'])>0)
             throw new InvalidArgumentException('مبلغ از اعتبار آزاد یا مانده فاکتور بیشتر است.');
@@ -182,6 +183,7 @@ function acct_party_balances(mysqli $db,string $kind): array {
     $party=$kind==='customer'?'customers':'suppliers';
     $col=$kind==='customer'?'customer_id':'supplier_id';
     $typ=$kind==='customer'?'sales_invoice':'purchase_invoice';
+    $preferredDirection=$kind==='customer'?'in':'out';
     $ret=$kind==='customer'
       ? "LEFT JOIN (SELECT customer_id AS party_id,SUM(payable_amount) total FROM sales_returns GROUP BY customer_id) rr ON rr.party_id=p.id"
       : '';
@@ -202,12 +204,12 @@ function acct_party_balances(mysqli $db,string $kind): array {
           SELECT i.{$col} party_id,SUM(a.amount) settled
           FROM account_payment_allocations a
           JOIN invoices i ON i.id=a.invoice_id
-          WHERE i.type='{$typ}' GROUP BY i.{$col}
+          WHERE i.type='{$typ}' AND a.reversed_at IS NULL GROUP BY i.{$col}
         ) al ON al.party_id=p.id
         LEFT JOIN (
-          SELECT x.party_id,SUM(x.amount-COALESCE(y.used,0)) free
+          SELECT x.party_id,SUM(CASE WHEN x.direction='{$preferredDirection}' THEN x.amount-COALESCE(y.used,0) ELSE -x.amount END) free
           FROM account_payments x
-          LEFT JOIN (SELECT payment_id,SUM(amount) used FROM account_payment_allocations GROUP BY payment_id) y ON y.payment_id=x.id
+          LEFT JOIN (SELECT payment_id,SUM(amount) used FROM account_payment_allocations WHERE reversed_at IS NULL GROUP BY payment_id) y ON y.payment_id=x.id
           WHERE x.party_kind='{$kind}'
           GROUP BY x.party_id
         ) py ON py.party_id=p.id
