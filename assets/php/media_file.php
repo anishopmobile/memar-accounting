@@ -1,6 +1,8 @@
 <?php
 /** Private, authenticated media streaming. Files never reside in webroot. */
 declare(strict_types=1);
+// Only this read-only authenticated image route may skip repeat schema initialization.
+define('MEMAR_DB_READ_ONLY_FASTPATH', true);
 require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/media_common.php';
 $id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
