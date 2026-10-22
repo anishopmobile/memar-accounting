@@ -563,7 +563,7 @@ $(function () {
     // ---------- مودال انتخاب خدمت (فقط فاکتور فروش) ----------
     var serviceSearchTimer = null, serviceRequest = null, serviceSequence = 0;
     function openServiceModal() {
-        $('#invoiceServiceTable tbody').html('<tr><td colspan="7" class="empty-state">در حال بارگذاری...</td></tr>');
+        $('#invoiceServiceTable tbody').html('<tr><td colspan="8" class="empty-state">در حال بارگذاری...</td></tr>');
         loadServices('');
         openModal('invoiceServiceModal');
         $('#invoiceServiceSearch').val('').focus();
@@ -576,7 +576,7 @@ $(function () {
             var rows = res.data || [];
             $('#invoiceServiceTable .invoice-image-col').toggle(mediaImagesEnabled);
             var html = '';
-            if (!rows.length) html = '<tr><td colspan="7" class="empty-state">خدمتی یافت نشد.</td></tr>';
+            if (!rows.length) html = '<tr><td colspan="8" class="empty-state">خدمتی یافت نشد.</td></tr>';
             rows.forEach(function (p) {
                 var units = p.units || [];
                 var price = (units.length)
