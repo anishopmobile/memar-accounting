@@ -32,6 +32,12 @@ function getSalesInvoicePrintData(mysqli $mysqli, int $invoiceId): array
     }
 
     $type = (string) $invoice['type'];
+    if (in_array($type,['sales_invoice','purchase_invoice'],true)) {
+        require_once __DIR__ . '/accounting_ledger.php';
+        $settlement=ledger_invoice_balance($mysqli,$invoiceId);
+        $invoice['settled_amount']=$settlement['settled'];
+        $invoice['remaining_amount']=$settlement['balance'];
+    }
     if ($type !== 'sales_invoice' && $type !== 'sales_proforma') {
         // خرید و هر نوع نامعتبر دیگر هرگز از این endpoint رندر نمی‌شود
         return ['ok' => false, 'error' => 'invalid_type'];
@@ -142,6 +148,12 @@ function getPurchaseInvoicePrintData(mysqli $mysqli, int $invoiceId): array
     }
 
     $type = (string) $invoice['type'];
+    if (in_array($type,['sales_invoice','purchase_invoice'],true)) {
+        require_once __DIR__ . '/accounting_ledger.php';
+        $settlement=ledger_invoice_balance($mysqli,$invoiceId);
+        $invoice['settled_amount']=$settlement['settled'];
+        $invoice['remaining_amount']=$settlement['balance'];
+    }
     if ($type !== 'purchase_invoice' && $type !== 'purchase_proforma') {
         // فروش و هر نوع نامعتبر دیگر هرگز از این مسیر رندر نمی‌شود
         return ['ok' => false, 'error' => 'invalid_type'];
