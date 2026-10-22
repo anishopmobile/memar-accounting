@@ -300,6 +300,7 @@ $(function () {
         var html = '<div class="invoice-form" id="invoiceForm">'
             + '<div class="page-actions">'
             + '<button type="button" class="button-secondary" id="invoiceBackToList">بازگشت به فاکتورها</button>'
+            + (isEdit ? '<button type="button" class="button-secondary" id="invAccountPayments">دریافت/پرداخت و صورت‌حساب</button>' : '')
             + '<h2 style="margin:0;">' + (isEdit ? 'ویرایش فاکتور' : 'ایجاد فاکتور') + '</h2>'
             + '</div>'
             + '<input type="hidden" id="invId" value="' + escAttr(currentInvoiceId) + '">'
@@ -457,6 +458,14 @@ $(function () {
     }
 
     $(document).on('click', '#invoiceBackToList, #invoiceFormCancel', function () { showList(); });
+    $(document).on('click', '#invAccountPayments', function () {
+        var id=Number($('#invId').val());
+        if(!id || !window.AccountingLedger)return;
+        $.getJSON('assets/php/invoice_get.php',{id:id}).done(function(res){
+            if(res.success&&res.data)window.AccountingLedger.openInvoice(res.data);
+            else alert('دریافت اطلاعات فاکتور ناموفق بود.');
+        }).fail(function(){alert('خطا در دریافت اطلاعات مالی فاکتور.');});
+    });
     $(document).on('input', '#invItemsTable .ii-price, #invItemsTable .ii-qty, #invItemsTable .ii-disc, #invDiscount', function () { recalcs(); });
     $(document).on('click', '.ii-remove', function () { $(this).closest('tr').remove(); recalcs(); });
     $(document).on('click', '#invAddProduct', function () { openProductModal(); });
