@@ -132,7 +132,7 @@ $(function () {
         var status = encodeURIComponent($('#invoiceStatusFilter').val() || '');
         $.getJSON('assets/php/invoice_list.php?type_group=' + typeGroup + '&search=' + search + '&payment_status=' + status + '&page=' + currentPage)
             .done(function (res) { renderInvoiceList(res.data); })
-            .fail(function () { $('#invoicesTable tbody').html('<tr><td colspan="7" class="empty-state">خطا در بارگذاری فاکتورها.</td></tr>'); });
+            .fail(function () { $('#invoicesTable tbody').html('<tr><td colspan="9" class="empty-state">خطا در بارگذاری فاکتورها.</td></tr>'); });
     }
     function renderInvoiceList(data) {
         var rows = (data && data.rows) || [];
@@ -142,7 +142,7 @@ $(function () {
         var perPage = (data && data.per_page) || 15;
         var tbody = $('#invoicesTable tbody');
         if (!rows.length) {
-            tbody.html('<tr><td colspan="7" class="empty-state">فاکتوری یافت نشد.</td></tr>');
+            tbody.html('<tr><td colspan="9" class="empty-state">فاکتوری یافت نشد.</td></tr>');
             renderInvoicePagination({ total: 0, page: 1, perPage: perPage });
             return;
         }
@@ -156,8 +156,10 @@ $(function () {
                 + '<td>' + esc(r.party_name) + '</td>'
                 + '<td>' + esc(r.invoice_date_shamsi) + '</td>'
                 + '<td>' + typeLbl + '</td>'
-                + '<td>' + stLbl + '</td>'
+                + '<td>' + stLbl + (r.legacy_unresolved ? ' (نامشخص تاریخی)' : '') + '</td>'
                 + '<td>' + fmtRial(r.payable_amount) + ' ' + window.Currency.label + '</td>'
+                + '<td>' + (r.settled_amount === null ? '—' : fmtRial(r.settled_amount) + ' ' + window.Currency.label) + '</td>'
+                + '<td>' + (r.remaining_amount === null ? '—' : fmtRial(r.remaining_amount) + ' ' + window.Currency.label) + '</td>'
                 + '<td class="invoice-actions">'
                 + (!isPro ? '<a class="button-secondary small" href="?page=accounting-ledger&kind=' + (isSales ? 'customer' : 'supplier') + '&party_id=' + encodeURIComponent(isSales ? r.customer_id : r.supplier_id) + '">دریافت / پرداخت</a> ' : '')
                 + '<button class="button-secondary small invoice-edit" data-id="' + r.id + '" type="button">مشاهده/ویرایش</button> '
@@ -498,7 +500,7 @@ $(function () {
     var pickedScheduled = true;
     var productSearchTimer = null, productRequest = null, productRequestSeq = 0;
     function openProductModal() {
-        $('#invoiceProductTable tbody').html('<tr><td colspan="7" class="empty-state">در حال بارگذاری...</td></tr>');
+        $('#invoiceProductTable tbody').html('<tr><td colspan="9" class="empty-state">در حال بارگذاری...</td></tr>');
         loadProducts('');
         openModal('invoiceProductModal');
         $('#invoiceProductSearch').val('').focus();
