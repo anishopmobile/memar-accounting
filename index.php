@@ -65,6 +65,7 @@ if (!array_key_exists($page, $pages)) {
     <link rel="stylesheet" href="assets/css/product-brand-defective.css">
     <link rel="stylesheet" href="assets/vendor/hcg-searchable-select/hcg-select.css">
     <link rel="stylesheet" href="assets/css/hcg-select-integration.css">
+    <link rel="stylesheet" href="assets/css/accounting.css">
     <?php if (in_array($page, ['goods-and-services','product-categories','media-library','settings','factors','purchase-invoice','sales-return','defective-goods','report-inventory','report-sold-items-detail','dashboard'], true)): ?>
     <link rel="stylesheet" href="assets/vendor/dropzone/dropzone.min.css">
     <link rel="stylesheet" href="assets/css/media-library.css">
