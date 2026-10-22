@@ -28,7 +28,7 @@ $(function(){
       $('#acAllocationList').html(opts||'فاکتور باز وجود ندارد.');
       var receipts='';
       data.payments.forEach(function(p){
-        receipts+='<tr><td>'+esc(p.payment_date)+'</td><td>'+(p.direction==='in'?'دریافت':'پرداخت')+'</td><td>'+money(p.amount)+'</td><td>'+money(p.allocated)+'</td><td>'+money(p.available)+'</td><td>'+esc(p.method)+'</td><td>'+(Number(p.available)>0?'<button class="button-secondary small ac-apply" data-id="'+p.id+'" data-available="'+esc(base(p.available))+'">تخصیص اعتبار</button>':'—')+'</td></tr>';
+        receipts+='<tr><td>'+esc(p.payment_date)+'</td><td>'+(p.direction==='in'?'دریافت':'پرداخت')+(p.state!=='posted'?' (ابطال‌شده)':'')+'</td><td>'+money(p.amount)+'</td><td>'+money(p.allocated)+'</td><td>'+money(p.available)+'</td><td>'+esc(p.method)+'</td><td>'+(p.state==='posted'?(Number(p.available)>0?'<button class="button-secondary small ac-apply" data-id="'+p.id+'" data-available="'+esc(base(p.available))+'">تخصیص اعتبار</button> ':'')+'<button class="button-danger small ac-reverse" data-id="'+p.id+'">ابطال سند</button>':'—')+'</td></tr>';
       });
       $('#acReceipts').html(receipts||'<tr><td colspan="7">تراکنشی ثبت نشده است.</td></tr>');
     }).fail(function(){$('#acBalance').text('خطا در دریافت صورت‌حساب');});
@@ -67,6 +67,13 @@ $(function(){
     var amount=prompt('مبلغ تخصیص ('+currency.label+')، سقف اعتبار آزاد: '+available, String(available));
     if(amount===null)return;
     post({action:'allocate',receipt_id:receiptId,invoice_id:invoiceId,amount:amount});
+  });
+  $(document).on('click','.ac-reverse',function(){
+    var id=$(this).data('id');
+    if(!confirm('این عملیات سابقه مالی را حفظ می‌کند اما اثر دریافت یا پرداخت را معکوس می‌کند. آیا مطمئن هستید؟'))return;
+    var reason=prompt('دلیل ابطال سند را وارد کنید (حداقل ۴ حرف):');
+    if(reason===null)return;
+    post({action:'reverse',receipt_id:id,reason:reason});
   });
   refresh();
 });
