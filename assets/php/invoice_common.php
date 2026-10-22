@@ -902,7 +902,7 @@ function createInvoice(mysqli $mysqli, array $in): array
             $customerId,
             $supplierId,
             $in['payment_type'],
-            $in['payment_status'],
+            $old['payment_status'],
             $in['invoice_date'],
             $totals['subtotal'],
             $invoiceDiscount,
@@ -963,6 +963,26 @@ function createInvoice(mysqli $mysqli, array $in): array
             }
         }
 
+        // One atomic invoice + initial receipt; proformas never create debts or cash movements.
+        $initial = (string)($in['initial_payment_amount'] ?? '0');
+        if (isFinal($type) && money_cmp($initial,'0') > 0) {
+            require_once __DIR__ . '/accounting_ledger.php';
+            if (money_cmp($initial,$totals['payable_amount']) > 0) throw new Exception('پرداخت اولیه از مبلغ فاکتور بیشتر است.');
+            ledger_post_in_tx($mysqli,[
+                'party_kind'=>isSales($type)?'customer':'supplier',
+                'party_id'=>$partyId,
+                'direction'=>isSales($type)?'in':'out',
+                'amount'=>$initial,
+                'method'=>$in['payment_type'],
+                'payment_date'=>$in['invoice_date'],
+                'request_key'=>'invoice-initial-'.$invoiceId,
+                'allocations'=>[['invoice_id'=>$invoiceId,'amount'=>$initial]]
+            ]);
+        }
+        if (isFinal($type)) {
+            require_once __DIR__ . '/accounting_ledger.php';
+            ledger_update_invoice_status($mysqli,$invoiceId);
+        }
         $mysqli->commit();
         return ['ok' => true, 'message' => 'فاکتور با موفقیت ثبت شد.', 'invoice_id' => $invoiceId];
     } catch (Exception $e) {
@@ -1258,7 +1278,14 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         );
         $stmt->execute();
         $stmt->close();
-
+        if (isFinal($newType)) {
+            require_once __DIR__ . '/accounting_ledger.php';
+            $financial = ledger_invoice_balance($mysqli,$invoiceId,true);
+            if (money_cmp($financial['balance'],'0') < 0) {
+                throw new Exception('مبلغ جدید کمتر از تسویه‌های ثبت‌شده است؛ ابتدا سند اصلاحی مالی ثبت کنید.');
+            }
+            ledger_update_invoice_status($mysqli,$invoiceId);
+        }
         $mysqli->commit();
         return ['ok' => true, 'message' => 'فاکتور با موفقیت ویرایش شد.', 'invoice_id' => $invoiceId];
     } catch (Exception $e) {
@@ -1363,6 +1390,12 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
             // پیش‌فاکتور: بدون تغییر موجودی
         }
 
+        // Financial records are immutable and must never disappear with an invoice.
+        require_once __DIR__ . '/accounting_ledger.php';
+        $check=ledger_invoice_balance($mysqli,$invoiceId,true);
+        if (money_cmp($check['allocated'],'0')>0 || money_cmp($check['historical'],'0')>0 || $check['needs_review']) {
+            throw new Exception('فاکتور دارای سوابق مالی است و قابل حذف مستقیم نیست.');
+        }
         // اقلام با CASCADE حذف می‌شوند؛ stock_movements با ON DELETE SET NULL باقی می‌ماند
         $stmt = $mysqli->prepare('DELETE FROM invoices WHERE id = ?');
         $stmt->bind_param('i', $invoiceId);
