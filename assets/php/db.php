@@ -11,9 +11,17 @@ if (!preg_match('/^[A-Za-z0-9_]+$/D', $dbName)) {
     exit('نام پایگاه داده در تنظیمات معتبر نیست.');
 }
 
-$mysqli = new mysqli($dbHost, $dbUser, $dbPass);
+try {
+    $mysqli = new mysqli($dbHost, $dbUser, $dbPass);
+} catch (mysqli_sql_exception $e) {
+    error_log('Database connection failed: ' . $e->getMessage());
+    http_response_code(503);
+    exit('ارتباط با پایگاه داده برقرار نشد. لطفاً با مدیر سامانه تماس بگیرید.');
+}
 if ($mysqli->connect_errno) {
-    die('خطا در اتصال به دیتابیس: ' . $mysqli->connect_error);
+    error_log('Database connection failed: ' . $mysqli->connect_error);
+    http_response_code(503);
+    exit('ارتباط با پایگاه داده برقرار نشد. لطفاً با مدیر سامانه تماس بگیرید.');
 }
 
 $mysqli->query("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
