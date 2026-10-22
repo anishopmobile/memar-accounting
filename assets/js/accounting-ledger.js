@@ -70,6 +70,19 @@ $(function () {
             $('#ledgerTotal').text(money(current.summary.total_invoices));
             $('#ledgerDebt').text(money(current.summary.debt));
             $('#ledgerCredit').text(money(current.summary.credit));
+            var statement=current.statement||{entries:[],truncated:false};
+            $('#ledgerStatementWarning').prop('hidden',!statement.truncated);
+            var ledgerHtml='';
+            (statement.entries||[]).forEach(function(ev){
+                var positive=sameCurrency(ev.delta,'0')>0,abs=String(ev.delta||'0').replace(/^-/, '');
+                var labels={opening:'افتتاحیه',invoice:'فاکتور قطعی',payment:'دریافت / پرداخت',
+                    historical:'تسویه تاریخی',sales_return:'برگشت فروش'};
+                ledgerHtml+='<tr><td>'+escapeHtml(ev.occurred_on)+'</td><td>'+escapeHtml(labels[ev.event_type]||ev.event_type)+'</td>'
+                    +'<td>'+escapeHtml(ev.description)+'</td><td>'+(positive?money(abs):'—')+'</td>'
+                    +'<td>'+(!positive?money(abs):'—')+'</td><td>'+money(ev.running_balance)+'</td></tr>';
+            });
+            $('#ledgerStatement').html(ledgerHtml||'<tr><td colspan="6">گردش مالی وجود ندارد.</td></tr>');
+
             var rows='';
             current.invoices.forEach(function(inv){
                 var locked=inv.legacy_classification==='requires_reconciliation';
