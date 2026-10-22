@@ -117,57 +117,38 @@ if ($stmt) {
     $stmt->close();
 }
 
-// ۵. محاسبه مبلغ پرداخت نشده فروش امروز
-// منطق «بدهی» مطابق بقیه برنامه: payment_status در حالت unpaid|partial
-// کل مبلغ قابل پرداخت به‌عنوان مانده شمرده می‌شود (مثل گزارش بدهی مشتریان).
-$todayUnpaid = 0;
-$stmt = $mysqli->prepare(
-    "SELECT COALESCE(
-         SUM(
-             CASE
-                 WHEN payment_status IN ('unpaid', 'partial')
-                 THEN payable_amount
-                 ELSE 0
-             END
-         ),
-         0
-     ) AS total
-     FROM invoices
-     WHERE type = 'sales_invoice'
-       AND invoice_date = ?"
-);
+// ۵. مانده واقعی فاکتورهای فروش (بدون قاطی‌کردن گردش نقدی و مبلغ فروش).
+// Payment/return aggregates are pre-grouped to avoid join fan-out.
+$todayUnpaid = '0.00';
+$monthlyUnpaid = '0.00';
+$stmt = $mysqli->prepare("
+    SELECT
+      COALESCE(SUM(CASE WHEN x.invoice_date=? THEN x.remaining ELSE 0 END),0) AS today_due,
+      COALESCE(SUM(x.remaining),0) AS month_due
+    FROM (
+      SELECT i.invoice_date,
+        GREATEST(0,i.payable_amount - COALESCE(sr.amount,0)
+          - COALESCE(l.recognized_amount,0) - COALESCE(al.amount,0)) AS remaining
+      FROM invoices i
+      LEFT JOIN (
+        SELECT invoice_id,SUM(payable_amount) amount FROM sales_returns GROUP BY invoice_id
+      ) sr ON sr.invoice_id=i.id
+      LEFT JOIN accounting_legacy_invoices l ON l.invoice_id=i.id
+      LEFT JOIN (
+        SELECT a.invoice_id,SUM(a.amount) amount
+        FROM accounting_allocations a
+        JOIN accounting_receipts r ON r.id=a.receipt_id AND r.status='posted'
+        GROUP BY a.invoice_id
+      ) al ON al.invoice_id=i.id
+      WHERE i.type='sales_invoice' AND i.invoice_date BETWEEN ? AND ?
+    ) x
+");
 if ($stmt) {
-    $stmt->bind_param('s', $todayGreg);
+    $stmt->bind_param('sss', $todayGreg, $monthStartGreg, $monthEndGreg);
     $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result ? $result->fetch_assoc() : null;
-    $todayUnpaid = (float) ($row['total'] ?? 0);
-    $stmt->close();
-}
-
-// ۶. محاسبه مبلغ پرداخت نشده فروش ماه جاری
-$monthlyUnpaid = 0;
-$stmt = $mysqli->prepare(
-    "SELECT COALESCE(
-         SUM(
-             CASE
-                 WHEN payment_status IN ('unpaid', 'partial')
-                 THEN payable_amount
-                 ELSE 0
-             END
-         ),
-         0
-     ) AS total
-     FROM invoices
-     WHERE type = 'sales_invoice'
-       AND invoice_date BETWEEN ? AND ?"
-);
-if ($stmt) {
-    $stmt->bind_param('ss', $monthStartGreg, $monthEndGreg);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result ? $result->fetch_assoc() : null;
-    $monthlyUnpaid = (float) ($row['total'] ?? 0);
+    $row = $stmt->get_result()->fetch_assoc();
+    $todayUnpaid = (string)($row['today_due'] ?? '0');
+    $monthlyUnpaid = (string)($row['month_due'] ?? '0');
     $stmt->close();
 }
 // ═══════════════════════════════════════════════════════════════════
