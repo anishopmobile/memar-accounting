@@ -170,6 +170,8 @@ $(function() {
         row += '<td>' + addressHtml + '</td>';
         row += '<td>' + escapeHtml(customer.total_spent) + '</td>';
         row += '<td>' + escapeHtml(customer.debt) + '</td>';
+        row += '<td>' + escapeHtml(customer.credit || '0') + '</td>';
+        row += '<td><a class="button-secondary small" href="?page=party-statement&kind=customer&id=' + Number(customer.id) + '">صورت‌حساب</a></td>';
         row += '<td><button class="button-secondary small edit-customer" type="button">ویرایش</button> <button class="button-danger small delete-customer" type="button">حذف</button></td>';
         row += '</tr>';
         return row;
@@ -241,7 +243,7 @@ $(function() {
     $('#customerForm').on('submit', function(e) {
         e.preventDefault();
         var $form = $(this);
-        var data = $form.serialize();
+        var data = $form.serialize() + '&csrf_token=' + encodeURIComponent(window.APP_CSRF_TOKEN || '');
         $.post($form.attr('action'), data, function(response) {
             if (response.success) {
                 var customer = response.customer;
@@ -301,6 +303,8 @@ $(function() {
         row += '<td>' + addressHtml + '</td>';
         row += '<td>' + escapeHtml(supplier.total_purchases) + '</td>';
         row += '<td>' + escapeHtml(supplier.unpaid) + '</td>';
+        row += '<td>' + escapeHtml(supplier.credit || '0') + '</td>';
+        row += '<td><a class="button-secondary small" href="?page=party-statement&kind=supplier&id=' + Number(supplier.id) + '">صورت‌حساب</a></td>';
         row += '<td><button class="button-secondary small edit-supplier" type="button">ویرایش</button> <button class="button-danger small delete-supplier" type="button">حذف</button></td>';
         row += '</tr>';
         return row;
@@ -378,7 +382,7 @@ $(function() {
     $('#supplierForm').on('submit', function(e) {
         e.preventDefault();
         var $form = $(this);
-        var data = $form.serialize();
+        var data = $form.serialize() + '&csrf_token=' + encodeURIComponent(window.APP_CSRF_TOKEN || '');
         $.post($form.attr('action'), data, function(response) {
             if (response.success) {
                 var supplier = response.supplier;
