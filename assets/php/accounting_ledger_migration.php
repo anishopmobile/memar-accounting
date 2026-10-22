@@ -121,6 +121,16 @@ function migrate_accounting_ledger(mysqli $db): void
         PRIMARY KEY(party_kind,party_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    $db->query("CREATE TABLE IF NOT EXISTS account_legacy_reconciliations (
+        invoice_id INT PRIMARY KEY,
+        historical_paid_amount DECIMAL(14,2) NOT NULL,
+        old_payment_status ENUM('paid','unpaid','partial') NOT NULL,
+        reason TEXT NOT NULL,
+        performed_by INT NULL,
+        performed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_alr_invoice FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
+        CONSTRAINT chk_alr_paid CHECK(historical_paid_amount>=0)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $column = $db->query("SHOW COLUMNS FROM invoices LIKE 'legacy_paid_amount'");
     if ($column && $column->num_rows === 0) {
         $db->query("ALTER TABLE invoices ADD COLUMN legacy_paid_amount DECIMAL(14,2) NULL DEFAULT NULL");
