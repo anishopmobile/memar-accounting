@@ -10,6 +10,18 @@ function migrate_accounting_ledger(mysqli $db): void
         migration_key VARCHAR(80) PRIMARY KEY,
         applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $db->query("CREATE TABLE IF NOT EXISTS accounting_cash_accounts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(120) NOT NULL,
+        account_type ENUM('cash','pos','bank_transfer') NOT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_ac_name(name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $db->query("INSERT IGNORE INTO accounting_cash_accounts(name,account_type) VALUES
+        ('صندوق فروشگاه','cash'),
+        ('کارت‌خوان فروشگاه','pos'),
+        ('حساب بانکی فروشگاه','bank_transfer')");
     $db->query("CREATE TABLE IF NOT EXISTS account_payments (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         party_kind ENUM('customer','supplier') NOT NULL,
@@ -21,14 +33,22 @@ function migrate_accounting_ledger(mysqli $db): void
         reference_no VARCHAR(120) NULL,
         note TEXT NULL,
         client_token VARCHAR(64) NOT NULL,
+        cash_account_id INT NULL,
         reversed_payment_id BIGINT UNSIGNED NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uq_ap_token(client_token),
+        KEY idx_ap_account(cash_account_id),
+        CONSTRAINT fk_ap_account FOREIGN KEY(cash_account_id) REFERENCES accounting_cash_accounts(id) ON DELETE RESTRICT,
         UNIQUE KEY uq_ap_reversal(reversed_payment_id),
         KEY idx_ap_party(party_kind,party_id,payment_date),
         CONSTRAINT chk_ap_amount CHECK (amount > 0),
         CONSTRAINT fk_ap_reversal FOREIGN KEY (reversed_payment_id) REFERENCES account_payments(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $cashColumn=$db->query("SHOW COLUMNS FROM account_payments LIKE 'cash_account_id'");
+    if ($cashColumn && $cashColumn->num_rows===0) {
+        $db->query("ALTER TABLE account_payments ADD COLUMN cash_account_id INT NULL,
+            ADD CONSTRAINT fk_ap_account FOREIGN KEY(cash_account_id) REFERENCES accounting_cash_accounts(id) ON DELETE RESTRICT");
+    }
     $db->query("CREATE TABLE IF NOT EXISTS account_payment_allocations (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         payment_id BIGINT UNSIGNED NOT NULL,
