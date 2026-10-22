@@ -271,7 +271,7 @@ $(function () {
         recalcs();
     }
 
-    function returnImage(id) {
+    function returnImage(id, productId) {
         if (id === undefined || id === null) return '';
         var n = Number(id) || 0;
         return '<img class="media-thumb" loading="lazy" data-id="' + n + '" width="40" height="40" style="vertical-align:middle;margin-left:6px" alt="" src="' +
