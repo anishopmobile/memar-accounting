@@ -121,7 +121,7 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
         else $total=money_add($total,$v['remaining']);
     }
     $stmt->close();
-    $stmt=$db->prepare('SELECT * FROM account_payments WHERE party_kind=? AND party_id=? ORDER BY payment_date,id');
+    $stmt=$db->prepare('SELECT p.*, EXISTS(SELECT 1 FROM account_payments rev WHERE rev.reversed_payment_id=p.id) AS is_reversed FROM account_payments p WHERE party_kind=? AND party_id=? ORDER BY payment_date,id');
     $stmt->bind_param('si',$kind,$partyId);$stmt->execute();$res=$stmt->get_result();$payments=[];$unallocated='0';
     while ($p=$res->fetch_assoc()) {
         $stmt2=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE reversed_at IS NULL AND payment_id=?');
@@ -129,7 +129,7 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
         $left=money_sub($p['amount'],$q['s']);
         $preferredDirection=$kind==='customer'?'in':'out';
         $unallocated=$p['direction']===$preferredDirection ? money_add($unallocated,$left) : money_sub($unallocated,$left);
-        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'allocated'=>$q['s'],'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note']];
+        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'allocated'=>$q['s'],'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note'],'is_reversed'=>(bool)$p['is_reversed'],'is_reversal'=>$p['reversed_payment_id']!==null];
     }
     $stmt->close();
     $stmt=$db->prepare('SELECT amount FROM account_opening_balances WHERE party_kind=? AND party_id=?');
