@@ -976,6 +976,7 @@ $(function() {
         direction: 'asc'
     };
     var productSearchTimer = null;
+    var productListRequest = null, productListSequence = 0;
 
     function refreshProducts() {
         if ($('#products-list').length === 0) {
@@ -985,7 +986,10 @@ $(function() {
         productListState.perPage = (isNaN(perPage) || perPage < 10) ? 25 : perPage;
         var term = $('#productSearch').val() || '';
         var category = $('#productCategoryFilter').val() || '';
-        $.getJSON('assets/php/product_list.php', {
+        // Prevent an older search response from hiding a newly added image/product.
+        if (productListRequest && productListRequest.readyState !== 4) productListRequest.abort();
+        var sequence = ++productListSequence;
+        productListRequest = $.getJSON('assets/php/product_list.php', {
             search: term,
             category: category,
             page: productListState.page,
@@ -993,6 +997,7 @@ $(function() {
             sort: productListState.sort,
             direction: productListState.direction
         }, function(response) {
+            if (sequence !== productListSequence) return;
             if (response && response.success) {
                 $('#products-list tbody').html(response.tableBody);
                 $('#inventoryValue').text(response.inventoryValue);
