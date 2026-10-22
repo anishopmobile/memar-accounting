@@ -8,6 +8,21 @@ $action = (string) ($_POST['action'] ?? $_GET['action'] ?? 'list');
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        // Release the session lock so thumbnail streams and search requests run concurrently.
+        if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+        if ($action === 'folders') {
+            $folders = [];
+            $result = $mysqli->query('SELECT f.id, f.name,
+                (SELECT COUNT(*) FROM media m WHERE m.folder_id=f.id) AS media_count
+                FROM media_folders f ORDER BY f.name, f.id');
+            while ($result && ($row = $result->fetch_assoc())) $folders[] = $row;
+            respond_json(true, '', ['folders'=>$folders]);
+        }
+        if ($action === 'defective') {
+            $id = filter_var($_GET['defective_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+            if (!$id) respond_error('شناسه ثبت معیوب نامعتبر است.', 422);
+            respond_json(true, '', ['items'=>media_defective_list($mysqli, (int)$id)]);
+        }
         if ($action === 'product') {
             $id = filter_var($_GET['product_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
             if (!$id) respond_error('شناسه محصول نامعتبر است.', 422);
@@ -30,16 +45,28 @@ try {
         if (mb_strlen($term) > 120) $term = mb_substr($term, 0, 120);
         $usage = (string)($_GET['usage'] ?? 'all');
         if (!in_array($usage, ['all', 'used', 'unused'], true)) $usage = 'all';
+        $folder = (string)($_GET['folder'] ?? 'all');
+        if ($folder !== 'all' && (!ctype_digit($folder) || strlen($folder) > 10)) {
+            respond_error('پوشه نامعتبر است.', 422);
+        }
         $conditions = [];
         $types = '';
         $values = [];
+        if ($folder === '0') {
+            $conditions[] = 'm.folder_id IS NULL';
+        } elseif ($folder !== 'all') {
+            $conditions[] = 'm.folder_id = ?';
+            $types .= 'i';
+            $values[] = (int)$folder;
+        }
         if ($term !== '') {
             $conditions[] = 'm.original_filename LIKE ?';
             $types .= 's';
             $values[] = '%' . $term . '%';
         }
         $usageSql = '(EXISTS (SELECT 1 FROM product_media pm WHERE pm.media_id=m.id)
-                         OR EXISTS (SELECT 1 FROM category_media cm WHERE cm.media_id=m.id))';
+                         OR EXISTS (SELECT 1 FROM category_media cm WHERE cm.media_id=m.id)
+                         OR EXISTS (SELECT 1 FROM defective_media dm WHERE dm.media_id=m.id))';
         if ($usage === 'used') $conditions[] = $usageSql;
         if ($usage === 'unused') $conditions[] = 'NOT ' . $usageSql;
         $where = $conditions ? ' WHERE ' . implode(' AND ', $conditions) : '';
@@ -49,9 +76,10 @@ try {
         $total = (int)($count->get_result()->fetch_assoc()['n'] ?? 0);
         $count->close();
         $offset = ($page - 1) * $perPage;
-        $sql = 'SELECT m.id,m.original_filename,m.file_size,m.width,m.height,m.created_at,
+        $sql = 'SELECT m.id,m.original_filename,m.folder_id,m.file_size,m.width,m.height,m.created_at,
                 (SELECT COUNT(*) FROM product_media pm WHERE pm.media_id=m.id) AS products_count,
-                (SELECT COUNT(*) FROM category_media cm WHERE cm.media_id=m.id) AS categories_count
+                (SELECT COUNT(*) FROM category_media cm WHERE cm.media_id=m.id) AS categories_count,
+                (SELECT COUNT(*) FROM defective_media dm WHERE dm.media_id=m.id) AS defective_count
                 FROM media m' . $where . ' ORDER BY m.id DESC LIMIT ? OFFSET ?';
         $stmt = $mysqli->prepare($sql);
         $bind = array_merge($values, [$perPage, $offset]);
@@ -72,7 +100,58 @@ try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') respond_error('روش درخواست نامعتبر است.', 405);
     require_csrf_or_fail();
 
+    if ($action === 'folder_create') {
+        $name = trim((string)($_POST['name'] ?? ''));
+        if ($name === '' || mb_strlen($name) > 140 || preg_match('/[<>\\x00-\\x1F]/u', $name)) {
+            respond_error('نام پوشه باید بین ۱ تا ۱۴۰ کاراکتر و بدون کاراکتر غیرمجاز باشد.', 422);
+        }
+        $stmt = $mysqli->prepare('INSERT INTO media_folders(name) VALUES (?)');
+        try {
+            $stmt->bind_param('s', $name);
+            $stmt->execute();
+            $id = (int)$stmt->insert_id;
+        } catch (mysqli_sql_exception $e) {
+            respond_error('این نام پوشه قبلاً استفاده شده یا مجاز نیست.', 409);
+        } finally { $stmt->close(); }
+        respond_json(true, 'پوشه ایجاد شد.', ['id'=>$id, 'name'=>$name]);
+    }
+    if ($action === 'media_move') {
+        $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+        $folderId = filter_var($_POST['folder_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>0]]);
+        if (!$id || $folderId === false || $folderId === null) respond_error('تصویر یا پوشه نامعتبر است.', 422);
+        if ($folderId > 0) {
+            $f = $mysqli->prepare('SELECT id FROM media_folders WHERE id=?');
+            $f->bind_param('i',$folderId); $f->execute();
+            $found = $f->get_result()->fetch_assoc(); $f->close();
+            if (!$found) respond_error('پوشه موردنظر وجود ندارد.', 404);
+        }
+        $target = $folderId > 0 ? (int)$folderId : null;
+        $stmt = $mysqli->prepare('UPDATE media SET folder_id=? WHERE id=?');
+        $stmt->bind_param('ii', $target, $id);
+        $stmt->execute(); $changed = $stmt->affected_rows; $stmt->close();
+        if (!media_get($mysqli,(int)$id)) respond_error('تصویر موردنظر یافت نشد.',404);
+        respond_json(true, 'پوشه تصویر تغییر کرد.', ['changed'=>$changed]);
+    }
+    if ($action === 'folder_delete') {
+        $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+        if (!$id) respond_error('شناسه پوشه نامعتبر است.', 422);
+        $stmt = $mysqli->prepare('DELETE FROM media_folders WHERE id=? AND NOT EXISTS
+            (SELECT 1 FROM media m WHERE m.folder_id=media_folders.id)');
+        $stmt->bind_param('i',$id); $stmt->execute();
+        $changed = $stmt->affected_rows; $stmt->close();
+        if ($changed !== 1) respond_error('پوشه خالی نیست یا وجود ندارد.', 409);
+        respond_json(true, 'پوشه خالی حذف شد.');
+    }
     if ($action === 'upload') {
+        $folderId = filter_var($_POST['folder_id'] ?? '0', FILTER_VALIDATE_INT, ['options'=>['min_range'=>0]]);
+        if ($folderId === false || $folderId === null) respond_error('شناسه پوشه نامعتبر است.',422);
+        if ($folderId > 0) {
+            $f = $mysqli->prepare('SELECT id FROM media_folders WHERE id=?');
+            $f->bind_param('i',$folderId); $f->execute();
+            $found = $f->get_result()->fetch_assoc(); $f->close();
+            if (!$found) respond_error('پوشه انتخاب‌شده وجود ندارد.',404);
+        }
+        $folderId = $folderId > 0 ? (int)$folderId : null;
         if (!isset($_FILES['file']) || !is_array($_FILES['file'])
             || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
             || !is_uploaded_file((string)($_FILES['file']['tmp_name'] ?? ''))) {
@@ -167,10 +246,10 @@ try {
         try {
             $stmt = $mysqli->prepare(
                 'INSERT INTO media(original_filename,stored_filename,original_path,thumbnail_path,mime_type,
-                file_size,width,height,sha256,uploaded_by) VALUES (?,?,?,?,?,?,?,?,?,?)'
+                file_size,width,height,sha256,uploaded_by,folder_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
             );
-            $stmt->bind_param('sssssiiisi', $filename, $name, $original, $thumb, $mime,
-                $fileSize, $w, $h, $hash, $userId);
+            $stmt->bind_param('sssssiiisii', $filename, $name, $original, $thumb, $mime,
+                $fileSize, $w, $h, $hash, $userId, $folderId);
             $stmt->execute();
             $id = (int)$stmt->insert_id;
             $stmt->close();
@@ -235,8 +314,9 @@ try {
             if (!$media) throw new InvalidArgumentException('تصویر پیدا نشد.');
             $stmt = $mysqli->prepare('SELECT (
                 (SELECT COUNT(*) FROM product_media WHERE media_id=?) +
-                (SELECT COUNT(*) FROM category_media WHERE media_id=?)) AS n');
-            $stmt->bind_param('ii', $id, $id);
+                (SELECT COUNT(*) FROM category_media WHERE media_id=?) +
+                (SELECT COUNT(*) FROM defective_media WHERE media_id=?)) AS n');
+            $stmt->bind_param('iii', $id, $id, $id);
             $stmt->execute();
             $n = (int)($stmt->get_result()->fetch_assoc()['n'] ?? 0);
             $stmt->close();
