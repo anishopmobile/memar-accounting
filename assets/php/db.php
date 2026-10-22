@@ -736,4 +736,7 @@ function migrate_product_media_schema(mysqli $mysqli): void
 }
 migrate_product_media_schema($mysqli);
 
+require_once __DIR__ . '/accounting_schema.php';
+ledger_migrate($mysqli);
+
 } // End database schema initialization; normal application requests are unchanged.
