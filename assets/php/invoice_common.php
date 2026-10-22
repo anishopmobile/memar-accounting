@@ -1518,6 +1518,8 @@ function convertInvoice(mysqli $mysqli, int $invoiceId): array
         $stmt->bind_param('ssi', $finalType, $newNumber, $invoiceId);
         $stmt->execute();
         $stmt->close();
+        // Convert any available deposit credit into final invoice settlement.
+        ledger_apply_proforma_deposits($mysqli,$invoiceId);
 
         $mysqli->commit();
         return ['ok' => true, 'message' => 'پیش‌فاکتور با موفقیت به فاکتور قطعی تبدیل شد.', 'invoice_id' => $invoiceId];
