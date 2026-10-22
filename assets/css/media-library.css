@@ -61,3 +61,8 @@
 .inv-image-col img,.invoice-image-col img{max-width:42px;max-height:42px}
 .media-picked img,.media-tile img,.media-manager-card img{content-visibility:auto}
 @media(max-width:640px){.media-picker-tools select{max-width:none;width:100%}}
+
+.media-folder-create-form{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:5px;border:1px solid #ccddeb;border-radius:9px;background:#f1f7ff}
+.media-folder-create-form input{flex:1;min-width:145px;max-width:260px;border:1px solid #b5c9dd;border-radius:6px;padding:7px}
+.media-folder-create-form button{padding:7px 12px;border-radius:6px}
+.media-folder-error{color:#b42318;font-size:12px}
