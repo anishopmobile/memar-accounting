@@ -66,12 +66,22 @@ $in = [
 ];
 
 if ($invoiceId === '') {
+    // Payments are independent ledger records, never an arbitrary user-supplied enum.
+    $in['payment_status'] = 'unpaid';
     $result = createInvoice($mysqli, $in);
 } else {
     if (!ctype_digit($invoiceId)) {
         respond_error('شناسه فاکتور نامعتبر است.');
     }
-    $result = editInvoice($mysqli, (int) $invoiceId, $in);
+    $statusStmt = $mysqli->prepare('SELECT payment_status FROM invoices WHERE id = ?');
+    $existingId = (int)$invoiceId;
+    $statusStmt->bind_param('i', $existingId);
+    $statusStmt->execute();
+    $existingStatus = $statusStmt->get_result()->fetch_assoc();
+    $statusStmt->close();
+    if (!$existingStatus) respond_error('فاکتور یافت نشد.', 404);
+    $in['payment_status'] = $existingStatus['payment_status'];
+    $result = editInvoice($mysqli, $existingId, $in);
 }
 
 if ($result['ok']) {
