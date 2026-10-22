@@ -267,8 +267,36 @@ function ledger_invoice_has_financial_events(mysqli $db,int $invoiceId): bool {
     $s=$db->prepare("SELECT
        EXISTS(SELECT 1 FROM ledger_allocations WHERE invoice_id=?) a,
        EXISTS(SELECT 1 FROM ledger_credit_allocations WHERE invoice_id=?) c,
-       EXISTS(SELECT 1 FROM ledger_legacy_invoices WHERE invoice_id=?) l");
-    $s->bind_param('iii',$invoiceId,$invoiceId,$invoiceId);$s->execute();
+       EXISTS(SELECT 1 FROM ledger_legacy_invoices WHERE invoice_id=?) l,
+       EXISTS(SELECT 1 FROM ledger_proforma_deposits WHERE proforma_invoice_id=?) d");
+    $s->bind_param('iiii',$invoiceId,$invoiceId,$invoiceId,$invoiceId);$s->execute();
     $r=$s->get_result()->fetch_assoc();$s->close();
-    return (int)$r['a']===1||(int)$r['c']===1||(int)$r['l']===1;
+    return (int)$r['a']===1||(int)$r['c']===1||(int)$r['l']===1||(int)$r['d']===1;
+}
+
+/**
+ * Promote a proforma deposit to final invoice settlement, once, within
+ * convertInvoice's existing transaction. Never create a new cash movement.
+ */
+function ledger_apply_proforma_deposits(mysqli $db,int $invoiceId): void {
+    $balance=ledger_invoice_balance($db,$invoiceId,true);
+    if($balance['legacy_classification']==='requires_reconciliation')
+        throw new DomainException('مغایرت تاریخی حل نشده است.');
+    $s=$db->prepare('SELECT p.id,p.amount,p.voided_at FROM ledger_payments p JOIN ledger_proforma_deposits d ON d.payment_id=p.id WHERE d.proforma_invoice_id=? ORDER BY p.id FOR UPDATE');
+    $s->bind_param('i',$invoiceId);$s->execute();$payments=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
+    foreach($payments as $p) {
+        if($p['voided_at']!==null)continue;
+        $balance=ledger_invoice_balance($db,$invoiceId,true);
+        if(money_cmp($balance['due'],'0')<=0)break;
+        $pid=(int)$p['id'];
+        $s=$db->prepare('SELECT COALESCE((SELECT SUM(amount) FROM ledger_allocations WHERE payment_id=?),0)+COALESCE((SELECT SUM(amount) FROM ledger_credit_allocations WHERE payment_id=?),0) used');
+        $s->bind_param('ii',$pid,$pid);$s->execute();$used=$s->get_result()->fetch_assoc()['used'];$s->close();
+        $available=money_sub($p['amount'],$used);
+        if(money_cmp($available,'0')<=0)continue;
+        $allocate=money_cmp($available,$balance['due'])<=0?$available:$balance['due'];
+        $token='proforma_'.$invoiceId.'_'.$pid;
+        $s=$db->prepare('INSERT INTO ledger_credit_allocations(payment_id,invoice_id,amount,request_token) VALUES(?,?,?,?)');
+        $s->bind_param('iiss',$pid,$invoiceId,$allocate,$token);$s->execute();$s->close();
+    }
+    ledger_sync_invoice_status($db,$invoiceId);
 }
