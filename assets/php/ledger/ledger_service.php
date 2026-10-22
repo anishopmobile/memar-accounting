@@ -267,8 +267,7 @@ function ledger_invoice_has_financial_events(mysqli $db,int $invoiceId): bool {
     $s=$db->prepare("SELECT
        EXISTS(SELECT 1 FROM ledger_allocations WHERE invoice_id=?) a,
        EXISTS(SELECT 1 FROM ledger_credit_allocations WHERE invoice_id=?) c,
-       EXISTS(SELECT 1 FROM ledger_legacy_invoices WHERE invoice_id=? AND
-          (recognized_paid > 0 OR classification='requires_reconciliation')) l");
+       EXISTS(SELECT 1 FROM ledger_legacy_invoices WHERE invoice_id=?) l");
     $s->bind_param('iii',$invoiceId,$invoiceId,$invoiceId);$s->execute();
     $r=$s->get_result()->fetch_assoc();$s->close();
     return (int)$r['a']===1||(int)$r['c']===1||(int)$r['l']===1;
