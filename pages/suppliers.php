@@ -87,7 +87,7 @@ if ($result) {
                             <td><?php echo htmlspecialchars($supplier['national_code'] ?? ''); ?></td>
                             <td><?php echo htmlspecialchars($supplier['phone'] ?? ''); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($supplier['address'] ?? '')); ?></td>
-                            <td><?php echo number_format($supplier['total_purchases']); ?></td>
+                            <td><?php echo formatMoneyNumber((string)$supplier['total_purchases']); ?></td>
                             <td><?php echo formatMoneyNumber($supplier['unpaid']); ?><?php if ((int)$supplier['pending_legacy']>0): ?> ⚠<?php endif; ?></td>
                         <td><?php echo formatMoneyNumber($supplier['credit']); ?></td>
                         <td><a class="button-secondary small" href="?page=party-statement&kind=supplier&id=<?php echo (int)$supplier['id']; ?>">صورت‌حساب</a></td>
