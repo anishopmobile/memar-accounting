@@ -2,7 +2,7 @@
 (function ($) {
     'use strict';
     function esc(x) { return $('<div>').text(x == null ? '' : String(x)).html(); }
-    function money(x) { return window.Currency.formatNumber(window.Currency.fromBase(String(x == null ? 0 : x))) + ' ' + window.Currency.label; }
+    function money(x) { return window.Currency.formatNumber(String(x == null ? 0 : x)) + ' ' + window.Currency.label; }
     function show(x) { return window.Currency.fromBase(String(x == null ? 0 : x)); }
     function newToken() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() :
         'r' + Date.now().toString(36) + Math.random().toString(36).slice(2); }
@@ -143,11 +143,13 @@
             $('#acctDebt').text(money(s.debt));
             $('#acctCredit').text(money(s.credit));
             $('#acctStatementRows').html(events.length?events.map(function(ev){
-                var delta=Number(ev.delta);
+                var delta=String(ev.delta || '0');
+                var negative=delta.charAt(0)==='-';
+                var zero=/^-?0+(?:\\.0+)?$/.test(delta);
                 var cancel=ev.receipt_id && ev.status==='posted' ?
                     '<button type="button" class="button-secondary small acct-reverse" data-receipt="'+Number(ev.receipt_id)+'">ابطال سند</button>' : '';
                 return '<tr><td>'+esc(ev.date)+'</td><td>'+esc(ev.description)+'</td><td>'+
-                    (delta>0?esc(money(ev.delta)):'—')+'</td><td>'+(delta<0?esc(money(String(-delta))):'—')+'</td><td>'+
+                    (!negative&&!zero?esc(money(ev.delta)):'—')+'</td><td>'+(negative&&!zero?esc(money(delta.slice(1))):'—')+'</td><td>'+
                     esc(money(ev.running))+'</td><td>'+cancel+'</td></tr>';
             }).join(''):'<tr><td colspan="6">گردشی ثبت نشده است.</td></tr>');
             var pending=d.pending_legacy||[];
