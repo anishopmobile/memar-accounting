@@ -6,6 +6,9 @@
 declare(strict_types=1);
 if(PHP_SAPI!=='cli'||getenv('CI')!=='true'||count($argv)!==4)exit(2);
 $kind=$argv[1];$partyId=(int)$argv[2];$invoiceId=(int)$argv[3];
+// The parent has already installed and migrated the CI schema. Avoid concurrent
+// startup DDL, so this worker tests the ledger row-locking path rather than DDL races.
+define('MEMAR_DB_READ_ONLY_FASTPATH',true);
 require_once dirname(__DIR__).'/db.php';
 require_once dirname(__DIR__).'/ledger/ledger_service.php';
 try {
