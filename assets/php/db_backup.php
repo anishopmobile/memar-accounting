@@ -38,17 +38,47 @@ require_csrf_or_fail();
  * Absolute paths (Windows / Unix) are used as-is; otherwise the value is
  * treated as a folder name inside the project's "backups" directory.
  */
+/**
+ * Resolve backup output outside the public document root.
+ * Relative names are stored beside the application, never under the
+ * document root; absolute locations must also be outside web-served paths.
+ */
 function resolveBackupDir($dir)
 {
-    $dir = trim($dir);
-    if ($dir === '') {
-        return '';
+    $dir = trim((string)$dir);
+    if ($dir === '' || str_contains($dir, "\\0")) {
+        throw new InvalidArgumentException('مسیر پشتیبان نامعتبر است.');
     }
     $webroot = realpath(__DIR__ . '/../..');
-    if (preg_match('#^[A-Za-z]:[\\\\/]#', $dir) || $dir[0] === '/' || $dir[0] === '\\') {
-        return rtrim($dir, '/\\');
+    if (!$webroot) throw new RuntimeException('Document root not found');
+    $absolute = preg_match('#^(?:[A-Za-z]:[\\\\/]|/|\\\\)#', $dir) === 1;
+    if (!$absolute) {
+        if (!preg_match('#^[a-zA-Z0-9_-]{1,80}$#D', $dir)) {
+            throw new InvalidArgumentException('نام پوشه نسبی فقط شامل حروف انگلیسی، اعداد، خط تیره یا زیرخط باشد.');
+        }
+        return dirname($webroot) . DIRECTORY_SEPARATOR . 'memar-private-backups' . DIRECTORY_SEPARATOR . $dir;
     }
-    return $webroot . DIRECTORY_SEPARATOR . 'backups' . DIRECTORY_SEPARATOR . $dir;
+    $dir = rtrim($dir, '/\\\\');
+    // Canonicalize the nearest existing parent to reject webroot symlinks
+    // and traversal even when the destination folder does not exist yet.
+    $cursor = $dir;
+    $suffix = [];
+    while (!file_exists($cursor) && !is_link($cursor)) {
+        $parent = dirname($cursor);
+        if ($parent === $cursor) throw new InvalidArgumentException('مسیر پشتیبان نامعتبر است.');
+        array_unshift($suffix, basename($cursor));
+        $cursor = $parent;
+    }
+    $canonical = realpath($cursor);
+    if (!$canonical) throw new InvalidArgumentException('مسیر پشتیبان نامعتبر است.');
+    $dest = rtrim($canonical . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR,$suffix), DIRECTORY_SEPARATOR);
+    // Reject any absolute path whose canonical parent resides in the public app.
+    $root = strtolower(rtrim($webroot, DIRECTORY_SEPARATOR));
+    $lower = strtolower($dest);
+    if ($lower === $root || str_starts_with($lower, $root . DIRECTORY_SEPARATOR)) {
+        throw new InvalidArgumentException('پشتیبان نباید داخل پوشه عمومی سایت ذخیره شود.');
+    }
+    return $dest;
 }
 
 /* ---------- ذخیره آدرس پوشه پشتیبان ---------- */
@@ -56,6 +86,11 @@ if ($action === 'save_dir') {
     $backup_dir = trim($_POST['backup_dir'] ?? '');
     if ($backup_dir === '') {
         respond(false, 'آدرس پوشه پشتیبان نمی‌تواند خالی باشد.');
+    }
+    try {
+        resolveBackupDir($backup_dir);
+    } catch (Throwable $e) {
+        respond(false, $e instanceof InvalidArgumentException ? $e->getMessage() : 'مسیر پشتیبان قابل استفاده نیست.');
     }
 
     if ($settings) {
@@ -84,7 +119,8 @@ if ($action === 'save_dir') {
 if ($action === 'backup_full') {
     $storedDir = $settings['backup_dir'] ?? '';
     if (trim($storedDir) === '') respond(false, 'آدرس پشتیبان را ابتدا ذخیره کنید.');
-    $targetDir = resolveBackupDir($storedDir);
+    try { $targetDir = resolveBackupDir($storedDir); }
+    catch (Throwable $e) { respond(false, 'مسیر پشتیبان ناامن یا نامعتبر است؛ لطفاً آدرس خارج از پوشه سایت انتخاب کنید.'); }
     if (!is_dir($targetDir) && !@mkdir($targetDir, 0700, true) && !is_dir($targetDir)) {
         respond(false, 'ایجاد پوشه پشتیبان ممکن نیست.');
     }
@@ -121,7 +157,8 @@ if ($action === 'backup') {
         respond(false, 'ابتدا باید آدرس پوشه پشتیبان را ذخیره کنید.');
     }
 
-    $targetDir = resolveBackupDir($storedDir);
+    try { $targetDir = resolveBackupDir($storedDir); }
+    catch (Throwable $e) { respond(false, 'مسیر پشتیبان ناامن یا نامعتبر است؛ لطفاً آدرس خارج از پوشه سایت انتخاب کنید.'); }
     if (!is_dir($targetDir)) {
         if (!@mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
             respond(false, 'پوشه مقصد قابل ایجاد نیست. آدرس را بررسی کنید.');
@@ -154,7 +191,8 @@ if ($action === 'backup_files') {
         respond(false, 'ابتدا باید آدرس پوشه پشتیبان را ذخیره کنید.');
     }
 
-    $backupRoot = resolveBackupDir($storedDir);
+    try { $backupRoot = resolveBackupDir($storedDir); }
+    catch (Throwable $e) { respond(false, 'مسیر پشتیبان ناامن یا نامعتبر است؛ لطفاً آدرس خارج از پوشه سایت انتخاب کنید.'); }
     if (!is_dir($backupRoot)) {
         if (!@mkdir($backupRoot, 0755, true) && !is_dir($backupRoot)) {
             respond(false, 'پوشه مقصد قابل ایجاد نیست. آدرس را بررسی کنید.');
@@ -168,6 +206,7 @@ if ($action === 'backup_files') {
     $dest = $backupRoot . DIRECTORY_SEPARATOR . 'files';
 
     // حذف پوشه files قبلی تا کپی همیشه تازه و کامل باشد
+    if (is_link($dest)) respond(false, 'مسیر پشتیبان files نباید پیوند نمادین باشد.');
     if (is_dir($dest)) {
         deleteDirectory($dest);
     }
@@ -313,6 +352,7 @@ function restoreDatabase($mysqli, $content)
 
 function deleteDirectory($dir)
 {
+    if (is_link($dir)) { @unlink($dir); return; }
     if (!is_dir($dir)) {
         return;
     }
@@ -322,7 +362,9 @@ function deleteDirectory($dir)
             continue;
         }
         $path = $dir . DIRECTORY_SEPARATOR . $item;
-        if (is_dir($path)) {
+        if (is_link($path)) {
+            @unlink($path);
+        } elseif (is_dir($path)) {
             deleteDirectory($path);
         } else {
             @unlink($path);
@@ -349,6 +391,10 @@ function copyDirectory($src, $dest, $backupRoot, $webroot)
         }
         $srcPath = $src . DIRECTORY_SEPARATOR . $item;
         $destPath = $dest . DIRECTORY_SEPARATOR . $item;
+        // Never follow symlinks into host secrets or outside project files.
+        if (is_link($srcPath)) continue;
+        // Credentials, Git metadata and temporary dumps are not application assets.
+        if (in_array($item, ['.git', '.env', '.env.local', '.env.production'], true)) continue;
 
         // جلوگیری از کپی بازگشتی: رد کردن مسیر مقصد، خود پوشه پشتیبان و
         // هر پوشه‌ای که پوشه پشتیبان داخل آن قرار دارد
