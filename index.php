@@ -12,6 +12,7 @@ $pages = [
     'defective-goods' => 'کالاهای معیوب',
     'customers' => 'مشتریان',
     'suppliers' => 'تامین‌کنندگان',
+    'accounting' => 'صورت‌حساب طرف‌های معامله',
     'report-inventory' => 'گزارش موجودی کالاها',
     'report-customer-debt' => 'گزارش بدهی مشتریان',
     'report-supplier-debt' => 'گزارش بدهی به تامین‌کنندگان',
@@ -84,6 +85,7 @@ if (!array_key_exists($page, $pages)) {
     <script src="assets/js/brand-settings.js" defer></script>
     <script src="assets/js/layout.js" defer></script>
     <script src="assets/js/invoice.js" defer></script>
+    <script src="assets/js/accounting.js" defer></script>
     <script src="assets/js/bundle.js" defer></script>
     <script src="assets/js/payment-forms.js" defer></script>
     <script src="assets/js/current-affairs.js" defer></script>
@@ -107,6 +109,7 @@ if (!array_key_exists($page, $pages)) {
         'defective-goods' => 'fa-times-circle',
         'customers' => 'fa-users',
         'suppliers' => 'fa-truck',
+        'accounting' => 'fa-book-open',
         'report-inventory' => 'fa-boxes-stacked',
         'report-customer-debt' => 'fa-user-clock',
         'report-supplier-debt' => 'fa-truck-field',
@@ -156,7 +159,7 @@ if (!array_key_exists($page, $pages)) {
                 $factorsChildren = ['factors', 'purchase-invoice', 'sales-return', 'defective-goods'];
                 $reportsChildren = ['report-inventory', 'report-customer-debt', 'report-supplier-debt', 'report-sold-items-detail'];
                 foreach ($pages as $key => $label):
-                    if (in_array($key, ['purchase-invoice', 'sales-return', 'report-customer-debt', 'report-supplier-debt', 'report-sold-items-detail', 'defective-goods', 'notes', 'payment-forms', 'payment-transactions', 'payment-sms-settings', 'payment-zarinpal-settings', 'account', 'about-us'], true)) {
+                    if (in_array($key, ['purchase-invoice', 'sales-return', 'report-customer-debt', 'report-supplier-debt', 'report-sold-items-detail', 'defective-goods', 'notes', 'payment-forms', 'payment-transactions', 'payment-sms-settings', 'payment-zarinpal-settings', 'account', 'about-us', 'accounting'], true)) {
 							continue;
 						}
                     $iconClass = $navIcons[$key] ?? 'fa-circle';
