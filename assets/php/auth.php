@@ -21,6 +21,9 @@ require_once __DIR__ . '/captcha/pure_captcha_provider.php';
 require_once __DIR__ . '/captcha/captcha_service.php';
 
 if (session_status() === PHP_SESSION_NONE) {
+    // Reject attacker-chosen unknown session IDs instead of adopting them.
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
     $secure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
 
     session_set_cookie_params([
@@ -32,6 +35,13 @@ if (session_status() === PHP_SESSION_NONE) {
     ]);
 
     session_start();
+}
+// Safe headers for authenticated pages and auth forms. Avoid CSP until all
+// inline legacy scripts have been migrated to nonces/external local bundles.
+if (!headers_sent()) {
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
 }
 
 /* ==================== CSRF (مشترک login/register + boot) ==================== */
