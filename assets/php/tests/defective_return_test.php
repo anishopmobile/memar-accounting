@@ -20,6 +20,12 @@ require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../defective_goods_common.php';
 require_once __DIR__ . '/../jdf.php';
 
+$dgAuthUsername = 'dg_smoke_' . bin2hex(random_bytes(5));
+$dgAuthHash = password_hash('DGSmoke456', PASSWORD_DEFAULT);
+$dgAuthStmt = $mysqli->prepare('INSERT INTO users(username,password_hash) VALUES(?,?)');
+$dgAuthStmt->bind_param('ss',$dgAuthUsername,$dgAuthHash);$dgAuthStmt->execute();
+$dgAuthId=(int)$dgAuthStmt->insert_id;$dgAuthStmt->close();
+
 $pass = 0;
 $fail = 0;
 $failures = [];
@@ -100,7 +106,7 @@ function t_dg_run_file(string $target, string $runner, string $outFile, array $g
 {
     $code = '<?php' . "\n"
         . 'session_start();' . "\n"
-        . '$_SESSION["auth_user"] = "memar";' . "\n"
+        . '$_SESSION["auth_user_id"] = ' . (int)$GLOBALS['dgAuthId'] . ';' . "\n"
         . '$_SESSION["csrf_token"] = "tokreturn123";' . "\n"
         . '$_GET = ' . var_export($get, true) . ';' . "\n"
         . '$_POST = ' . var_export($post, true) . ';' . "\n"
@@ -119,7 +125,7 @@ function t_write_worker(int $defectiveId, string $qty, string $runner): void
 {
     $code = '<?php' . "\n"
         . 'session_start();' . "\n"
-        . '$_SESSION["auth_user"] = "memar";' . "\n"
+        . '$_SESSION["auth_user_id"] = ' . (int)$GLOBALS['dgAuthId'] . ';' . "\n"
         . '$_SESSION["csrf_token"] = "tokconc123";' . "\n"
         . '$_POST = ' . var_export(['csrf_token' => 'tokconc123', 'defective_id' => (string) $defectiveId, 'quantity' => $qty], true) . ';' . "\n"
         . 'require __DIR__ . "/../defective_goods_return_action.php";' . "\n";
@@ -294,6 +300,8 @@ t_check('همزمانی: جمع بازگشتی‌ها از ۳ بیشتر نشد'
 @unlink($oA);
 @unlink($oB);
 t_cleanup_product($mysqli, $p1, 'T-DGR-1');
+$dgAuthClean=$mysqli->prepare('DELETE FROM users WHERE id=?');
+$dgAuthClean->bind_param('i',$dgAuthId);$dgAuthClean->execute();$dgAuthClean->close();
 
 echo "\n== Result: $pass passed, $fail failed ==\n";
 if ($fail > 0) {
