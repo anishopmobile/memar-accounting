@@ -135,6 +135,10 @@ $(function() {
     });
     $(document).on('keydown', function(e) {
         if (e.key !== 'Escape' || !$('.nav-dropdown.open').length) return;
+        // Prevent the separate mobile-sidebar Escape handler from closing the
+        // entire navigation on the same key press.
+        e.preventDefault();
+        e.stopImmediatePropagation();
         var $toggle = $('.nav-dropdown.open').last().find('> .nav-dropdown-toggle').first();
         closeNavDropdowns();
         // Do not steal Escape from another modal; the user remains on the page.
