@@ -162,8 +162,8 @@ function ledger_set_opening(mysqli $db,string $kind,int $party,string $amount,st
 }
 
 /** Allocate an existing advance/overpayment to an invoice without moving money again. */
-function ledger_allocate_existing(mysqli $db,int $receiptId,int $invoiceId,string $amount): void {
-    $value=ledger_money($amount);$db->begin_transaction();
+function ledger_allocate_existing(mysqli $db,int $receiptId,int $invoiceId,string $amount,bool $inTx=false): void {
+    $value=ledger_money($amount);if(!$inTx)$db->begin_transaction();
     try {
         // Lock parent party first, then payment and invoice.
         $st=$db->prepare('SELECT party_kind,party_id,direction,state FROM accounting_receipts WHERE id=?');
@@ -183,16 +183,16 @@ function ledger_allocate_existing(mysqli $db,int $receiptId,int $invoiceId,strin
         if($balance['needs_review'] || money_cmp($value,$balance['balance'])>0)throw new InvalidArgumentException('مانده فاکتور برای تخصیص کافی نیست.');
         $st=$db->prepare('INSERT INTO accounting_allocations (receipt_id,invoice_id,amount) VALUES(?,?,?) ON DUPLICATE KEY UPDATE amount=amount+VALUES(amount)');
         $st->bind_param('iis',$receiptId,$invoiceId,$value);$st->execute();$st->close();
-        ledger_update_invoice_status($db,$invoiceId);$db->commit();
-    }catch(Throwable $e){$db->rollback();throw $e;}
+        ledger_update_invoice_status($db,$invoiceId);if(!$inTx)$db->commit();
+    }catch(Throwable $e){if(!$inTx)$db->rollback();throw $e;}
 }
 
 /** Cancel an erroneous posted receipt without deleting history or moving cash. */
-function ledger_reverse_receipt(mysqli $db,int $receiptId,string $reason): int {
+function ledger_reverse_receipt(mysqli $db,int $receiptId,string $reason,bool $inTx=false): int {
     $reason=trim($reason);
     if($receiptId<1 || mb_strlen($reason)<4 || mb_strlen($reason)>500)
         throw new InvalidArgumentException('دلیل اصلاح سند (حداقل ۴ حرف) الزامی است.');
-    $db->begin_transaction();
+    if(!$inTx)$db->begin_transaction();
     try {
         $st=$db->prepare('SELECT party_kind,party_id FROM accounting_receipts WHERE id=?');
         $st->bind_param('i',$receiptId);$st->execute();$pre=$st->get_result()->fetch_assoc();$st->close();
@@ -218,6 +218,6 @@ function ledger_reverse_receipt(mysqli $db,int $receiptId,string $reason): int {
         $st->bind_param('sisssssssis',$orig['party_kind'],$orig['party_id'],$dir,$orig['amount'],$orig['method'],$orig['account_label'],$date,$orig['reference_number'],$note,$receiptId,$key);
         $st->execute();$newId=(int)$db->insert_id;$st->close();
         foreach($invoices as $id)ledger_update_invoice_status($db,(int)$id);
-        $db->commit();return $newId;
-    }catch(Throwable $e){$db->rollback();throw $e;}
+        if(!$inTx)$db->commit();return $newId;
+    }catch(Throwable $e){if(!$inTx)$db->rollback();throw $e;}
 }
