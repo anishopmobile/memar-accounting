@@ -126,6 +126,7 @@ $(function () {
 
     // ---------- لیست فاکتورها (صفحه‌بندی سمت سرور؛ حداکثر ۱۵ فاکتور در هر صفحه) ----------
     var currentPage = 1;
+    window.refreshInvoiceAccountingList = function(){loadInvoices(currentPage);};
     function loadInvoices(page) {
         currentPage = (page && page >= 1) ? page : 1;
         var search = encodeURIComponent($('#invoiceSearch').val() || '');
@@ -163,6 +164,7 @@ $(function () {
                 + (isPro ? '<button class="button-secondary small invoice-convert" data-id="' + r.id + '" type="button">تبدیل به قطعی</button> ' : '')
                 + (isSales ? '<button class="button-secondary small invoice-pdf" data-id="' + r.id + '" data-number="' + escAttr(r.invoice_number) + '" type="button">تولید و چاپ فاکتور</button> ' : '')
                 + (!isSales ? '<button class="button-secondary small invoice-pdf-purchase" data-id="' + r.id + '" data-number="' + escAttr(r.invoice_number) + '" type="button">تولید و چاپ فاکتور</button> ' : '')
+                + (!isPro ? '<button class="button-secondary small invoice-accounting" data-id="' + r.id + '" type="button">دریافت/پرداخت و صورت‌حساب</button> ' : '')
                 + '<button class="button-secondary small invoice-delete" data-id="' + r.id + '" type="button">حذف</button>'
                 + '</td></tr>';
         });
@@ -727,7 +729,14 @@ $(function () {
         var $btn = $('#invoiceFormSave');
         $btn.prop('disabled', true).text('در حال ذخیره...');
         $.post('assets/php/invoice_save.php', payload).done(function (res) {
-            if (res.success) { showList(currentInvoiceId === '' ? 1 : currentPage); alert(res.message); }
+            if (res.success) {
+                var created = currentInvoiceId === '';
+                showList(created ? 1 : currentPage);
+                alert(res.message);
+                if (created && res.data && res.data.invoice && window.AccountingLedger && !/proforma/.test(res.data.invoice.type)) {
+                    window.AccountingLedger.openInvoice(res.data.invoice);
+                }
+            }
             else { alert(res.message || 'خطا در ذخیره.'); }
             $btn.prop('disabled', false).text('ذخیره فاکتور');
         }).fail(function () {
