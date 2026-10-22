@@ -34,7 +34,22 @@ try {
             $stmt=$mysqli->prepare("SELECT * FROM {$table} WHERE id=?");
             $stmt->bind_param('i',$id);$stmt->execute();$party=$stmt->get_result()->fetch_assoc();$stmt->close();
             if(!$party)throw new InvalidArgumentException('طرف حساب پیدا نشد.');
-            respond_json(true,'',['party'=>$party]+acct_statement($mysqli,$kind,(int)$id));
+            $fk=$kind==='customer'?'customer_id':'supplier_id';
+            $invoiceType=$kind==='customer'?'sales_invoice':'purchase_invoice';
+            $st=$mysqli->prepare("SELECT id FROM invoices WHERE {$fk}=? AND type=? ORDER BY invoice_date,id");
+            $st->bind_param('is',$id,$invoiceType);$st->execute();$rs=$st->get_result();$open=[];
+            while($item=$rs->fetch_assoc()){
+                $balance=acct_invoice_balance($mysqli,(int)$item['id']);
+                if(bccomp($balance['remaining'],'0',2)>0)$open[]=$balance;
+            }
+            $st->close();
+            $st=$mysqli->prepare("SELECT l.invoice_id,i.invoice_number,i.payable_amount
+              FROM accounting_legacy_invoices l JOIN invoices i ON i.id=l.invoice_id
+              WHERE i.{$fk}=? AND l.original_status='partial' AND l.verified=0");
+            $st->bind_param('i',$id);$st->execute();$rs=$st->get_result();$legacy=[];
+            while($row=$rs->fetch_assoc())$legacy[]=$row;
+            $st->close();
+            respond_json(true,'',['party'=>$party,'open'=>$open,'pending_legacy'=>$legacy]+acct_statement($mysqli,$kind,(int)$id));
         }
         respond_error('درخواست نامعتبر است.',404);
     }
