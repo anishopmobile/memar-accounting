@@ -50,6 +50,16 @@ function ledger_migrate(mysqli $db): void {
             id TINYINT PRIMARY KEY,
             legacy_initialized TINYINT NOT NULL DEFAULT 0
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS ledger_reconciliations (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            invoice_id INT NOT NULL,
+            recognized_paid DECIMAL(14,2) NOT NULL,
+            explanation VARCHAR(2000) NOT NULL,
+            recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_legacy_reconciled_invoice (invoice_id),
+            CONSTRAINT fk_legacy_reconcile_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
+            CHECK (recognized_paid >= 0)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         "CREATE TABLE IF NOT EXISTS ledger_legacy_invoices (
             invoice_id INT NOT NULL PRIMARY KEY,
             recognized_paid DECIMAL(14,2) NOT NULL,
