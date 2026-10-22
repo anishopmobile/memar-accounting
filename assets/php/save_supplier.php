@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/accounting_ledger.php';
+require_once __DIR__ . '/currency.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -46,6 +48,7 @@ if ($supplier_id !== '') {
         $totalStmt->bind_result($totalPurchases, $unpaid);
         $totalStmt->fetch();
         $totalStmt->close();
+        $unpaid=ledger_party_balance($mysqli,'supplier',(int)($supplier_id ?: $id))['debt'];
 
         $supplier = [
             'id' => (int) $supplier_id,
@@ -60,8 +63,8 @@ if ($supplier_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_purchases' => number_format($totalPurchases ?? 0),
-            'unpaid' => number_format($unpaid ?? 0),
+            'total_purchases' => formatMoneyNumber((string)($totalPurchases ?? '0')),
+            'unpaid' => formatMoneyNumber((string)($unpaid ?? '0')),
         ];
         echo json_encode(['success' => true, 'supplier' => $supplier]);
     } else {
@@ -82,6 +85,7 @@ if ($supplier_id !== '') {
         $totalStmt->bind_result($totalPurchases, $unpaid);
         $totalStmt->fetch();
         $totalStmt->close();
+        $unpaid=ledger_party_balance($mysqli,'supplier',(int)($supplier_id ?: $id))['debt'];
 
         $supplier = [
             'id' => $id,
@@ -96,8 +100,8 @@ if ($supplier_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_purchases' => number_format($totalPurchases ?? 0),
-            'unpaid' => number_format($unpaid ?? 0),
+            'total_purchases' => formatMoneyNumber((string)($totalPurchases ?? '0')),
+            'unpaid' => formatMoneyNumber((string)($unpaid ?? '0')),
         ];
         echo json_encode(['success' => true, 'supplier' => $supplier]);
     } else {
