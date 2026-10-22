@@ -115,6 +115,10 @@ function ledger_record_payment(mysqli $db,array $in,bool $insideExistingTransact
             if(!hash_equals((string)$old['payload_hash'],$requestHash))throw new DomainException('شناسه درخواست قبلاً برای پرداخت دیگری استفاده شده است.');
             if(!$insideExistingTransaction) $db->commit();return ['payment_id'=>(int)$old['id'],'duplicate'=>true];
         }
+        if($direction!==$expectedDirection){
+            $credit=ledger_party_summary($db,$kind,(int)$pid)['credit'];
+            if(money_cmp($amount,$credit)>0)throw new DomainException('مبلغ استرداد از بستانکاری واقعی طرف حساب بیشتر است.');
+        }
         foreach($mapped as $invId=>$value){
             $bal=ledger_invoice_balance($db,(int)$invId,true);
             if($bal['party_kind']!==$kind||$bal['party_id']!==(int)$pid)throw new DomainException('فاکتور متعلق به این طرف حساب نیست.');
