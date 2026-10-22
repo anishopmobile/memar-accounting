@@ -2,6 +2,14 @@
 /** Full account + private media backup. No untrusted ZIP entry is extracted verbatim. */
 declare(strict_types=1);
 
+/** Ignore the dump generator's timestamp *comment* only; all SQL statements remain significant. */
+function media_sql_content_digest(string $sql): string
+{
+    $normalized = preg_replace('/^-- تاریخ و ساعت تهیه: [^\\r\\n]*$/mu',
+        '-- تاریخ و ساعت تهیه: [normalized]', $sql, 1);
+    return hash('sha256', is_string($normalized) ? $normalized : $sql);
+}
+
 function media_full_backup_create(mysqli $db, string $destination, string $sql): string
 {
     if (!class_exists('ZipArchive')) throw new RuntimeException('ZIP extension is missing');
@@ -171,7 +179,8 @@ function media_full_backup_restore(mysqli $db, string $archive, callable $restor
         // A same-version backup may be restored repeatedly while many photos
         // already exist. When *both* SQL bytes and every media SHA already
         // match, doing destructive DROP/CREATE SQL is unnecessary.
-        $unchangedSql = hash_equals((string)$manifest['sql_sha256'], hash('sha256',$priorSql));
+        $unchangedSql = hash_equals(media_sql_content_digest($sql),
+            media_sql_content_digest($priorSql));
         if (!$staged && $unchangedSql) {
             return ['files'=>count($manifest['files']),'new_media_files'=>0,
                 'database_restored'=>true,'sql_skipped_identical'=>true];
