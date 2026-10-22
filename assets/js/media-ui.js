@@ -10,6 +10,7 @@
     var libraryFolder = 'all', folders = [], dzInstance = null;
     var pickerRequest = null, pickerSequence = 0, managerRequest = null, managerSequence = 0;
     var uploadRefreshTimer = null, managerSnapshot = null;
+    var loadManager = function () {};
     var modal = null, restoreFocus = null;
 
     function escapeHtml(v) {
@@ -356,27 +357,48 @@
     // Full-page library manager shares the same API and picker.
     if ($('#mediaLibraryPage').length) {
         var refresh = function () { loadManager(); };
-        function loadManager() {
+        loadManager = function () {
             var box = $('#mediaManagerGrid').text('در حال بارگذاری...');
-            $.getJSON('assets/php/media_api.php', {action:'list',page:libraryPage,search:libraryTerm,usage:libraryUsage})
+            if (managerRequest && managerRequest.readyState !== 4) managerRequest.abort();
+            var seq = ++managerSequence;
+            managerRequest = $.getJSON('assets/php/media_api.php', {action:'list',page:libraryPage,search:libraryTerm,usage:libraryUsage,folder:libraryFolder})
                 .done(function (res) {
+                    if (seq !== managerSequence) return;
                     if (!res || !res.success) {box.text(res.message || 'خطا');return;}
                     var data = res.data || {}, html = '';
                     (data.items || []).forEach(function (m) {
-                        var used = Number(m.products_count || 0)+Number(m.categories_count || 0);
-                        html += '<article class="media-manager-card"><img data-id="' + m.id + '" class="media-thumb" loading="lazy" src="' + escapeHtml(m.url) + '" alt="">'
+                        var used = Number(m.products_count || 0)+Number(m.categories_count || 0)+Number(m.defective_count || 0);
+                        html += '<article class="media-manager-card"><img data-id="' + m.id + '" class="media-thumb" loading="lazy" decoding="async" width="180" height="180" src="' + escapeHtml(m.url) + '" alt="">'
                             + '<strong>' + escapeHtml(m.original_filename) + '</strong>'
                             + '<small>' + m.width + ' × ' + m.height + ' — ' + used + ' مورد استفاده</small>'
+                            + '<label class="media-folder-card-label">پوشه <select class="media-manager-move" data-id="' + Number(m.id) + '">' + moveOptions(m.folder_id || 0) + '</select></label>'
                             + '<button type="button" data-id="' + m.id + '" class="media-manager-delete" ' + (used ? 'disabled title="در حال استفاده"' : '') + '>حذف از کتابخانه</button></article>';
                     });
                     box.html(html || '<p>تصویری یافت نشد.</p>');
                     $('#mediaManagerPageText').text('صفحه ' + data.page + ' از ' + data.pages);
                     $('#mediaManagerPrev').prop('disabled', data.page<=1);
                     $('#mediaManagerNext').prop('disabled', data.page>=data.pages);
-                }).fail(function () {box.text('خطای ارتباط با سرور');});
-        }
-        $('#mediaManagerSearch').on('input',function(){libraryTerm=$(this).val();libraryPage=1;refresh();});
+                }).fail(function (xhr,status) {
+                    if (status !== 'abort' && seq === managerSequence) box.text('خطای ارتباط با سرور');
+                });
+        };
+        var managerTimer = null;
+        $('#mediaManagerSearch').on('input',function(){
+            var value=$(this).val();
+            clearTimeout(managerTimer);
+            managerTimer=setTimeout(function(){libraryTerm=value;libraryPage=1;refresh();},220);
+        });
         $('#mediaManagerUsage').on('change',function(){libraryUsage=$(this).val();libraryPage=1;refresh();});
+        $('#mediaManagerFolder').on('change',function(){libraryFolder=String($(this).val());libraryPage=1;refresh();});
+        $(document).on('change','.media-manager-move',function(){
+            var select=$(this),id=Number(select.data('id')),folder=Number(select.val());
+            select.prop('disabled',true);
+            $.post('assets/php/media_api.php',{action:'media_move',id:id,folder_id:folder,csrf_token:csrf()},function(res){
+                if (!res || !res.success) alert((res && res.message)||'جابه‌جایی تصویر ناموفق بود.');
+                loadFolders().done(refresh);
+            },'json').fail(function(){alert('خطا در جابه‌جایی تصویر.');refresh();})
+                .always(function(){select.prop('disabled',false);});
+        });
         $('#mediaManagerPrev').on('click',function(){libraryPage=Math.max(1,libraryPage-1);refresh();});
         $('#mediaManagerNext').on('click',function(){libraryPage++;refresh();});
         $('#mediaManagerUpload').on('click',function(){openPicker(null,true);});
@@ -386,7 +408,7 @@
                 if (!res.success)alert(res.message||'حذف ناموفق بود');refresh();
             },'json').fail(function(){alert('خطای ارتباط');});
         });
-        refresh();
+        loadFolders().done(refresh);
     }
     if ($('#mediaSettingsForm').length) {
         $.getJSON('assets/php/media_settings.php').done(function(res){
