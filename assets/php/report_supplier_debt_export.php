@@ -2,6 +2,7 @@
 require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/accounting_ledger.php';
 require_once __DIR__ . '/report_excel_lib.php';
 
 $search = reportParam('search');
@@ -48,6 +49,14 @@ if ($search !== '') {
     }
 }
 
+$balances = acct_party_balances($mysqli, 'supplier');
+foreach ($rows as &$acctRow) {
+    $ledger = $balances[(int)$acctRow['id']] ?? ['balance'=>'0','unreconciled'=>false];
+    $acctRow['unpaid'] = $ledger['balance'];
+    $acctRow['unreconciled_history'] = $ledger['unreconciled'];
+}
+unset($acctRow);
+
 $columns = [
     'name'            => 'نام / شرکت',
     'phone'           => 'تلفن',
@@ -66,7 +75,7 @@ foreach ($rows as $r) {
         'phone'           => $r['phone'],
         'address'         => $r['address'],
         'total_purchases' => formatMoneyNumber((string) $r['total_purchases']),
-        'unpaid'          => formatMoneyNumber((string) $r['unpaid']),
+        'unpaid'          => ($r['unreconciled_history'] ? 'نیازمند تطبیق' : formatMoneyNumber((string) $r['unpaid'])),
     ];
 }
 
