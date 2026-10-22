@@ -223,8 +223,11 @@ if ($action === 'backup_files') {
 
 /* ---------- بازیابی نسخه پشتیبان ---------- */
 if ($action === 'restore') {
-    if (empty($_FILES['backup_file']) || $_FILES['backup_file']['error'] !== UPLOAD_ERR_OK) {
-        respond(false, 'لطفاً یک فایل SQL برای بازیابی انتخاب کنید.');
+    if (empty($_FILES['backup_file']) || (int)($_FILES['backup_file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
+        || !is_uploaded_file((string)($_FILES['backup_file']['tmp_name'] ?? ''))
+        || (int)($_FILES['backup_file']['size'] ?? 0) < 1
+        || (int)($_FILES['backup_file']['size'] ?? 0) > 200 * 1024 * 1024) {
+        respond(false, 'فایل SQL باید آپلود واقعی و کمتر از ۲۰۰ مگابایت باشد.');
     }
 
     $file = $_FILES['backup_file'];
