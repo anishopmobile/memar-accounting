@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../assets/php/db.php';
+require_once __DIR__ . '/../assets/php/accounting_ledger.php';
+require_once __DIR__ . '/../assets/php/currency.php';
 
 $customers = [];
 $query = "
@@ -30,6 +32,13 @@ if ($result) {
     }
     $result->free();
 }
+$balances = acct_party_balances($mysqli, 'customer');
+foreach ($customers as &$acctRow) {
+    $ledger = $balances[(int)$acctRow['id']] ?? ['balance'=>'0','unreconciled'=>false];
+    $acctRow['debt'] = $ledger['balance'];
+    $acctRow['unreconciled_history'] = $ledger['unreconciled'];
+}
+unset($acctRow);
 ?>
 <div class="card">
     <div class="page-actions">
@@ -75,7 +84,7 @@ if ($result) {
                             <td><?php echo htmlspecialchars($customer['phone'] ?? ''); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($customer['address'] ?? '')); ?></td>
                             <td><?php echo number_format($customer['total_spent']); ?></td>
-                            <td><?php echo number_format($customer['debt']); ?></td>
+                            <td><?php echo ($customer['unreconciled_history'] ? 'نیازمند تطبیق' : formatMoneyNumber((string) $customer['debt'])); ?></td>
                             <td>
                                 <button class="button-secondary small edit-customer" type="button">ویرایش</button>
                                 <button class="button-danger small delete-customer" type="button">حذف</button>
