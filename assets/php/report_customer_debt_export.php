@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/accounting_ledger.php';
 require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/db.php';
@@ -8,6 +9,7 @@ $search = reportParam('search');
 
 $sql = "
     SELECT
+         c.id,
         CONCAT(c.first_name, ' ', c.last_name) AS full_name,
         c.phone,
         c.address,
@@ -31,7 +33,8 @@ if ($search !== '') {
         $result = $stmt->get_result();
         if ($result) {
             while ($row = $result->fetch_assoc()) {
-                $rows[] = $row;
+                $row['debt']=ledger_party_balance($mysqli,'customer',(int)$row['id'])['debt'];
+        $rows[] = $row;
             }
         }
         $stmt->close();
@@ -40,7 +43,8 @@ if ($search !== '') {
     $result = $mysqli->query($sql);
     if ($result) {
         while ($row = $result->fetch_assoc()) {
-            $rows[] = $row;
+            $row['debt']=ledger_party_balance($mysqli,'customer',(int)$row['id'])['debt'];
+        $rows[] = $row;
         }
         $result->free();
     }
