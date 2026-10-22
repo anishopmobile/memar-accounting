@@ -12,6 +12,31 @@ declare(strict_types=1);
 require_once __DIR__ . '/jdf.php';
 require_once __DIR__ . '/invoice_pdf_common.php';
 require_once __DIR__ . '/media_common.php';
+require_once __DIR__ . '/ledger/ledger_service.php';
+
+/** Ledger summary is read-only at PDF generation time; historical values remain immutable. */
+function invoice_pdf_with_ledger(mysqli $db,array $invoice): array {
+    $type=(string)$invoice['type'];
+    $invoice['accounting_settled']='0.00';
+    $invoice['accounting_due']=null;
+    $invoice['accounting_returns']='0.00';
+    $invoice['accounting_unknown']=false;
+    $invoice['accounting_deposit']='0.00';
+    if(in_array($type,['sales_invoice','purchase_invoice'],true)){
+        $balance=ledger_invoice_balance($db,(int)$invoice['id']);
+        $invoice['accounting_settled']=$balance['paid'];
+        $invoice['accounting_due']=$balance['due'];
+        $invoice['accounting_returns']=$balance['returned'];
+        $invoice['accounting_unknown']=$balance['legacy_classification']==='requires_reconciliation';
+        $invoice['payment_status']=$balance['status'];
+    }elseif(in_array($type,['sales_proforma','purchase_proforma'],true)){
+        $id=(int)$invoice['id'];
+        $s=$db->prepare('SELECT COALESCE(SUM(p.amount),0) amount FROM ledger_payments p JOIN ledger_proforma_deposits d ON d.payment_id=p.id WHERE d.proforma_invoice_id=? AND p.voided_at IS NULL');
+        $s->bind_param('i',$id);$s->execute();$invoice['accounting_deposit']=$s->get_result()->fetch_assoc()['amount'];$s->close();
+    }
+    return $invoice;
+}
+
 
 /**
  * بارگذاری همه داده‌های موردنیاز قالب‌های فاکتور فروش.
@@ -36,6 +61,8 @@ function getSalesInvoicePrintData(mysqli $mysqli, int $invoiceId): array
         // خرید و هر نوع نامعتبر دیگر هرگز از این endpoint رندر نمی‌شود
         return ['ok' => false, 'error' => 'invalid_type'];
     }
+
+    $invoice = invoice_pdf_with_ledger($mysqli,$invoice);
 
     /* --- مشتری (اطلاعات کامل از رکورد واقعی) --- */
     $customer = null;
@@ -146,6 +173,8 @@ function getPurchaseInvoicePrintData(mysqli $mysqli, int $invoiceId): array
         // فروش و هر نوع نامعتبر دیگر هرگز از این مسیر رندر نمی‌شود
         return ['ok' => false, 'error' => 'invalid_type'];
     }
+
+    $invoice = invoice_pdf_with_ledger($mysqli,$invoice);
 
     /* --- تامین‌کننده (طرف فروشنده در معامله خرید) — اطلاعات کامل از رکورد واقعی --- */
     $supplier = null;
