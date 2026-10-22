@@ -5,6 +5,7 @@ $pages = [
     'dashboard' => 'داشبورد',
     'factors' => 'فاکتورها',
     'purchase-invoice' => 'فاکتور خرید',
+    'accounting-ledger' => 'دریافت‌ها و پرداخت‌های حسابداری',
     'sales-return' => 'برگشت فروش',
     'product-categories' => 'دسته‌بندی کالاها',
     'goods-and-services' => 'کالاها و خدمات',
@@ -84,6 +85,7 @@ if (!array_key_exists($page, $pages)) {
     <script src="assets/js/brand-settings.js" defer></script>
     <script src="assets/js/layout.js" defer></script>
     <script src="assets/js/invoice.js" defer></script>
+    <script src="assets/js/accounting-ledger.js" defer></script>
     <script src="assets/js/bundle.js" defer></script>
     <script src="assets/js/payment-forms.js" defer></script>
     <script src="assets/js/current-affairs.js" defer></script>
@@ -99,6 +101,7 @@ if (!array_key_exists($page, $pages)) {
     $shamsiDate = jdate('l، j F Y');
     $navIcons = [
         'dashboard' => 'fa-chart-pie',
+        'accounting-ledger' => 'fa-money-bill-transfer',
         'factors' => 'fa-file-invoice-dollar',
         'purchase-invoice' => 'fa-cart-plus',
         'sales-return' => 'fa-undo',
