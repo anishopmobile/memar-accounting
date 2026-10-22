@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/accounting/ledger.php';
 require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/db.php';
@@ -8,6 +9,7 @@ $search = reportParam('search');
 
 $sql = "
     SELECT
+        s.id,
         s.company_name,
         s.first_name,
         s.last_name,
@@ -33,6 +35,9 @@ if ($search !== '') {
         $result = $stmt->get_result();
         if ($result) {
             while ($row = $result->fetch_assoc()) {
+                $ledger=acct_party_summary($mysqli,'supplier',(int)$row['id']);
+                $row['unpaid']=$ledger['debt'];
+                $row['credit']=$ledger['credit'];
                 $rows[] = $row;
             }
         }
@@ -42,7 +47,10 @@ if ($search !== '') {
     $result = $mysqli->query($sql);
     if ($result) {
         while ($row = $result->fetch_assoc()) {
-            $rows[] = $row;
+            $ledger=acct_party_summary($mysqli,'supplier',(int)$row['id']);
+                $row['unpaid']=$ledger['debt'];
+                $row['credit']=$ledger['credit'];
+                $rows[] = $row;
         }
         $result->free();
     }
@@ -54,6 +62,7 @@ $columns = [
     'address'         => 'آدرس',
     'total_purchases' => 'مجموع خرید',
     'unpaid'          => 'مبلغ پرداخت نشده',
+    'credit' => 'اعتبار طرف حساب',
 ];
 
 $exportRows = [];
@@ -67,6 +76,7 @@ foreach ($rows as $r) {
         'address'         => $r['address'],
         'total_purchases' => formatMoneyNumber((string) $r['total_purchases']),
         'unpaid'          => formatMoneyNumber((string) $r['unpaid']),
+        'credit' => formatMoneyNumber((string)$r['credit']),
     ];
 }
 
