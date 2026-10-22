@@ -7,7 +7,7 @@ $(function() {
   if (!isInvoicePage && !isPartyPage) return;
   var kind=(isInvoicePage ? $('#invoiceMode').val()==='sales' : $('body').is('#customers'))?'customer':'supplier';
   var csrf=window.APP_CSRF_TOKEN;
-  var partyId=0, selectedInvoice=0, sourceProformaId=0, statement=null, posting=false, paymentToken='', cashAccounts=[], autoAllocation=true;
+  var partyId=0, selectedInvoice=0, sourceProformaId=0, statement=null, posting=false, paymentToken='', cashAccounts=[], autoAllocation=true, cleanPaymentRow='';
   var html='<div class="modal" id="accountingModal"><div class="modal-backdrop" data-close="accountingModal"></div>'
     +'<div class="modal-content" style="max-width:900px;max-height:90vh;overflow:auto">'
     +'<div class="modal-header"><h2>دریافت‌ها، پرداخت‌ها و صورت‌حساب</h2><button type="button" class="modal-close" id="acctClose">×</button></div>'
@@ -72,11 +72,14 @@ $(function() {
       out+='</tbody></table></div>';
     }
     $('#acctContent').html(out);
-    $('#acctDate').val(new Date().toLocaleDateString('en-CA'));
+    // Capture unenhanced HTML before the HCG select observer decorates it.
+    cleanPaymentRow=$('#acctPaymentRows .acctPaymentRow').first().prop('outerHTML');
     loadCashAccounts();updateTotals();
   }
   function loadCashAccounts(){
-    $.getJSON('assets/php/accounting_ledger_action.php',{action:'accounts'}).done(function(r){cashAccounts=(r.data&&r.data.accounts)||[];renderCashAccounts();}).fail(fail);
+    $.getJSON('assets/php/accounting_ledger_action.php',{action:'accounts'}).done(function(r){cashAccounts=(r.data&&r.data.accounts)||[];
+      if(!$('#acctDate').val())$('#acctDate').val((r.data&&r.data.today)||'');
+      renderCashAccounts();}).fail(fail);
   }
 
   function renderCashAccounts(){
@@ -100,7 +103,7 @@ $(function() {
   });
   $(document).on('click','#acctAddPayment',function(){
     if($('#acctPaymentRows .acctPaymentRow').length>=12){alert('حداکثر ۱۲ روش پرداخت مجاز است.');return;}
-    var $part=$('#acctPaymentRows .acctPaymentRow').first().clone();
+    var $part=$(cleanPaymentRow);
     $part.find('.acctPartAmount').val('');
     $part.find('.acctMethod').val('cash');
     $part.find('.acctCashAccount').empty();
