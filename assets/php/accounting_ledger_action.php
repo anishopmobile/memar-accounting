@@ -4,6 +4,7 @@ require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/accounting_ledger.php';
+require_once __DIR__ . '/accounting_payment_batch.php';
 date_default_timezone_set('Asia/Tehran');
 
 $action=(string)($_REQUEST['action']??'');
@@ -31,6 +32,31 @@ try {
         $stmt=$mysqli->prepare('INSERT INTO accounting_cash_accounts(name,account_type) VALUES(?,?)');
         $stmt->bind_param('ss',$name,$type);$stmt->execute();$id=(int)$stmt->insert_id;$stmt->close();
         respond_json(true,'حساب جدید ایجاد شد.',['id'=>$id]);
+    }
+    if ($action==='payment_batch') {
+        $payments=json_decode((string)($_POST['payments']??''),true,32,JSON_THROW_ON_ERROR);
+        $allocs=json_decode((string)($_POST['allocations']??'[]'),true,32,JSON_THROW_ON_ERROR);
+        if (!is_array($payments)||!is_array($allocs))throw new InvalidArgumentException('اطلاعات پرداخت نامعتبر است.');
+        foreach($payments as &$p) {
+            if(!is_array($p))throw new InvalidArgumentException('ردیف پرداخت نامعتبر است.');
+            $p['amount']=parseMoneyInput((string)($p['amount']??''));
+        }
+        unset($p);
+        foreach($allocs as &$a) {
+            if(!is_array($a))throw new InvalidArgumentException('تخصیص نامعتبر است.');
+            $a['amount']=parseMoneyInput((string)($a['amount']??''));
+        }
+        unset($a);
+        $input=[
+           'party_kind'=>$_POST['party_kind']??'','party_id'=>$_POST['party_id']??0,
+           'source_proforma_id'=>$_POST['source_proforma_id']??0,
+           'payment_date'=>$_POST['payment_date']??date('Y-m-d'),
+           'client_token'=>$_POST['client_token']??'',
+           'reference_no'=>$_POST['reference_no']??'',
+           'note'=>$_POST['note']??'',
+           'payments'=>$payments,'allocations'=>$allocs
+        ];
+        respond_json(true,'دریافت/پرداخت ترکیبی ثبت شد.',acct_record_payment_batch($mysqli,$input));
     }
     if ($action==='payment') {
         $alloc=$_POST['allocations']??'[]';
