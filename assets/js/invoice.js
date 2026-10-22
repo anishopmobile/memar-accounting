@@ -366,7 +366,7 @@ $(function () {
         });
     }
 
-    function invoiceImageHtml(id) {
+    function invoiceImageHtml(id, productId) {
         if (id === undefined || id === null || id === '') return '';
         var n = Number(id) || 0;
         var src = n ? 'assets/php/media_file.php?id=' + n + '&size=thumb' : 'assets/img/product-placeholder.svg';
