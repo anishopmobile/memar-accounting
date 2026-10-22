@@ -105,16 +105,21 @@ function ledger_migrate(mysqli $db): void {
 function ledger_initialize_legacy(mysqli $db): void {
     static $ready = false;
     if($ready) return;
-    ledger_migrate($db);
-    // Existing installations must not acquire migration row locks on every request.
-    // This also prevents competing requests from deadlocking during normal posting.
-    $already=$db->query("SELECT legacy_initialized FROM ledger_metadata WHERE id=1 LIMIT 1");
+    // Check a previously initialized schema without DDL or row locks first.
+    // This keeps simultaneous accounting requests out of the shared DDL/migration path.
+    $already=null;
+    try {
+        $already=$db->query("SELECT legacy_initialized FROM ledger_metadata WHERE id=1 LIMIT 1");
+    } catch(mysqli_sql_exception $e) {
+        if((int)$e->getCode()!==1146)throw $e; // only missing table is a fresh-install signal
+    }
     if($already && ($row=$already->fetch_assoc()) && (int)$row['legacy_initialized']===1){
         $already->free();
         $ready=true;
         return;
     }
     if($already)$already->free();
+    ledger_migrate($db);
     $db->begin_transaction();
     try {
         $db->query("INSERT IGNORE INTO ledger_metadata(id,legacy_initialized) VALUES(1,0)");
