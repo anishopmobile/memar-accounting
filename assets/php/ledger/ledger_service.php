@@ -29,10 +29,16 @@ function ledger_invoice_balance(mysqli $db, int $invoiceId, bool $lock=false): a
     $s=$db->prepare('SELECT recognized_paid,classification FROM ledger_legacy_invoices WHERE invoice_id=?');
     $s->bind_param('i',$invoiceId);$s->execute();$legacy=$s->get_result()->fetch_assoc();$s->close();
     $base=$legacy ? $legacy['recognized_paid'] : '0';
+    $returned='0';
+    if($inv['type']==='sales_invoice') {
+        $s=$db->prepare('SELECT COALESCE(SUM(payable_amount),0) AS returned FROM sales_returns WHERE invoice_id=?');
+        $s->bind_param('i',$invoiceId);$s->execute();$returned=$s->get_result()->fetch_assoc()['returned'];$s->close();
+    }
     $paid=money_add($base,$row['allocated']);
-    $due=money_sub($inv['payable_amount'],$paid);
+    $effectiveTotal=money_sub($inv['payable_amount'],$returned);
+    $due=money_sub($effectiveTotal,$paid);
     return ['invoice'=>$inv,'party_kind'=>$kind,'party_id'=>$pid,'paid'=>$paid,'due'=>$due,
-        'total'=>money_round($inv['payable_amount']),'legacy_classification'=>$legacy['classification']??null,
+        'total'=>money_round($inv['payable_amount']),'returned'=>money_round($returned),'effective_total'=>$effectiveTotal,'legacy_classification'=>$legacy['classification']??null,
         'status'=>money_cmp($due,'0')<=0?'paid':(money_cmp($paid,'0')<=0?'unpaid':'partial')];
 }
 /** Non-voided unapplied cash is a credit, NOT revenue and NOT a negative invoice. */
@@ -48,8 +54,13 @@ function ledger_party_summary(mysqli $db,string $kind,int $id): array {
     $s->execute();$payments=$s->get_result()->fetch_assoc()['v'];$s->close();
     $s=$db->prepare('SELECT signed_amount FROM ledger_openings WHERE party_kind=? AND party_id=?');
     $s->bind_param('si',$kind,$id);$s->execute();$opening=$s->get_result()->fetch_assoc()['signed_amount']??'0';$s->close();
-    $balance=money_sub(money_add($invoices,$opening),money_add($legacy,$payments));
-    return ['total_invoices'=>money_round($invoices),'paid_historically'=>money_round($legacy),
+    $returned='0';
+    if($kind==='customer') {
+        $s=$db->prepare('SELECT COALESCE(SUM(payable_amount),0) AS returned FROM sales_returns WHERE customer_id=?');
+        $s->bind_param('i',$id);$s->execute();$returned=$s->get_result()->fetch_assoc()['returned'];$s->close();
+    }
+    $balance=money_sub(money_add($invoices,$opening),money_add(money_add($legacy,$payments),$returned));
+    return ['total_invoices'=>money_round($invoices),'sales_returns'=>money_round($returned),'paid_historically'=>money_round($legacy),
         'payments'=>money_round($payments),'opening'=>money_round($opening),
         'balance'=>$balance,'debt'=>money_cmp($balance,'0')>0?$balance:'0.00',
         'credit'=>money_cmp($balance,'0')<0?money_abs($balance):'0.00'];
@@ -169,7 +180,7 @@ function ledger_party_details(mysqli $db,string $kind,int $id): array {
     foreach($rows as $row) {
         $v=ledger_invoice_balance($db,(int)$row['id']);
         $invoices[]=['id'=>(int)$row['id'],'invoice_number'=>$row['invoice_number'],'invoice_date'=>$row['invoice_date'],
-           'total'=>$v['total'],'paid'=>$v['paid'],'due'=>$v['due'],'status'=>$v['status'],
+           'total'=>$v['total'],'returned'=>$v['returned'],'effective_total'=>$v['effective_total'],'paid'=>$v['paid'],'due'=>$v['due'],'status'=>$v['status'],
            'legacy_classification'=>$v['legacy_classification']];
     }
     $s=$db->prepare('SELECT p.id,p.direction,p.amount,p.method,p.paid_on,p.reference_no,p.note,p.voided_at, (p.amount-COALESCE((SELECT SUM(a.amount) FROM ledger_allocations a WHERE a.payment_id=p.id),0)-COALESCE((SELECT SUM(a.amount) FROM ledger_credit_allocations a WHERE a.payment_id=p.id),0)) AS unapplied FROM ledger_payments p WHERE p.party_kind=? AND p.party_id=? ORDER BY p.id DESC LIMIT 150');
