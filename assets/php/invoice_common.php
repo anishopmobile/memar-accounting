@@ -1485,6 +1485,8 @@ function convertInvoice(mysqli $mysqli, int $invoiceId): array
 
     $mysqli->begin_transaction();
     try {
+        require_once __DIR__ . '/accounting_ledger.php';
+        ledger_assert_party($mysqli,$isSales?'customer':'supplier',(int)($isSales?$inv['customer_id']:$inv['supplier_id']));
         $lockIds = $allPids;
         foreach (array_keys($convCompReq) as $cpid) {
             $lockIds[] = (int) $cpid;
@@ -1519,6 +1521,22 @@ function convertInvoice(mysqli $mysqli, int $invoiceId): array
         $stmt->execute();
         $stmt->close();
 
+        // Conversion confirms applying linked advances to this now-final invoice.
+        $stmt=$mysqli->prepare("SELECT id,amount FROM accounting_receipts WHERE source_proforma_id=? AND state='posted' ORDER BY id FOR UPDATE");
+        $stmt->bind_param('i',$invoiceId);$stmt->execute();$advanceRows=$stmt->get_result()->fetch_all(MYSQLI_ASSOC);$stmt->close();
+        foreach ($advanceRows as $advance) {
+            $finance=ledger_invoice_balance($mysqli,$invoiceId,true);
+            if(money_cmp($finance['balance'],'0')<=0)break;
+            $receiptId=(int)$advance['id'];
+            $stmt=$mysqli->prepare('SELECT COALESCE(SUM(amount),0) allocated FROM accounting_allocations WHERE receipt_id=?');
+            $stmt->bind_param('i',$receiptId);$stmt->execute();$used=$stmt->get_result()->fetch_assoc()['allocated'];$stmt->close();
+            $available=money_sub($advance['amount'],$used);
+            $portion=money_cmp($available,$finance['balance'])>0?$finance['balance']:$available;
+            if(money_cmp($portion,'0')<=0)continue;
+            $stmt=$mysqli->prepare('INSERT INTO accounting_allocations (receipt_id,invoice_id,amount) VALUES (?,?,?) ON DUPLICATE KEY UPDATE amount=amount+VALUES(amount)');
+            $stmt->bind_param('iis',$receiptId,$invoiceId,$portion);$stmt->execute();$stmt->close();
+        }
+        ledger_update_invoice_status($mysqli,$invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'پیش‌فاکتور با موفقیت به فاکتور قطعی تبدیل شد.', 'invoice_id' => $invoiceId];
     } catch (Exception $e) {
