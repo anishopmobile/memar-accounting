@@ -59,12 +59,18 @@ function migrate_accounting_ledger(mysqli $db): void
         invoice_id INT NOT NULL,
         amount DECIMAL(14,2) NOT NULL,
         reversed_at DATETIME NULL,
-        UNIQUE KEY uq_apa_pair(payment_id,invoice_id),
+        KEY idx_apa_pair(payment_id,invoice_id),
         KEY idx_apa_invoice(invoice_id),
         CONSTRAINT fk_apa_payment FOREIGN KEY(payment_id) REFERENCES account_payments(id) ON DELETE RESTRICT,
         CONSTRAINT fk_apa_invoice FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
         CONSTRAINT chk_apa_amount CHECK (amount > 0)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // The first release used a unique pair. Removing it allows new immutable
+    // allocation rows without rewriting previously reversed historical rows.
+    $uniquePair=$db->query("SHOW INDEX FROM account_payment_allocations WHERE Key_name='uq_apa_pair'");
+    if ($uniquePair && $uniquePair->num_rows>0) {
+        $db->query("ALTER TABLE account_payment_allocations DROP INDEX uq_apa_pair, ADD KEY idx_apa_pair(payment_id,invoice_id)");
+    }
     $allocationCol=$db->query("SHOW COLUMNS FROM account_payment_allocations LIKE 'reversed_at'");
     if ($allocationCol && $allocationCol->num_rows===0) {
         $db->query("ALTER TABLE account_payment_allocations ADD COLUMN reversed_at DATETIME NULL");
