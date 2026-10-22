@@ -2,9 +2,11 @@
 (function($) {
 'use strict';
 $(function() {
-  if ($('#invoiceMode').length===0) return;
-  var kind=$('#invoiceMode').val()==='sales'?'customer':'supplier';
-  var csrf=$('#invoiceCsrfToken').val();
+  var isInvoicePage = $('#invoiceMode').length>0;
+  var isPartyPage = $('body').is('#customers,#suppliers');
+  if (!isInvoicePage && !isPartyPage) return;
+  var kind=(isInvoicePage ? $('#invoiceMode').val()==='sales' : $('body').is('#customers'))?'customer':'supplier';
+  var csrf=window.APP_CSRF_TOKEN;
   var partyId=0, selectedInvoice=0, statement=null, posting=false;
   var html='<div class="modal" id="accountingModal"><div class="modal-backdrop" data-close="accountingModal"></div>'
     +'<div class="modal-content" style="max-width:900px;max-height:90vh;overflow:auto">'
@@ -30,6 +32,7 @@ $(function() {
   function render(){
     var s=statement, b=Number(s.balance), out='';
     out+='<p><strong>مانده حساب: '+(s.balance_final?fmt(Math.abs(b))+(b>=0?' بدهکار':' بستانکار'):'نیازمند تعیین وضعیت فاکتورهای قدیمی')+'</strong></p>';
+    if(!s.has_opening_balance)out+='<button type="button" class="button-secondary small" id="acctOpening">ثبت مانده افتتاحیه</button>';
     out+='<p>اعتبار تخصیص‌نیافته: '+fmt(s.unallocated_credit||0)+' | اعتبار برگشت از فروش: '+fmt(s.return_credit||0)+'</p>';
     out+='<h3>فاکتورها و مانده‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>فاکتور</th><th>تاریخ</th><th>مبلغ</th><th>تسویه</th><th>مانده</th><th>تخصیص پرداخت جدید</th></tr></thead><tbody>';
     (s.invoices||[]).forEach(function(i){
@@ -101,6 +104,22 @@ $(function() {
     if(amount===null)return;
     $.post('assets/php/accounting_ledger_action.php',{action:'apply_credit',csrf_token:csrf,payment_id:paymentId,invoice_id:invoiceId,amount:amount})
       .done(load).fail(fail);
+  });
+  if(isPartyPage){
+    $('.customer-row,.supplier-row').each(function(){
+      var id=$(this).data('id');
+      if(!id)return;
+      var $actions=$(this).children('td').last();
+      $('<button type="button" class="button-secondary small acctPartyOpen">صورت حساب / دریافت و پرداخت</button>').data('id',id).appendTo($actions);
+    });
+    $(document).on('click','.acctPartyOpen',function(){partyId=Number($(this).data('id'));selectedInvoice=0;show();load();});
+  }
+  $(document).on('click','#acctOpening',function(){
+    var entered=prompt('مانده افتتاحیه طرف حساب را وارد کنید. مقدار مثبت: بدهی؛ مقدار منفی: بستانکاری. واحد: '+window.Currency.label,'0');
+    if(entered===null)return;
+    var note=prompt('توضیح و مستند مانده افتتاحیه','مانده انتقالی از قبل از استقرار سیستم');
+    if(note===null)return;
+    $.post('assets/php/accounting_ledger_action.php',{action:'opening_balance',csrf_token:csrf,party_kind:kind,party_id:partyId,amount:entered,note:note}).done(load).fail(fail);
   });
   window.AccountingLedger={
     openInvoice:function(i){
