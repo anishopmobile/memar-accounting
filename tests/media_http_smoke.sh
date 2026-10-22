@@ -21,6 +21,9 @@ for _ in {1..30}; do
   if curl -sf -o /dev/null "$base/login.php" 2>/dev/null; then break; fi
   sleep 0.2
 done
+status="$(curl -sS -o /dev/null -w '%{http_code}' "$base/assets/php/db.php")"
+[[ "$status" == '404' ]] || { echo "Internal db.php must not serve web GET, got $status" >&2; exit 1; }
+echo 'PASS internal database bootstrap denies direct web access'
 curl -sSf -c "$tmp/cookies" "$base/login.php" > "$tmp/login.html"
 token="$(sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' "$tmp/login.html" | head -n 1)"
 if [[ ! "$token" =~ ^[0-9a-f]{64}$ ]]; then
@@ -100,6 +103,14 @@ code="$(curl -sS -b "$tmp/cookies" -o "$tmp/deny-delete.json" -w '%{http_code}' 
   --data-urlencode "csrf_token=$token" "$base/assets/php/media_api.php")"
 [[ "$code" == '422' ]] || { echo "Expected linked-media deletion to return 422, got $code" >&2; exit 1; }
 echo 'PASS shared-media deletion protection'
+
+# An absolute path inside the public webroot must not be usable for backup.
+curl -sS -b "$tmp/cookies" -o "$tmp/webroot-backup.json" \
+  --data-urlencode action=save_dir \
+  --data-urlencode "backup_dir=$(pwd)/backups" \
+  --data-urlencode "csrf_token=$token" "$base/assets/php/db_backup.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(($j["success"]??true)!==false)exit(1);' "$tmp/webroot-backup.json"
+echo 'PASS public document-root backup paths rejected'
 
 # Create a real full SQL + private-media backup, then restore into this
 # disposable CI database and verify the removed original was recovered.
