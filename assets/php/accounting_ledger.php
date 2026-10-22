@@ -97,13 +97,6 @@ function acct_record_payment(mysqli $db,array $input,bool $insideTransaction=fal
         $cashAccountId=acct_resolve_cash_account($db,$method,$input['cash_account_id']??null);
         acct_party_lock($db,$kind,$id); // consistent lock order: party then invoice.
         $sourceId=(int)($input['source_proforma_id']??0);
-        if ($sourceId>0) {
-            $stmt=$db->prepare('SELECT type,customer_id,supplier_id FROM invoices WHERE id=? FOR UPDATE');
-            $stmt->bind_param('i',$sourceId);$stmt->execute();$res=$stmt->get_result();$source=$res?$res->fetch_assoc():null;$stmt->close();
-            if (!$source || ($kind==='customer' && ($source['type']!=='sales_proforma'||(int)$source['customer_id']!==$id))
-                || ($kind==='supplier' && ($source['type']!=='purchase_proforma'||(int)$source['supplier_id']!==$id)))
-                throw new InvalidArgumentException('پیش‌فاکتور مبنای پیش‌پرداخت نامعتبر است.');
-        }
         ksort($alloc,SORT_NUMERIC);
         $requestHash=hash('sha256',json_encode([$kind,$id,$direction,$amount,$method,$date,$ref,$note,$cashAccountId,$sourceId,$alloc],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
         $stmt=$db->prepare('SELECT id,request_hash FROM account_payments WHERE client_token=?');
@@ -112,6 +105,13 @@ function acct_record_payment(mysqli $db,array $input,bool $insideTransaction=fal
             if (!hash_equals((string)($existing['request_hash']??''),$requestHash))
                 throw new InvalidArgumentException('شناسه تکراری برای پرداخت متفاوت استفاده شده است.');
             if (!$insideTransaction) $db->commit();return ['payment_id'=>(int)$existing['id'],'duplicate'=>true];
+        }
+        if ($sourceId>0) {
+            $stmt=$db->prepare('SELECT type,customer_id,supplier_id FROM invoices WHERE id=? FOR UPDATE');
+            $stmt->bind_param('i',$sourceId);$stmt->execute();$res=$stmt->get_result();$source=$res?$res->fetch_assoc():null;$stmt->close();
+            if (!$source || ($kind==='customer' && ($source['type']!=='sales_proforma'||(int)$source['customer_id']!==$id))
+                || ($kind==='supplier' && ($source['type']!=='purchase_proforma'||(int)$source['supplier_id']!==$id)))
+                throw new InvalidArgumentException('پیش‌فاکتور مبنای پیش‌پرداخت نامعتبر است.');
         }
         foreach ($alloc as $invoiceId=>$value) {
             $v=acct_invoice_outstanding($db,(int)$invoiceId,true);
