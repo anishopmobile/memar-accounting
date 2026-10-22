@@ -20,7 +20,8 @@ try {
           'account_label'=>$_POST['account_label']??'',
           'reference_number'=>$_POST['reference_number']??'',
           'note'=>$_POST['note']??'',
-          'request_key'=>$_POST['request_key']??''
+          'request_key'=>$_POST['request_key']??'',
+          'source_proforma_id'=>$_POST['source_proforma_id']??0
         ];
         foreach ($allocations as &$allocation) {
             if (!is_array($allocation)) throw new InvalidArgumentException('تخصیص نامعتبر است.');
