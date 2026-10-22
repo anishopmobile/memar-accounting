@@ -69,8 +69,8 @@ function ledger_party_summary(mysqli $db,string $kind,int $id): array {
  * Allocate exactly the requested amounts to matching final invoices.
  * No automatic allocation; explicit allocations are persisted and independently auditable.
  */
-function ledger_record_payment(mysqli $db,array $in): array {
-    ledger_initialize_legacy($db);
+function ledger_record_payment(mysqli $db,array $in,bool $insideExistingTransaction=false): array {
+    if(!$insideExistingTransaction) ledger_initialize_legacy($db);
     $kind=(string)($in['party_kind']??'');
     $pid=filter_var($in['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
     $method=(string)($in['method']??'');
@@ -101,7 +101,7 @@ function ledger_record_payment(mysqli $db,array $in): array {
     $ref=trim((string)($in['reference_no']??''));$ref=substr($ref,0,120);
     $requestHash=hash('sha256',json_encode([$kind,$pid,$direction,$amount,$method,$date,$ref,$note,$mapped],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
     $table=$kind==='customer'?'customers':'suppliers';
-    $db->begin_transaction();
+    if(!$insideExistingTransaction) $db->begin_transaction();
     try{
         $s=$db->prepare("SELECT id FROM $table WHERE id=? FOR UPDATE");$s->bind_param('i',$pid);$s->execute();$found=$s->get_result()->fetch_assoc();$s->close();
         if(!$found)throw new DomainException('طرف حساب وجود ندارد.');
@@ -109,7 +109,7 @@ function ledger_record_payment(mysqli $db,array $in): array {
         $s->bind_param('s',$token);$s->execute();$old=$s->get_result()->fetch_assoc();$s->close();
         if($old) {
             if(!hash_equals((string)$old['payload_hash'],$requestHash))throw new DomainException('شناسه درخواست قبلاً برای پرداخت دیگری استفاده شده است.');
-            $db->commit();return ['payment_id'=>(int)$old['id'],'duplicate'=>true];
+            if(!$insideExistingTransaction) $db->commit();return ['payment_id'=>(int)$old['id'],'duplicate'=>true];
         }
         foreach($mapped as $invId=>$value){
             $bal=ledger_invoice_balance($db,(int)$invId,true);
@@ -132,8 +132,8 @@ function ledger_record_payment(mysqli $db,array $in): array {
             $s=$db->prepare('UPDATE invoices SET payment_status=? WHERE id=?');
             $s->bind_param('si',$derived,$invId);$s->execute();$s->close();
         }
-        $db->commit();return ['payment_id'=>$paymentId,'duplicate'=>false,'unallocated'=>money_sub($amount,$sum)];
-    } catch(Throwable $e){$db->rollback();throw $e;}
+        if(!$insideExistingTransaction) $db->commit();return ['payment_id'=>$paymentId,'duplicate'=>false,'unallocated'=>money_sub($amount,$sum)];
+    } catch(Throwable $e){if(!$insideExistingTransaction)$db->rollback();throw $e;}
 }
 
 /**
