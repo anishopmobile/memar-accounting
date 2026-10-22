@@ -102,6 +102,28 @@ try {
     acct_sync_invoice($mysqli,$sale);
     test_eq(acct_invoice_balance($mysqli,$sale)['remaining'],'0.00','sale return reduces outstanding');
     test_eq(acct_invoice_balance($mysqli,$sale)['overpaid_credit'],'2000000.00','return creates 2m account credit when paid 3m');
+    $newSale=fixture_invoice($mysqli,'customer',$customer,'2000000');
+    test_eq(acct_apply_credit($mysqli,'customer',$customer,$newSale),'2000000.00','returned credit transfers to new sale');
+    test_eq(acct_invoice_balance($mysqli,$newSale)['remaining'],'0.00','sales-return credit settles new invoice');
+    test_eq(acct_invoice_balance($mysqli,$sale)['overpaid_credit'],'0.00','return credit cannot be used twice');
+
+    $s2=fixture_party($mysqli,'suppliers','Refund source matching');
+    $s2inv=fixture_invoice($mysqli,'supplier',$s2,'1000000');
+    acct_post($mysqli,'supplier',$s2,'out','2000000','pos',date('Y-m-d'),
+      'CREDIT','','extra paid',$s2inv,null,'test-refund-src');
+    test_eq(acct_party_summary($mysqli,'supplier',$s2)['credit'],'1000000.00','supplier original credit before refund');
+    $refund=acct_post($mysqli,'supplier',$s2,'in','400000','bank_transfer',date('Y-m-d'),
+      'REFUND','','supplier refunded cash',null,null,'test-refund-1');
+    test_eq(acct_party_summary($mysqli,'supplier',$s2)['credit'],'600000.00','cash refund consumes supplier credit');
+    $new2=fixture_invoice($mysqli,'supplier',$s2,'1000000');
+    test_eq(acct_apply_credit($mysqli,'supplier',$s2,$new2),'600000.00','refunded cash not double applied');
+    try {
+      acct_reverse($mysqli,(int)acct_one($mysqli,"SELECT id FROM accounting_receipts WHERE client_token='test-refund-src'"),'reversed source');
+      throw new RuntimeException('refunded source reversed without first reversing refund');
+    } catch(InvalidArgumentException $e) { echo "PASS protected refund source reversal\\n"; }
+    acct_reverse($mysqli,$refund['id'],'refund reversed');
+    test_eq(acct_apply_credit($mysqli,'supplier',$s2,$new2),'400000.00','reversed refund restores unused supplier credit');
+    test_eq(acct_invoice_balance($mysqli,$new2)['remaining'],'0.00','refund reversal credit settles invoice');
     echo "PASS all accounting integration checks\n";
 } catch(Throwable $e) {
     // This suite executes against a disposable MySQL server only.
