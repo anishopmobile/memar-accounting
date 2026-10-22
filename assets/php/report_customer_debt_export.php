@@ -33,7 +33,9 @@ if ($search !== '') {
         $result = $stmt->get_result();
         if ($result) {
             while ($row = $result->fetch_assoc()) {
-                $row['debt']=ledger_party_balance($mysqli,'customer',(int)$row['id'])['debt'];
+                $summary=ledger_party_balance($mysqli,'customer',(int)$row['id']);
+            $row['debt']=$summary['debt'];
+            $row['credit']=$summary['credit'];
         $rows[] = $row;
             }
         }
@@ -43,7 +45,9 @@ if ($search !== '') {
     $result = $mysqli->query($sql);
     if ($result) {
         while ($row = $result->fetch_assoc()) {
-            $row['debt']=ledger_party_balance($mysqli,'customer',(int)$row['id'])['debt'];
+            $summary=ledger_party_balance($mysqli,'customer',(int)$row['id']);
+            $row['debt']=$summary['debt'];
+            $row['credit']=$summary['credit'];
         $rows[] = $row;
         }
         $result->free();
@@ -56,6 +60,7 @@ $columns = [
     'address'         => 'آدرس',
     'total_purchases' => 'مجموع خرید',
     'debt'            => 'مجموع بدهی',
+    'credit'          => 'اعتبار طرف حساب',
 ];
 
 $exportRows = [];
@@ -66,6 +71,7 @@ foreach ($rows as $r) {
         'address'         => $r['address'],
         'total_purchases' => formatMoneyNumber((string) $r['total_purchases']),
         'debt'            => formatMoneyNumber((string) $r['debt']),
+        'credit'          => formatMoneyNumber((string) $r['credit']),
     ];
 }
 
