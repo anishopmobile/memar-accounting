@@ -1,5 +1,9 @@
 <?php
+require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/currency.php';
+require_once __DIR__ . '/accounting/ledger.php';
+require_csrf_or_fail();
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -37,15 +41,10 @@ if ($supplier_id !== '') {
     if ($stmt->execute()) {
         $stmt->close();
 
-        $totalStmt = $mysqli->prepare("SELECT
-            COALESCE(SUM(CASE WHEN i.type = 'purchase_invoice' THEN i.payable_amount ELSE 0 END), 0) AS total_purchases,
-            COALESCE(SUM(CASE WHEN i.type = 'purchase_invoice' AND i.payment_status IN ('unpaid', 'partial') THEN i.payable_amount ELSE 0 END), 0) AS unpaid
-            FROM invoices i WHERE i.supplier_id = ?");
-        $totalStmt->bind_param('i', $supplier_id);
-        $totalStmt->execute();
-        $totalStmt->bind_result($totalPurchases, $unpaid);
-        $totalStmt->fetch();
-        $totalStmt->close();
+        $ledger = acct_party_summary($mysqli,'supplier', (int)$supplier_id);
+        $totalPurchases = $ledger['invoiced'];
+        $unpaid = $ledger['debt'];
+        $credit = $ledger['credit'];
 
         $supplier = [
             'id' => (int) $supplier_id,
@@ -60,8 +59,9 @@ if ($supplier_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_purchases' => number_format($totalPurchases ?? 0),
-            'unpaid' => number_format($unpaid ?? 0),
+            'total_purchases' => formatMoneyNumber($totalPurchases),
+            'unpaid' => formatMoneyNumber($unpaid),
+            'credit' => formatMoneyNumber($credit),
         ];
         echo json_encode(['success' => true, 'supplier' => $supplier]);
     } else {
@@ -73,15 +73,10 @@ if ($supplier_id !== '') {
     if ($stmt->execute()) {
         $id = $stmt->insert_id;
 
-        $totalStmt = $mysqli->prepare("SELECT
-            COALESCE(SUM(CASE WHEN i.type = 'purchase_invoice' THEN i.payable_amount ELSE 0 END), 0) AS total_purchases,
-            COALESCE(SUM(CASE WHEN i.type = 'purchase_invoice' AND i.payment_status IN ('unpaid', 'partial') THEN i.payable_amount ELSE 0 END), 0) AS unpaid
-            FROM invoices i WHERE i.supplier_id = ?");
-        $totalStmt->bind_param('i', $id);
-        $totalStmt->execute();
-        $totalStmt->bind_result($totalPurchases, $unpaid);
-        $totalStmt->fetch();
-        $totalStmt->close();
+        $ledger = acct_party_summary($mysqli,'supplier', (int)$id);
+        $totalPurchases = $ledger['invoiced'];
+        $unpaid = $ledger['debt'];
+        $credit = $ledger['credit'];
 
         $supplier = [
             'id' => $id,
