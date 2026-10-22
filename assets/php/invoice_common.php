@@ -902,7 +902,7 @@ function createInvoice(mysqli $mysqli, array $in): array
             $customerId,
             $supplierId,
             $in['payment_type'],
-            $in['payment_status'],
+            $savedStatus,
             $in['invoice_date'],
             $totals['subtotal'],
             $invoiceDiscount,
@@ -915,6 +915,13 @@ function createInvoice(mysqli $mysqli, array $in): array
         $stmt->execute();
         $invoiceId = (int) $stmt->insert_id;
         $stmt->close();
+        // New documents start unsettled; payment flags are never accounting evidence.
+        $stmt = $mysqli->prepare('UPDATE invoices SET legacy_paid_amount=0, payment_status=? WHERE id=?');
+        $initialStatus = 'unpaid';
+        $stmt->bind_param('si',$initialStatus,$invoiceId);
+        $stmt->execute();
+        $stmt->close();
+
 
         $insertedItems = insertInvoiceItems($mysqli, $invoiceId, $items);
 
@@ -1234,6 +1241,26 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         $note = ($in['note'] ?? null);
         $note = ($note === '' || $note === null) ? null : (string) $note;
 
+        // Historical partials remain unresolved until explicitly reconciled.
+        // Allocated payments lock invoice identity and require sufficient payable total.
+        $stmtAcct = $mysqli->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE invoice_id=?');
+        $stmtAcct->bind_param('i',$invoiceId);
+        $stmtAcct->execute();
+        $acctRow = $stmtAcct->get_result()->fetch_assoc();
+        $stmtAcct->close();
+        $allocated = (string) ($acctRow['s'] ?? '0');
+        $hasSettlements = money_cmp($allocated,'0')>0;
+        if ($hasSettlements && (($old['customer_id'] ?? null) != $customerId || ($old['supplier_id'] ?? null) != $supplierId)) {
+            throw new Exception('تغییر طرف حساب فاکتور دارای پرداخت مجاز نیست.');
+        }
+        if ($hasSettlements && money_cmp($totals['payable_amount'],money_add($allocated,$old['legacy_paid_amount'] ?? '0'))<0) {
+            throw new Exception('مبلغ جدید فاکتور از تسویه‌های ثبت‌شده کمتر است.');
+        }
+        $savedStatus = $old['payment_status'];
+        if ($old['legacy_paid_amount'] !== null) {
+            $paidTotal = money_add($allocated,$old['legacy_paid_amount']);
+            $savedStatus = money_cmp($totals['payable_amount'],$paidTotal)<=0 ? 'paid' : (money_cmp($paidTotal,'0')>0 ? 'partial' : 'unpaid');
+        }
         $stmt = $mysqli->prepare(
             'UPDATE invoices SET
                 customer_id = ?, supplier_id = ?, payment_type = ?, payment_status = ?,
@@ -1363,7 +1390,11 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
             // پیش‌فاکتور: بدون تغییر موجودی
         }
 
-        // اقلام با CASCADE حذف می‌شوند؛ stock_movements با ON DELETE SET NULL باقی می‌ماند
+        $paidCheck=$mysqli->prepare('SELECT COUNT(*) AS c FROM account_payment_allocations WHERE invoice_id=?');
+        $paidCheck->bind_param('i',$invoiceId);$paidCheck->execute();
+        $paidCount=(int)$paidCheck->get_result()->fetch_assoc()['c'];$paidCheck->close();
+        if ($paidCount>0) throw new Exception('فاکتور دارای دریافت یا پرداخت ثبت‌شده قابل حذف نیست.');
+                // اقلام با CASCADE حذف می‌شوند؛ stock_movements با ON DELETE SET NULL باقی می‌ماند
         $stmt = $mysqli->prepare('DELETE FROM invoices WHERE id = ?');
         $stmt->bind_param('i', $invoiceId);
         $stmt->execute();
