@@ -84,29 +84,30 @@ function ledger_record_payment(mysqli $db,array $in): array {
         $mapped[$id]=$v;$sum=money_add($sum,$v);
     }
     if(money_cmp($sum,$amount)>0)throw new InvalidArgumentException('تخصیص بیشتر از مبلغ پرداخت است.');
+    ksort($mapped,SORT_NUMERIC);
+    $direction=$kind==='customer'?'receipt':'disbursement';
+    $note=trim((string)($in['note']??''));$note=substr($note,0,3000);
+    $ref=trim((string)($in['reference_no']??''));$ref=substr($ref,0,120);
+    $requestHash=hash('sha256',json_encode([$kind,$pid,$direction,$amount,$method,$date,$ref,$note,$mapped],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
     $table=$kind==='customer'?'customers':'suppliers';
     $db->begin_transaction();
     try{
         $s=$db->prepare("SELECT id FROM $table WHERE id=? FOR UPDATE");$s->bind_param('i',$pid);$s->execute();$found=$s->get_result()->fetch_assoc();$s->close();
         if(!$found)throw new DomainException('طرف حساب وجود ندارد.');
-        $s=$db->prepare('SELECT id,party_kind,party_id,direction,amount FROM ledger_payments WHERE request_token=?');
+        $s=$db->prepare('SELECT id,payload_hash FROM ledger_payments WHERE request_token=?');
         $s->bind_param('s',$token);$s->execute();$old=$s->get_result()->fetch_assoc();$s->close();
-        $direction=$kind==='customer'?'receipt':'disbursement';
         if($old) {
-            if($old['party_kind']!==$kind||(int)$old['party_id']!==$pid||$old['direction']!==$direction||money_cmp($old['amount'],$amount)!==0)throw new DomainException('شناسه درخواست قبلاً برای پرداخت دیگری استفاده شده است.');
+            if(!hash_equals((string)$old['payload_hash'],$requestHash))throw new DomainException('شناسه درخواست قبلاً برای پرداخت دیگری استفاده شده است.');
             $db->commit();return ['payment_id'=>(int)$old['id'],'duplicate'=>true];
         }
-        ksort($mapped,SORT_NUMERIC);
         foreach($mapped as $invId=>$value){
             $bal=ledger_invoice_balance($db,(int)$invId,true);
             if($bal['party_kind']!==$kind||$bal['party_id']!==(int)$pid)throw new DomainException('فاکتور متعلق به این طرف حساب نیست.');
             if($bal['legacy_classification']==='requires_reconciliation')throw new DomainException('ابتدا پرداخت جزئی تاریخی فاکتور تعیین تکلیف شود.');
             if(money_cmp($value,$bal['due'])>0)throw new DomainException('مبلغ تخصیص از مانده فاکتور بیشتر است.');
         }
-        $note=trim((string)($in['note']??''));$note=substr($note,0,3000);
-        $ref=trim((string)($in['reference_no']??''));$ref=substr($ref,0,120);
-        $s=$db->prepare('INSERT INTO ledger_payments(party_kind,party_id,direction,amount,method,paid_on,reference_no,note,request_token) VALUES(?,?,?,?,?,?,?,?,?)');
-        $s->bind_param('sisssssss',$kind,$pid,$direction,$amount,$method,$date,$ref,$note,$token);$s->execute();
+        $s=$db->prepare('INSERT INTO ledger_payments(party_kind,party_id,direction,amount,method,paid_on,reference_no,note,request_token,payload_hash) VALUES(?,?,?,?,?,?,?,?,?,?)');
+        $s->bind_param('sissssssss',$kind,$pid,$direction,$amount,$method,$date,$ref,$note,$token,$requestHash);$s->execute();
         $paymentId=(int)$db->insert_id;$s->close();
         foreach($mapped as $invId=>$value){
             $s=$db->prepare('INSERT INTO ledger_allocations(payment_id,invoice_id,amount) VALUES(?,?,?)');
