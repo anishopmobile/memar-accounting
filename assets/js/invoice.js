@@ -337,6 +337,10 @@ $(function () {
                 + '<div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>مبلغ</th><th>تخصیص به فاکتور</th><th>وضعیت</th></tr></thead><tbody id="invAccountingHistory"></tbody></table></div>'
                 : '<div class="form-grid"><div class="form-row"><label>مبلغ دریافتی/پرداختی هنگام ثبت (' + esc(window.Currency.label) + ')</label>'
                 + '<input type="number" id="invInitialPaid" value="0" step="0.01" min="0"></div>'
+                + '<div class="form-row"><label>تاریخ دریافت/پرداخت اولیه</label><input type="date" id="invInitialDate" value="' + todayISO() + '"></div>'
+                + '<div class="form-row"><label>نام حساب/صندوق</label><input type="text" id="invInitialAccount" maxlength="120"></div>'
+                + '<div class="form-row"><label>شماره پیگیری پرداخت</label><input type="text" id="invInitialReference" maxlength="120"></div>'
+                + '<div class="form-row"><label>توضیحات پرداخت اولیه</label><input type="text" id="invInitialNote" maxlength="500"></div>'
                 + '<div class="form-row"><label>مانده تخمینی فاکتور</label><div id="invInitialRemaining" class="money-cell">—</div></div></div>'
                 + '<p class="setting-note">مبلغ اضافی، پس از تسویه فاکتور فعلی، برای بدهی‌های قبلی تخصیص می‌یابد و مازاد آن اعتبار خواهد شد. برای پرداخت ترکیبی، پس از ثبت فاکتور تراکنش جداگانه ثبت کنید.</p>')
             + '</div>'
@@ -762,6 +766,10 @@ $(function () {
             type: $('#invType').val(),
             payment_type: $('#invPaymentType').val(),
             initial_payment: currentInvoiceId ? '0' : ($('#invInitialPaid').val() || '0'),
+            initial_payment_date: $('#invInitialDate').val() || gDate,
+            initial_payment_account: $('#invInitialAccount').val() || '',
+            initial_payment_reference: $('#invInitialReference').val() || '',
+            initial_payment_note: $('#invInitialNote').val() || '',
             invoice_date: gDate,
             discount: $('#invDiscount').val() || '0',
             note: $('#invNote').val(),
