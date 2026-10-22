@@ -235,11 +235,20 @@ function acct_post(mysqli $db,string $kind,int $partyId,string $flow,$amount,str
     if (!$nested) $db->begin_transaction();
     try {
         acct_lock_party($db,$kind,$partyId);
+        $normalFlow = ($kind === 'customer' && $flow === 'in') || ($kind === 'supplier' && $flow === 'out');
+        if (!$normalFlow) {
+            $credit = acct_party_summary($db,$kind,$partyId)['credit'];
+            if (bccomp($amount,$credit,2)>0) {
+                throw new InvalidArgumentException('مبلغ استرداد بیشتر از اعتبار قابل استرداد طرف حساب است.');
+            }
+        }
         if ($token!=='') {
-            $st=$db->prepare('SELECT id,party_kind,party_id FROM accounting_receipts WHERE client_token=?');
+            $st=$db->prepare('SELECT id,party_kind,party_id,flow,amount,method FROM accounting_receipts WHERE client_token=?');
             $st->bind_param('s',$token);$st->execute();$row=$st->get_result()->fetch_assoc();$st->close();
             if ($row) {
-                if ($row['party_kind']!==$kind || (int)$row['party_id']!==$partyId) throw new InvalidArgumentException('شناسه تکراری متعلق به حساب دیگری است.');
+                if ($row['party_kind']!==$kind || (int)$row['party_id']!==$partyId
+                    || $row['flow']!==$flow || bccomp($row['amount'],$amount,2)!==0 || $row['method']!==$method)
+                    throw new InvalidArgumentException('شناسه تکراری با اطلاعات پرداخت متفاوت ثبت شده است.');
                 if (!$nested) $db->commit();
                 return ['id'=>(int)$row['id'],'existing'=>true,'allocations'=>[]];
             }
@@ -259,7 +268,7 @@ function acct_post(mysqli $db,string $kind,int $partyId,string $flow,$amount,str
         $st->bind_param('sisssssssisi',$kind,$partyId,$flow,$amount,$method,$account,$reference,$note,$date,$proformaId,$tk,$userId);
         $st->execute();$rid=(int)$db->insert_id;$st->close();
         $alloc=[];
-        $normalFlow=($kind==='customer' && $flow==='in') || ($kind==='supplier' && $flow==='out');
+        // Flow was validated against the party balance before recording.
         if (!$normalFlow && ($preferredInvoice || $manual)) throw new InvalidArgumentException('استرداد وجه نمی‌تواند بدهی فاکتور را تسویه کند.');
         if ($normalFlow && !$proformaId) {
             if ($manual) {
@@ -313,6 +322,7 @@ function acct_apply_credit(mysqli $db,string $kind,int $partyId,int $invoiceId):
 }
 
 function acct_reverse(mysqli $db,int $id,string $note=''): void {
+    if (trim($note)==='' || mb_strlen($note)>400) throw new InvalidArgumentException('دلیل ابطال الزامی است.');
     $db->begin_transaction();
     try {
         $st=$db->prepare('SELECT * FROM accounting_receipts WHERE id=?');
