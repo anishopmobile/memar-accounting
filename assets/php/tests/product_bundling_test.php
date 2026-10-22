@@ -30,6 +30,14 @@ require_once __DIR__ . '/../invoice_common.php';
 require_once __DIR__ . '/../bundle_common.php';
 require_once __DIR__ . '/../sales_return_common.php';
 
+$bundleAuthUsername = 'bundle_ci_' . bin2hex(random_bytes(5));
+$bundleAuthHash = password_hash('BundleTest456', PASSWORD_DEFAULT);
+$bundleAuthStmt = $mysqli->prepare('INSERT INTO users(username,password_hash) VALUES(?,?)');
+$bundleAuthStmt->bind_param('ss',$bundleAuthUsername,$bundleAuthHash);
+$bundleAuthStmt->execute();
+$bundleAuthId=(int)$bundleAuthStmt->insert_id;
+$bundleAuthStmt->close();
+
 $pass = 0;
 $fail = 0;
 $failures = [];
@@ -180,7 +188,7 @@ function endpoint_run_child(string $file, array $params, string $method = 'GET')
     $root = realpath(__DIR__ . '/../../..');
     $code = "<?php\n"
         . "session_start();\n"
-        . "if (session_status() === PHP_SESSION_ACTIVE) { \$_SESSION['auth_user'] = 'memar'; \$_SESSION['csrf_token'] = 'ci-bundle-csrf'; }\n"
+        . "if (session_status() === PHP_SESSION_ACTIVE) { \$_SESSION['auth_user_id'] = " . (int)$GLOBALS['bundleAuthId'] . "; \$_SESSION['csrf_token'] = 'ci-bundle-csrf'; }\n"
         . "\$_SERVER['REQUEST_METHOD'] = " . var_export($method, true) . ";\n"
         . "\$_SERVER['HTTP_ACCEPT'] = 'application/json';\n"
         . "\$p = json_decode((string) file_get_contents(\$argv[1] ?? ''), true);\n"
@@ -219,6 +227,8 @@ function endpoint_codes(array $data): array
 
 echo "== Setup ==\n";
 t_cleanup_test_data($mysqli);
+$bundleAuthClean=$mysqli->prepare('DELETE FROM users WHERE id=?');
+$bundleAuthClean->bind_param('i',$bundleAuthId);$bundleAuthClean->execute();$bundleAuthClean->close();
 
 echo "\n== 1) Bundle creation & validation ==\n";
 $A = t_make_product($mysqli, 'T-BND-A', 'کالای جزء آ', 'product', 20, 10, 20);
