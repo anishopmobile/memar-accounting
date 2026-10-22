@@ -976,7 +976,10 @@ function createInvoice(mysqli $mysqli, array $in): array
         if (money_cmp($initial, '0') > 0) {
             acct_post($mysqli, isSales($type) ? 'customer' : 'supplier', $partyId,
                 isSales($type) ? 'in' : 'out', $initial, $in['payment_type'],
-                $in['invoice_date'], '', '', 'پرداخت هنگام ثبت فاکتور',
+                ($in['initial_payment_date'] ?? '') ?: $in['invoice_date'],
+                (string)($in['initial_payment_reference'] ?? ''),
+                (string)($in['initial_payment_account'] ?? ''),
+                'پرداخت هنگام ثبت فاکتور — '.(string)($in['initial_payment_note'] ?? ''),
                 isFinal($type) ? $invoiceId : null,
                 isFinal($type) ? null : $invoiceId,
                 $clientToken ? 'invoice-initial-'.$invoiceId : '', true, true);
