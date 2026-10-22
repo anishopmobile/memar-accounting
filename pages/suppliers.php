@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../assets/php/accounting_ledger.php';
+require_once __DIR__ . '/../assets/php/currency.php';
 require_once __DIR__ . '/../assets/php/db.php';
 
 $suppliers = [];
@@ -28,7 +29,9 @@ $query = "
 $result = $mysqli->query($query);
 if ($result) {
     while ($row = $result->fetch_assoc()) {
-        $row['unpaid']=ledger_party_balance($mysqli,'supplier',(int)$row['id'])['debt'];
+        $summary=ledger_party_balance($mysqli,'supplier',(int)$row['id']);
+        $row['unpaid']=$summary['debt'];
+        $row['credit']=$summary['credit'];
         $suppliers[] = $row;
     }
     $result->free();
@@ -52,6 +55,7 @@ if ($result) {
                     <th>تلفن</th>
                     <th>آدرس</th>
                     <th>مجموع خرید</th>
+                    <th>اعتبار طرف حساب</th>
                     <th>پرداخت نشده</th>
                     <th>عملیات</th>
                 </tr>
@@ -59,7 +63,7 @@ if ($result) {
             <tbody>
                 <?php if (count($suppliers) === 0): ?>
                     <tr class="empty-state-row">
-                        <td colspan="7" class="empty-state">تامین‌کننده‌ای یافت نشد</td>
+                        <td colspan="8" class="empty-state">تامین‌کننده‌ای یافت نشد</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($suppliers as $supplier): ?>
@@ -83,8 +87,9 @@ if ($result) {
                             <td><?php echo htmlspecialchars($supplier['national_code'] ?? ''); ?></td>
                             <td><?php echo htmlspecialchars($supplier['phone'] ?? ''); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($supplier['address'] ?? '')); ?></td>
-                            <td><?php echo number_format($supplier['total_purchases']); ?></td>
-                            <td><?php echo number_format($supplier['unpaid']); ?></td>
+                            <td><?php echo formatMoneyNumber((string)$supplier['total_purchases']); ?></td>
+                            <td><?php echo formatMoneyNumber((string)$supplier['unpaid']); ?></td>
+                            <td><?php echo formatMoneyNumber((string)$supplier['credit']); ?></td>
                             <td>
                                 <a class="button-secondary small" href="?page=accounting&amp;party_kind=supplier&amp;party_id=<?php echo (int) $supplier['id']; ?>">صورت‌حساب</a> <button class="button-secondary small edit-supplier" type="button">ویرایش</button>
                                 <button class="button-danger small delete-supplier" type="button">حذف</button>
