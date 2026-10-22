@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../assets/php/accounting/ledger.php';
+require_once __DIR__ . '/../assets/php/currency.php';
 require_once __DIR__ . '/../assets/php/db.php';
 
 $suppliers = [];
@@ -27,6 +29,10 @@ $query = "
 $result = $mysqli->query($query);
 if ($result) {
     while ($row = $result->fetch_assoc()) {
+        $ledger = acct_party_summary($mysqli, 'supplier', (int)$row['id']);
+        $row['unpaid'] = $ledger['debt'];
+        $row['credit'] = $ledger['credit'];
+        $row['pending_legacy'] = $ledger['pending_legacy'];
         $suppliers[] = $row;
     }
     $result->free();
@@ -50,7 +56,7 @@ if ($result) {
                     <th>تلفن</th>
                     <th>آدرس</th>
                     <th>مجموع خرید</th>
-                    <th>پرداخت نشده</th>
+                    <th>پرداخت نشده</th><th>اعتبار</th><th>صورت‌حساب</th>
                     <th>عملیات</th>
                 </tr>
             </thead>
@@ -82,7 +88,9 @@ if ($result) {
                             <td><?php echo htmlspecialchars($supplier['phone'] ?? ''); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($supplier['address'] ?? '')); ?></td>
                             <td><?php echo number_format($supplier['total_purchases']); ?></td>
-                            <td><?php echo number_format($supplier['unpaid']); ?></td>
+                            <td><?php echo formatMoneyNumber($supplier['unpaid']); ?><?php if ((int)$supplier['pending_legacy']>0): ?> ⚠<?php endif; ?></td>
+                        <td><?php echo formatMoneyNumber($supplier['credit']); ?></td>
+                        <td><a class="button-secondary small" href="?page=party-statement&kind=supplier&id=<?php echo (int)$supplier['id']; ?>">صورت‌حساب</a></td>
                             <td>
                                 <button class="button-secondary small edit-supplier" type="button">ویرایش</button>
                                 <button class="button-danger small delete-supplier" type="button">حذف</button>
