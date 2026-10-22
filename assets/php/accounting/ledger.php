@@ -456,8 +456,8 @@ function acct_post(mysqli $db,string $kind,int $partyId,string $flow,$amount,str
 }
 
 /** Allocate existing unassigned credit, including after conversion of a proforma. */
-function acct_apply_credit(mysqli $db,string $kind,int $partyId,int $invoiceId): string {
-    $db->begin_transaction();
+function acct_apply_credit(mysqli $db,string $kind,int $partyId,int $invoiceId,bool $nested=false): string {
+    if (!$nested) $db->begin_transaction();
     try {
         acct_lock_party($db,$kind,$partyId);
         $inv=acct_invoice_balance($db,$invoiceId);
@@ -515,8 +515,9 @@ function acct_apply_credit(mysqli $db,string $kind,int $partyId,int $invoiceId):
                 $used=bcadd($used,$chunk,2);
             }
         }
-        $db->commit();return $used;
-    }catch(Throwable $e){$db->rollback();throw $e;}
+        if (!$nested) $db->commit();
+        return $used;
+    }catch(Throwable $e){if (!$nested) $db->rollback();throw $e;}
 }
 
 function acct_reverse(mysqli $db,int $id,string $note=''): void {
