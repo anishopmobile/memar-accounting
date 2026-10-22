@@ -1255,11 +1255,12 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         $stmtAcct->bind_param('i',$invoiceId);$stmtAcct->execute();
         $retAllocated=(string)($stmtAcct->get_result()->fetch_assoc()['s']??'0');$stmtAcct->close();
         $allocated=money_add($allocated,$retAllocated);
-        $hasSettlements = money_cmp($allocated,'0')>0;
+        $settledTotal=money_add($allocated,$old['legacy_paid_amount'] ?? '0');
+        $hasSettlements=money_cmp($settledTotal,'0')>0;
         if ($hasSettlements && (($old['customer_id'] ?? null) != $customerId || ($old['supplier_id'] ?? null) != $supplierId)) {
-            throw new Exception('تغییر طرف حساب فاکتور دارای پرداخت مجاز نیست.');
+            throw new Exception('تغییر طرف حساب فاکتور دارای تسویه مجاز نیست.');
         }
-        if ($hasSettlements && money_cmp($totals['payable_amount'],money_add($allocated,$old['legacy_paid_amount'] ?? '0'))<0) {
+        if (money_cmp($totals['payable_amount'],$settledTotal)<0) {
             throw new Exception('مبلغ جدید فاکتور از تسویه‌های ثبت‌شده کمتر است.');
         }
         $savedStatus = $old['payment_status'];
