@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/accounting_ledger.php';
 require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/currency.php';
 require_once __DIR__ . '/db.php';
@@ -8,6 +9,7 @@ $search = reportParam('search');
 
 $sql = "
     SELECT
+         s.id,
         s.company_name,
         s.first_name,
         s.last_name,
@@ -33,7 +35,8 @@ if ($search !== '') {
         $result = $stmt->get_result();
         if ($result) {
             while ($row = $result->fetch_assoc()) {
-                $rows[] = $row;
+                $row['unpaid']=ledger_party_balance($mysqli,'supplier',(int)$row['id'])['debt'];
+        $rows[] = $row;
             }
         }
         $stmt->close();
@@ -42,7 +45,8 @@ if ($search !== '') {
     $result = $mysqli->query($sql);
     if ($result) {
         while ($row = $result->fetch_assoc()) {
-            $rows[] = $row;
+            $row['unpaid']=ledger_party_balance($mysqli,'supplier',(int)$row['id'])['debt'];
+        $rows[] = $row;
         }
         $result->free();
     }
