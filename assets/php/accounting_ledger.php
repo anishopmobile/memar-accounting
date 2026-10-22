@@ -115,7 +115,8 @@ function ledger_post_in_tx(mysqli $db,array $in): array {
      (party_kind,party_id,direction,amount,method,account_label,payment_date,reference_number,note,request_key,source_proforma_id,request_fingerprint)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
     $linkedProforma=$proformaId ?: null;
-    $st->bind_param('sissssssssis',$kind,$party,$direction,$amount,$method,$label,$date,$ref,$note,$key,$linkedProforma,$fingerprint);
+    $persistKey=$key===''?null:$key;
+    $st->bind_param('sissssssssis',$kind,$party,$direction,$amount,$method,$label,$date,$ref,$note,$persistKey,$linkedProforma,$fingerprint);
     $st->execute();$receiptId=(int)$db->insert_id;$st->close();
     foreach ($normalized as $id=>$v) {
         $st=$db->prepare('INSERT INTO accounting_allocations (receipt_id,invoice_id,amount) VALUES (?,?,?)');
