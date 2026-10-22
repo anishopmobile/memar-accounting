@@ -142,3 +142,23 @@ function ledger_reconcile_partial(mysqli $db,int $invoiceId,$paidRaw,string $exp
         return ['invoice_id'=>$invoiceId,'recognized_paid'=>$paid];
     }catch(Throwable $e){$db->rollback();throw $e;}
 }
+
+/** Party detail for payment allocation UI. Includes no gateway transactions. */
+function ledger_party_details(mysqli $db,string $kind,int $id): array {
+    ledger_initialize_legacy($db);
+    $summary=ledger_party_summary($db,$kind,$id);
+    $fk=$kind==='customer'?'customer_id':'supplier_id';
+    $type=$kind==='customer'?'sales_invoice':'purchase_invoice';
+    $s=$db->prepare("SELECT id,invoice_number,invoice_date,payable_amount FROM invoices WHERE type=? AND $fk=? ORDER BY invoice_date DESC,id DESC LIMIT 150");
+    $s->bind_param('si',$type,$id);$s->execute();$rows=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
+    $invoices=[];
+    foreach($rows as $row) {
+        $v=ledger_invoice_balance($db,(int)$row['id']);
+        $invoices[]=['id'=>(int)$row['id'],'invoice_number'=>$row['invoice_number'],'invoice_date'=>$row['invoice_date'],
+           'total'=>$v['total'],'paid'=>$v['paid'],'due'=>$v['due'],'status'=>$v['status'],
+           'legacy_classification'=>$v['legacy_classification']];
+    }
+    $s=$db->prepare('SELECT id,direction,amount,method,paid_on,reference_no,note,voided_at FROM ledger_payments WHERE party_kind=? AND party_id=? ORDER BY id DESC LIMIT 150');
+    $s->bind_param('si',$kind,$id);$s->execute();$payments=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
+    return ['summary'=>$summary,'invoices'=>$invoices,'payments'=>$payments];
+}
