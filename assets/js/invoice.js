@@ -370,7 +370,7 @@ $(function () {
         if (id === undefined || id === null || id === '') return '';
         var n = Number(id) || 0;
         var src = n ? 'assets/php/media_file.php?id=' + n + '&size=thumb' : 'assets/img/product-placeholder.svg';
-        return '<img loading="lazy" decoding="async" data-id="' + n + '" class="media-thumb" width="40" height="40" src="' + src + '" alt="">';
+        return '<img loading="lazy" decoding="async" data-id="' + n + '" data-product-id="' + (Number(productId)||0) + '" class="media-thumb" width="40" height="40" src="' + src + '" alt="">';
     }
     function addItemRow(pid, name, price, qty, disc, pcode, units, selUnitId, mediaId) {
         units = units || [];
@@ -386,7 +386,7 @@ $(function () {
             opts = '<option value="">' + esc('عدد') + '</option>';
         }
         var tr = '<tr data-pid="' + escAttr(pid) + '">'
-            + '<td class="inv-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(mediaId) + '</td>'
+            + '<td class="inv-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(mediaId,pid) + '</td>'
             + '<td>' + esc((pcode ? pcode + ' — ' : '') + (name || '')) + '</td>'
             + '<td><select class="ii-unit">' + opts + '</select></td>'
             + '<td><input type="number" class="ii-price" min="0" step="1" value="' + escAttr(showBase(price)) + '"></td>'
@@ -489,7 +489,7 @@ $(function () {
                     : (p[priceKey] || 0);
                 var unitsJson = JSON.stringify(units);
                 html += '<tr>'
-                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id) + '</td>'
+                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id,p.id) + '</td>'
                     + '<td>' + esc(p.code) + '</td>'
                     + '<td>' + esc(p.barcode) + '</td>'
                     + '<td>' + esc(p.name) + '</td>'
@@ -584,7 +584,7 @@ $(function () {
                     : (p[priceKey] || 0);
                 var unitsJson = JSON.stringify(units);
                 html += '<tr>'
-                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id) + '</td>'
+                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id,p.id) + '</td>'
                     + '<td>' + esc(p.code) + '</td>'
                     + '<td>' + esc(p.barcode) + '</td>'
                     + '<td>' + esc(p.name) + '</td>'
