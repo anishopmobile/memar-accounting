@@ -76,27 +76,8 @@ function ledger_post_in_tx(mysqli $db,array $in): array {
     }
     if (money_cmp($sum,$amount)>0) throw new InvalidArgumentException('جمع تخصیص‌ها از مبلغ پرداخت بیشتر است.');
     ksort($normalized,SORT_NUMERIC);
-    foreach ($normalized as $id=>$v) {
-        $s=ledger_invoice_balance($db,(int)$id,true);$inv=$s['invoice'];
-        $foreign=$kind==='customer'?'customer_id':'supplier_id';
-        $expected=$kind==='customer'?'sales_invoice':'purchase_invoice';
-        $expectedDirection=$kind==='customer'?'in':'out';
-        if ($inv['type']!==$expected || (int)$inv[$foreign]!==$party || $direction!==$expectedDirection) throw new InvalidArgumentException('تخصیص به فاکتور این طرف حساب مجاز نیست.');
-        if ($s['needs_review']) throw new InvalidArgumentException('ابتدا مانده پرداخت جزئی تاریخی فاکتور را تعیین کنید.');
-        if (money_cmp($v,$s['balance'])>0) throw new InvalidArgumentException('تخصیص از مانده فاکتور بیشتر است.');
-    }
     $proformaId=(int)($in['source_proforma_id']??0);
-    if ($proformaId>0) {
-        if ($normalized) throw new InvalidArgumentException('پیش‌دریافت فقط به پیش‌فاکتور مرتبط می‌شود و هنوز تخصیص قطعی ندارد.');
-        $st=$db->prepare('SELECT type,customer_id,supplier_id FROM invoices WHERE id=? FOR UPDATE');
-        $st->bind_param('i',$proformaId);$st->execute();$pro=$st->get_result()->fetch_assoc();$st->close();
-        $expected=$kind==='customer'?'sales_proforma':'purchase_proforma';
-        $fk=$kind==='customer'?'customer_id':'supplier_id';
-        $needDirection=$kind==='customer'?'in':'out';
-        if(!$pro || $pro['type']!==$expected || (int)$pro[$fk]!==$party || $direction!==$needDirection)
-            throw new InvalidArgumentException('پیش‌فاکتور متعلق به این طرف حساب نیست.');
-    }
-        $label=substr(trim((string)($in['account_label']??'')),0,120);
+    $label=substr(trim((string)($in['account_label']??'')),0,120);
     $ref=substr(trim((string)($in['reference_number']??'')),0,120);
     $note=substr(trim((string)($in['note']??'')),0,2000);
     $fingerprint=hash('sha256',json_encode([
@@ -111,7 +92,26 @@ function ledger_post_in_tx(mysqli $db,array $in): array {
             return ['receipt_id'=>(int)$prior['id'],'duplicate'=>true];
         }
     }
-    $st=$db->prepare("INSERT INTO accounting_receipts
+    foreach ($normalized as $id=>$v) {
+        $s=ledger_invoice_balance($db,(int)$id,true);$inv=$s['invoice'];
+        $foreign=$kind==='customer'?'customer_id':'supplier_id';
+        $expected=$kind==='customer'?'sales_invoice':'purchase_invoice';
+        $expectedDirection=$kind==='customer'?'in':'out';
+        if ($inv['type']!==$expected || (int)$inv[$foreign]!==$party || $direction!==$expectedDirection) throw new InvalidArgumentException('تخصیص به فاکتور این طرف حساب مجاز نیست.');
+        if ($s['needs_review']) throw new InvalidArgumentException('ابتدا مانده پرداخت جزئی تاریخی فاکتور را تعیین کنید.');
+        if (money_cmp($v,$s['balance'])>0) throw new InvalidArgumentException('تخصیص از مانده فاکتور بیشتر است.');
+    }
+    if ($proformaId>0) {
+        if ($normalized) throw new InvalidArgumentException('پیش‌دریافت فقط به پیش‌فاکتور مرتبط می‌شود و هنوز تخصیص قطعی ندارد.');
+        $st=$db->prepare('SELECT type,customer_id,supplier_id FROM invoices WHERE id=? FOR UPDATE');
+        $st->bind_param('i',$proformaId);$st->execute();$pro=$st->get_result()->fetch_assoc();$st->close();
+        $expected=$kind==='customer'?'sales_proforma':'purchase_proforma';
+        $fk=$kind==='customer'?'customer_id':'supplier_id';
+        $needDirection=$kind==='customer'?'in':'out';
+        if(!$pro || $pro['type']!==$expected || (int)$pro[$fk]!==$party || $direction!==$needDirection)
+            throw new InvalidArgumentException('پیش‌فاکتور متعلق به این طرف حساب نیست.');
+    }
+        $st=$db->prepare("INSERT INTO accounting_receipts
      (party_kind,party_id,direction,amount,method,account_label,payment_date,reference_number,note,request_key,source_proforma_id,request_fingerprint)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
     $linkedProforma=$proformaId ?: null;
