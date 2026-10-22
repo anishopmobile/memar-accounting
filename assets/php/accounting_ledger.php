@@ -30,16 +30,16 @@ function acct_invoice_outstanding(mysqli $db, int $id, bool $lock = false): arra
     $inv=$r?$r->fetch_assoc():null;$stmt->close();
     if (!$inv || !in_array($inv['type'],['sales_invoice','purchase_invoice'],true))
         throw new InvalidArgumentException('فقط فاکتور قطعی قابل تسویه است.');
-    if ($inv['legacy_paid_amount'] === null)
-        throw new InvalidArgumentException('مبلغ پرداختی تاریخی این فاکتور جزئی هنوز تعیین تکلیف نشده است.');
+    $unreconciled = $inv['legacy_paid_amount'] === null;
     $stmt=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE invoice_id=?');
     $stmt->bind_param('i',$id);$stmt->execute();$r=$stmt->get_result();
-    $paid=money_add($inv['legacy_paid_amount'],($r?$r->fetch_assoc()['s']:'0'));
+    $paid=money_add($inv['legacy_paid_amount'] ?? '0',($r?$r->fetch_assoc()['s']:'0'));
     $stmt->close();
-    return ['invoice'=>$inv,'paid'=>$paid,'remaining'=>money_sub($inv['payable_amount'],$paid)];
+    return ['invoice'=>$inv,'paid'=>$paid,'remaining'=>money_sub($inv['payable_amount'],$paid),'unreconciled'=>$unreconciled];
 }
 function acct_update_status(mysqli $db,int $id): void {
     $v=acct_invoice_outstanding($db,$id,true);
+    if ($v['unreconciled']) throw new InvalidArgumentException('ابتدا وضعیت پرداخت تاریخی فاکتور را تطبیق دهید.');
     $status=money_cmp($v['remaining'],'0') <= 0?'paid':(money_cmp($v['paid'],'0')>0?'partial':'unpaid');
     $stmt=$db->prepare('UPDATE invoices SET payment_status=? WHERE id=?');
     $stmt->bind_param('si',$status,$id);$stmt->execute();$stmt->close();
@@ -83,6 +83,7 @@ function acct_record_payment(mysqli $db,array $input): array {
         ksort($alloc,SORT_NUMERIC);
         foreach ($alloc as $invoiceId=>$value) {
             $v=acct_invoice_outstanding($db,(int)$invoiceId,true);
+            if ($v['unreconciled']) throw new InvalidArgumentException('ابتدا مبلغ پرداخت تاریخی این فاکتور را مشخص کنید.');
             $inv=$v['invoice'];
             if (($kind==='customer' && ($inv['type']!=='sales_invoice' || (int)$inv['customer_id']!==$id))
                 || ($kind==='supplier' && ($inv['type']!=='purchase_invoice' || (int)$inv['supplier_id']!==$id)))
