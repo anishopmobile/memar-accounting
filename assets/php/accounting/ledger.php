@@ -83,6 +83,25 @@ function acct_migrate(mysqli $db): void {
             KEY idx_ao_party (party_kind,party_id),
             CONSTRAINT chk_ao_nonzero CHECK (signed_amount <> 0)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS accounting_opening_allocations (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            opening_id BIGINT UNSIGNED NOT NULL,
+            invoice_id INT NOT NULL,
+            amount DECIMAL(14,2) NOT NULL,
+            KEY idx_oa_invoice (invoice_id),
+            CONSTRAINT fk_oa_entry FOREIGN KEY (opening_id) REFERENCES accounting_opening_entries(id) ON DELETE RESTRICT,
+            CONSTRAINT fk_oa_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
+            CONSTRAINT chk_oa_amount CHECK (amount > 0)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS accounting_opening_refunds (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            opening_id BIGINT UNSIGNED NOT NULL,
+            refund_receipt_id BIGINT UNSIGNED NOT NULL,
+            amount DECIMAL(14,2) NOT NULL,
+            CONSTRAINT fk_or_entry FOREIGN KEY (opening_id) REFERENCES accounting_opening_entries(id) ON DELETE RESTRICT,
+            CONSTRAINT fk_or_refund FOREIGN KEY (refund_receipt_id) REFERENCES accounting_receipts(id) ON DELETE RESTRICT,
+            CONSTRAINT chk_or_amount CHECK (amount > 0)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         "CREATE TABLE IF NOT EXISTS accounting_legacy_invoices (
             invoice_id INT PRIMARY KEY,
             original_status ENUM('paid','unpaid','partial') NOT NULL,
@@ -175,7 +194,9 @@ function acct_invoice_balance(mysqli $db, int $id): array {
       "SELECT COALESCE(SUM(t.amount),0) FROM accounting_credit_transfers t
        LEFT JOIN accounting_receipts p ON p.id=t.refund_receipt_id
        WHERE t.source_invoice_id=? AND (t.refund_receipt_id IS NULL OR p.status='posted')",'i',[$id]) : '0';
-    $paid=bcadd(bcadd($allocated,$legacy,2),$creditsIn,2);
+    $openingApplied = $isFinal ? acct_one($db,
+      'SELECT COALESCE(SUM(amount),0) FROM accounting_opening_allocations WHERE invoice_id=?','i',[$id]) : '0';
+    $paid=bcadd(bcadd(bcadd($allocated,$legacy,2),$creditsIn,2),$openingApplied,2);
     $remaining=bcsub($net,$paid,2);
     $credit='0.00';
     if (bccomp($remaining,'0',2)<0) {
@@ -193,7 +214,7 @@ function acct_invoice_balance(mysqli $db, int $id): array {
       'payable_amount'=>(string)$r['payable_amount'],'returned'=>$returned,
       'net_amount'=>$net,'legacy_paid'=>$legacy,'allocated'=>$allocated,
       'paid'=>$paid,'remaining'=>$remaining,'overpaid_credit'=>$credit,
-      'credit_received'=>$creditsIn,'credit_assigned'=>$creditsOut,
+      'credit_received'=>$creditsIn,'credit_assigned'=>$creditsOut,'opening_applied'=>$openingApplied,
       'advance'=>$advance,'status'=>$status
     ];
 }
@@ -216,6 +237,32 @@ function acct_receipt_available(mysqli $db,int $receiptId): string {
           JOIN accounting_receipts refund ON refund.id=m.refund_receipt_id AND refund.status='posted'
           WHERE m.source_receipt_id=p.id),0))
       FROM accounting_receipts p WHERE p.id=? AND p.status='posted'",'i',[$receiptId]);
+}
+
+/** Remaining credit in an opening entry after cash refunds and invoice assignments. */
+function acct_opening_available(mysqli $db,int $openingId): string {
+    return acct_one($db,"SELECT GREATEST(0,-o.signed_amount
+      - COALESCE((SELECT SUM(x.amount) FROM accounting_opening_allocations x WHERE x.opening_id=o.id),0)
+      - COALESCE((SELECT SUM(x.amount) FROM accounting_opening_refunds x
+          JOIN accounting_receipts refund ON refund.id=x.refund_receipt_id AND refund.status='posted'
+          WHERE x.opening_id=o.id),0))
+      FROM accounting_opening_entries o WHERE o.id=? AND o.signed_amount<0",'i',[$openingId]);
+}
+
+/** Apply documented historic prepayment without creating a fabricated cash receipt. */
+function acct_apply_opening(mysqli $db,int $openingId,int $invoiceId,string $amount,string $kind,int $partyId): void {
+    $amount=acct_decimal($amount);
+    $st=$db->prepare('SELECT party_kind,party_id FROM accounting_opening_entries WHERE id=?');
+    $st->bind_param('i',$openingId);$st->execute();$entry=$st->get_result()->fetch_assoc();$st->close();
+    $inv=acct_invoice_balance($db,$invoiceId);
+    if(!$entry||$entry['party_kind']!==$kind||(int)$entry['party_id']!==$partyId
+      || $inv['party_kind']!==$kind||$inv['party_id']!==$partyId||$inv['status']==='proforma'
+      || bccomp($amount,acct_opening_available($db,$openingId),2)>0
+      || bccomp($amount,$inv['remaining'],2)>0)
+      throw new InvalidArgumentException('اعتبار افتتاحیه برای این فاکتور کافی نیست.');
+    $st=$db->prepare('INSERT INTO accounting_opening_allocations (opening_id,invoice_id,amount) VALUES (?,?,?)');
+    $st->bind_param('iis',$openingId,$invoiceId,$amount);$st->execute();$st->close();
+    acct_sync_invoice($db,$invoiceId);
 }
 
 /** A sales-return overpayment may settle another sale without a second cash receipt. */
@@ -270,7 +317,21 @@ function acct_match_refund(mysqli $db,string $kind,int $partyId,int $refundId,st
         $st->bind_param('iis',$invoiceId,$refundId,$chunk);$st->execute();$st->close();
         $amount=bcsub($amount,$chunk,2);
     }
-    // The remainder, if any, can only come from an opening credit.
+    if(bccomp($amount,'0',2)>0) {
+        $st=$db->prepare('SELECT id FROM accounting_opening_entries WHERE party_kind=? AND party_id=? AND signed_amount<0 ORDER BY entry_date,id');
+        $st->bind_param('si',$kind,$partyId);$st->execute();$rs=$st->get_result();$openings=[];
+        while($row=$rs->fetch_assoc())$openings[]=(int)$row['id'];$st->close();
+        foreach($openings as $openingId) {
+            if(bccomp($amount,'0',2)<=0)break;
+            $available=acct_opening_available($db,$openingId);
+            if(bccomp($available,'0',2)<=0)continue;
+            $chunk=bccomp($amount,$available,2)<0?$amount:$available;
+            $st=$db->prepare('INSERT INTO accounting_opening_refunds
+              (opening_id,refund_receipt_id,amount) VALUES (?,?,?)');
+            $st->bind_param('iis',$openingId,$refundId,$chunk);$st->execute();$st->close();
+            $amount=bcsub($amount,$chunk,2);
+        }
+    }
 }
 
 /** Must be called inside transaction while party row is locked. */
@@ -436,6 +497,21 @@ function acct_apply_credit(mysqli $db,string $kind,int $partyId,int $invoiceId):
                 if(bccomp($avail,'0',2)<=0)continue;
                 $chunk=bccomp($remain,$avail,2)<0?$remain:$avail;
                 acct_transfer_credit($db,$sourceId,$invoiceId,$chunk,$kind,$partyId);
+                $used=bcadd($used,$chunk,2);
+            }
+        }
+        $remain=acct_invoice_balance($db,$invoiceId)['remaining'];
+        if(bccomp($remain,'0',2)>0) {
+            $st=$db->prepare('SELECT id FROM accounting_opening_entries WHERE party_kind=? AND party_id=? AND signed_amount<0 ORDER BY entry_date,id');
+            $st->bind_param('si',$kind,$partyId);$st->execute();$rs=$st->get_result();$openings=[];
+            while($r=$rs->fetch_assoc())$openings[]=(int)$r['id'];$st->close();
+            foreach($openings as $openingId){
+                $remain=acct_invoice_balance($db,$invoiceId)['remaining'];
+                if(bccomp($remain,'0',2)<=0)break;
+                $available=acct_opening_available($db,$openingId);
+                if(bccomp($available,'0',2)<=0)continue;
+                $chunk=bccomp($remain,$available,2)<0?$remain:$available;
+                acct_apply_opening($db,$openingId,$invoiceId,$chunk,$kind,$partyId);
                 $used=bcadd($used,$chunk,2);
             }
         }
