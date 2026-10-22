@@ -347,7 +347,7 @@ function acct_allocate(mysqli $db,int $receiptId,int $invoiceId,string $amount,s
     if (!$row) throw new InvalidArgumentException('تراکنش یافت نشد.');
     $available=acct_receipt_available($db,$receiptId);
     if (bccomp($amount,$available,2)>0) throw new InvalidArgumentException('اعتبار این پرداخت کافی نیست.');
-    $stmt=$db->prepare('INSERT INTO accounting_allocations (receipt_id,invoice_id,amount) VALUES (?,?,?)');
+    $stmt=$db->prepare('INSERT INTO accounting_allocations (receipt_id,invoice_id,amount) VALUES (?,?,?) ON DUPLICATE KEY UPDATE amount = amount + VALUES(amount)');
     $stmt->bind_param('iis',$receiptId,$invoiceId,$amount);
     $stmt->execute(); $stmt->close();
     acct_sync_invoice($db,$invoiceId);
