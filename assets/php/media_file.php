@@ -22,7 +22,10 @@ if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
 $stat = @stat($path);
 if (!$stat) { http_response_code(404); exit; }
 $tag = '"' . hash('sha256', (string)$m['id'] . ':' . $size . ':' . $stat['size'] . ':' . $stat['mtime']) . '"';
-header('Cache-Control: private, max-age=604800, immutable');
+// Cache is scoped to the authenticated session cookie; a later login must
+// never reuse a previous account's privately cached thumbnails.
+header('Cache-Control: private, max-age=3600, must-revalidate');
+header('Vary: Cookie');
 header('ETag: ' . $tag);
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $stat['mtime']) . ' GMT');
 header('X-Frame-Options: SAMEORIGIN');
