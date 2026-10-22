@@ -1256,6 +1256,13 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         }
 
         $partyId = (int) $in['party_id'];
+        if ($partyId !== (int)(isSales($newType)?$old['customer_id']:$old['supplier_id'])) {
+            require_once __DIR__ . '/accounting_ledger.php';
+            $hasFinancial = ledger_invoice_balance($mysqli,$invoiceId);
+            if (money_cmp($hasFinancial['allocated'],'0')>0 || money_cmp($hasFinancial['historical'],'0')>0 || $hasFinancial['needs_review']) {
+                throw new Exception('تغییر طرف حساب فاکتور دارای سوابق مالی مجاز نیست.');
+            }
+        }
         $customerId = isSales($newType) ? $partyId : null;
         $supplierId = isPurchase($newType) ? $partyId : null;
         $note = ($in['note'] ?? null);
@@ -1273,7 +1280,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
             $customerId,
             $supplierId,
             $in['payment_type'],
-            $in['payment_status'],
+            $old['payment_status'],
             $in['invoice_date'],
             $totals['subtotal'],
             $invoiceDiscount,
