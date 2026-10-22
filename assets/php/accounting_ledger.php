@@ -63,14 +63,7 @@ function ledger_post_in_tx(mysqli $db,array $in): array {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$date) || !checkdate((int)substr($date,5,2),(int)substr($date,8,2),(int)substr($date,0,4))) throw new InvalidArgumentException('تاریخ نامعتبر است.');
     $key=trim((string)($in['request_key']??''));
     if ($key !== '' && !preg_match('/^[A-Za-z0-9:_-]{12,80}$/D',$key)) throw new InvalidArgumentException('شناسه عملیات نامعتبر است.');
-    if ($key !== '') {
-        $st=$db->prepare('SELECT * FROM accounting_receipts WHERE request_key=?');
-        $st->bind_param('s',$key);$st->execute();$prior=$st->get_result()->fetch_assoc();$st->close();
-        if ($prior) {
-            if ($prior['party_kind']!==$kind || (int)$prior['party_id']!==$party || $prior['direction']!==$direction || money_cmp($prior['amount'],$amount)!==0) throw new InvalidArgumentException('شناسه عملیات قبلاً برای سند دیگری ثبت شده است.');
-            return ['receipt_id'=>(int)$prior['id'],'duplicate'=>true];
-        }
-    }
+
     $allocs=$in['allocations']??[];
     if (!is_array($allocs)) throw new InvalidArgumentException('تخصیص‌ها نامعتبرند.');
     $sum='0';$seen=[];$normalized=[];
@@ -106,11 +99,23 @@ function ledger_post_in_tx(mysqli $db,array $in): array {
         $label=substr(trim((string)($in['account_label']??'')),0,120);
     $ref=substr(trim((string)($in['reference_number']??'')),0,120);
     $note=substr(trim((string)($in['note']??'')),0,2000);
+    $fingerprint=hash('sha256',json_encode([
+        $kind,$party,$direction,$amount,$method,$date,$label,$ref,$note,$proformaId,$normalized
+    ],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
+    if ($key!=='') {
+        $st=$db->prepare('SELECT id,request_fingerprint FROM accounting_receipts WHERE request_key=?');
+        $st->bind_param('s',$key);$st->execute();$prior=$st->get_result()->fetch_assoc();$st->close();
+        if($prior) {
+            if(!hash_equals((string)($prior['request_fingerprint']??''),$fingerprint))
+                throw new InvalidArgumentException('شناسه عملیات برای محتوای متفاوتی استفاده شده است.');
+            return ['receipt_id'=>(int)$prior['id'],'duplicate'=>true];
+        }
+    }
     $st=$db->prepare("INSERT INTO accounting_receipts
-     (party_kind,party_id,direction,amount,method,account_label,payment_date,reference_number,note,request_key,source_proforma_id)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+     (party_kind,party_id,direction,amount,method,account_label,payment_date,reference_number,note,request_key,source_proforma_id,request_fingerprint)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
     $linkedProforma=$proformaId ?: null;
-    $st->bind_param('sissssssssi',$kind,$party,$direction,$amount,$method,$label,$date,$ref,$note,$key,$linkedProforma);
+    $st->bind_param('sissssssssis',$kind,$party,$direction,$amount,$method,$label,$date,$ref,$note,$key,$linkedProforma,$fingerprint);
     $st->execute();$receiptId=(int)$db->insert_id;$st->close();
     foreach ($normalized as $id=>$v) {
         $st=$db->prepare('INSERT INTO accounting_allocations (receipt_id,invoice_id,amount) VALUES (?,?,?)');
