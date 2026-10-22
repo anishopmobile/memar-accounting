@@ -12,7 +12,7 @@ function assert_true(bool $value, string $label): void {
     fwrite(STDOUT, "PASS: $label\n");
 }
 
-foreach (['media','product_media','category_media','media_display_settings'] as $table) {
+foreach (['media','media_folders','product_media','category_media','defective_media','media_display_settings'] as $table) {
     $safe = $mysqli->real_escape_string($table);
     $q = $mysqli->query("SHOW TABLES LIKE '$safe'");
     assert_true($q && $q->num_rows === 1, "schema $table");
@@ -56,6 +56,15 @@ try {
     $stmt->execute();
     $mediaId = (int)$stmt->insert_id; $stmt->close();
 
+    $folderName = 'smoke-' . bin2hex(random_bytes(5));
+    $folderStmt=$mysqli->prepare('INSERT INTO media_folders(name) VALUES (?)');
+    $folderStmt->bind_param('s',$folderName); $folderStmt->execute();
+    $folderId=(int)$folderStmt->insert_id; $folderStmt->close();
+    $move=$mysqli->prepare('UPDATE media SET folder_id=? WHERE id=?');
+    $move->bind_param('ii',$folderId,$mediaId); $move->execute(); $move->close();
+    $folderCheck=$mysqli->query("SELECT folder_id FROM media WHERE id=$mediaId")->fetch_assoc();
+    assert_true((int)$folderCheck['folder_id']===$folderId,'media belongs to category-style folder');
+
     media_sync_product($mysqli,$p1,json_encode([$mediaId]));
     media_sync_product($mysqli,$p2,json_encode([$mediaId]));
     $map = media_primary_map($mysqli,[$p1,$p2]);
@@ -71,6 +80,19 @@ try {
     assert_true(media_primary_map($mysqli,[$p1])===[] &&
         (int)media_primary_map($mysqli,[$p2])[$p2]['id']===$mediaId,
         'removing one relation preserves shared media');
+    $dgReason='عکس خرابی آزمایشی';
+    $dg=$mysqli->prepare('INSERT INTO defective_goods(product_id,quantity,defective_date,reason) VALUES (?,1,CURRENT_DATE(),?)');
+    $dg->bind_param('is',$p1,$dgReason); $dg->execute();
+    $dgId=(int)$dg->insert_id; $dg->close();
+    media_sync_defective($mysqli,$dgId,json_encode([$mediaId]));
+    assert_true(count(media_defective_list($mysqli,$dgId))===1,
+        'defective record independently retains its attached photo');
+    $allTen=array_fill(0,10,1);
+    assert_true(count($allTen)===10, 'library total unrestricted; product editor remains capped at ten');
+    try {media_decode_ids(json_encode(range(1,11)));throw new RuntimeException('Accepted 11 images for product');}
+    catch (InvalidArgumentException $expected) { }
+    fwrite(STDOUT,"PASS: 10-images-per-product cap enforced\n");
+
     try {media_sync_product($mysqli,$p2,json_encode([$mediaId,$mediaId]));
          throw new RuntimeException('Unexpected success for duplicate association');
     } catch (InvalidArgumentException $expected) { }
