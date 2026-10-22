@@ -284,6 +284,7 @@ $(function () {
         currentInvoiceId = data && data.id ? String(data.id) : '';
         clientToken = currentInvoiceId ? '' : uuid();
         var isEdit = !!currentInvoiceId;
+        var accountingLocked = !!(data && data.accounting_locked);
         var typeVal = type || (isSales ? 'sales_invoice' : 'purchase_invoice');
 
         var paymentTypes = '<option value="cash">نقدی</option>'
@@ -336,11 +337,17 @@ $(function () {
                 + '<div class="form-grid"><div class="form-row"><label>جمع ' + (isSales?'دریافتی':'پرداختی') + '</label><div id="invInitialPaid" class="money-cell">0</div></div>'
                 + '<div class="form-row"><label>مانده فاکتور پس از این پرداخت‌ها</label><div id="invInitialDue" class="money-cell">0</div></div>'
                 + '<div class="form-row"><label>مازاد واریز (اعتبار طرف حساب)</label><div id="invInitialExcess" class="money-cell">0</div></div></div></div>')
+            + (isEdit
+                ? '<div class="card"><h3>وضعیت تسویه ثبت‌شده</h3><p>مجموع تسویه‌شده: <strong>' + (data.settled_amount===null ? '—' : fmtRial(data.settled_amount)+' '+window.Currency.label) + '</strong> | مانده فاکتور: <strong>' + (data.remaining_amount===null ? '—' : fmtRial(data.remaining_amount)+' '+window.Currency.label) + '</strong></p>'
+                  + (data.legacy_unresolved ? '<p class="setting-note">مبلغ پرداخت جزئی این فاکتور قدیمی هنوز تعیین نشده است.</p>' : '')
+                  + '<a class="button-secondary" href="?page=accounting-ledger&kind=' + (isSales?'customer':'supplier') + '&party_id=' + encodeURIComponent(isSales?data.customer_id:data.supplier_id) + '">مشاهده گردش حساب و ثبت پرداخت</a></div>'
+                : '')
+            + (accountingLocked ? '<p class="setting-note">این فاکتور دارای سند دریافت/پرداخت یا سابقه تاریخی است؛ ویرایش مستقیم برای حفظ اسناد مالی غیرفعال شده است.</p>' : '')
             + '<div class="form-row"><label>مبلغ به حروف</label><div id="invWords" class="words-cell"></div></div>'
             + '<div class="form-row"><label>یادداشت</label><textarea id="invNote" rows="2">' + esc(data ? data.note : '') + '</textarea></div>'
             + '<div class="form-actions">'
             + '<button type="button" class="button-secondary" id="invoiceFormCancel">لغو</button>'
-            + '<button type="button" class="button" id="invoiceFormSave">ذخیره فاکتور</button>'
+            + '<button type="button" class="button" id="invoiceFormSave"' + (accountingLocked?' disabled':'') + '>ذخیره فاکتور</button>'
             + '</div>'
             + '</div>';
 
