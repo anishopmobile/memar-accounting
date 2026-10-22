@@ -1250,6 +1250,10 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         $acctRow = $stmtAcct->get_result()->fetch_assoc();
         $stmtAcct->close();
         $allocated = (string) ($acctRow['s'] ?? '0');
+        $stmtAcct=$mysqli->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_return_allocations WHERE invoice_id=?');
+        $stmtAcct->bind_param('i',$invoiceId);$stmtAcct->execute();
+        $retAllocated=(string)($stmtAcct->get_result()->fetch_assoc()['s']??'0');$stmtAcct->close();
+        $allocated=money_add($allocated,$retAllocated);
         $hasSettlements = money_cmp($allocated,'0')>0;
         if ($hasSettlements && (($old['customer_id'] ?? null) != $customerId || ($old['supplier_id'] ?? null) != $supplierId)) {
             throw new Exception('تغییر طرف حساب فاکتور دارای پرداخت مجاز نیست.');
@@ -1391,10 +1395,14 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
             // پیش‌فاکتور: بدون تغییر موجودی
         }
 
-        $paidCheck=$mysqli->prepare('SELECT COUNT(*) AS c FROM account_payment_allocations WHERE invoice_id=?');
+        $paidCheck=$mysqli->prepare('SELECT (SELECT COUNT(*) FROM account_payment_allocations WHERE invoice_id=? AND reversed_at IS NULL) AS c');
         $paidCheck->bind_param('i',$invoiceId);$paidCheck->execute();
         $paidCount=(int)$paidCheck->get_result()->fetch_assoc()['c'];$paidCheck->close();
-        if ($paidCount>0) throw new Exception('فاکتور دارای دریافت یا پرداخت ثبت‌شده قابل حذف نیست.');
+        $returnCheck=$mysqli->prepare('SELECT COUNT(*) AS c FROM account_return_allocations WHERE invoice_id=?');
+        $returnCheck->bind_param('i',$invoiceId);$returnCheck->execute();
+        $returnCount=(int)$returnCheck->get_result()->fetch_assoc()['c'];$returnCheck->close();
+        if ($paidCount>0 || $returnCount>0 || money_cmp($inv['legacy_paid_amount'] ?? '0','0')>0)
+            throw new Exception('فاکتور دارای تسویه یا اعتبار برگشت قابل حذف نیست.');
                 // اقلام با CASCADE حذف می‌شوند؛ stock_movements با ON DELETE SET NULL باقی می‌ماند
         $stmt = $mysqli->prepare('DELETE FROM invoices WHERE id = ?');
         $stmt->bind_param('i', $invoiceId);
