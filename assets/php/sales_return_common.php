@@ -582,6 +582,7 @@ function createSalesReturn(mysqli $mysqli, array $in): array
         sr_insert_return_items($mysqli, $returnId, $items);
         sr_apply_stock_for_items($mysqli, $items, $returnId, 'create');
 
+        acct_assert_credit_integrity($mysqli, $invoiceId);
         acct_sync_invoice($mysqli, $invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'برگشت فروش با موفقیت ثبت شد.', 'return_id' => $returnId, 'return_number' => $returnNumber];
@@ -771,6 +772,7 @@ function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
         $stmt->execute();
         $stmt->close();
 
+        acct_assert_credit_integrity($mysqli, $invoiceId);
         acct_sync_invoice($mysqli, $invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'برگشت فروش با موفقیت ویرایش شد.', 'return_id' => $returnId];
@@ -847,6 +849,7 @@ function deleteSalesReturn(mysqli $mysqli, int $returnId): array
         $stmt->execute();
         $stmt->close();
 
+        acct_assert_credit_integrity($mysqli, $invoiceId);
         acct_sync_invoice($mysqli, $invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'برگشت فروش با موفقیت حذف شد.', 'return_id' => $returnId];
