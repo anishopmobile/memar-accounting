@@ -991,7 +991,7 @@ function createInvoice(mysqli $mysqli, array $in): array
             $referenceToken = 'initial_' . substr(hash('sha256',$invoiceId . ':' . $paymentIndex . ':' . ($clientToken ?? '')),0,54);
             $paymentNote = trim((string)($payment['note'] ?? ''));
             if (!isFinal($type)) $paymentNote = 'پیش‌پرداخت مرتبط با پیش‌فاکتور ' . $invoiceNumber . ' | ' . $paymentNote;
-            ledger_record_payment($mysqli,[
+            $initialPaymentResult = ledger_record_payment($mysqli,[
                 'party_kind'=>$ledgerKind,'party_id'=>$partyId,
                 'amount'=>$amount,'method'=>$payment['method'] ?? $in['payment_type'],
                 'paid_on'=>$payment['paid_on'] ?? $in['invoice_date'],
@@ -999,6 +999,15 @@ function createInvoice(mysqli $mysqli, array $in): array
                 'note'=>$paymentNote,
                 'request_token'=>$referenceToken,'allocations'=>$allocations
             ],true);
+            if (!isFinal($type)) {
+                $depositPaymentId = (int)$initialPaymentResult['payment_id'];
+                $depositLink = $mysqli->prepare(
+                    'INSERT INTO ledger_proforma_deposits(payment_id,proforma_invoice_id) VALUES(?,?)'
+                );
+                $depositLink->bind_param('ii',$depositPaymentId,$invoiceId);
+                $depositLink->execute();
+                $depositLink->close();
+            }
         }
 
         $mysqli->commit();
