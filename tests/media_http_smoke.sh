@@ -192,3 +192,40 @@ curl -sS -b "$tmp/cookies" -o "$tmp/second-full-restore.json" \
   -F action=restore_full -F "csrf_token=$token" -F "backup_file=@$second_archive" "$base/assets/php/db_backup.php"
 php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||(int)($j["data"]["new_media_files"]??-1)!==0||empty($j["data"]["sql_skipped_identical"])) {fwrite(STDERR,json_encode($j).PHP_EOL);exit(1);}' "$tmp/second-full-restore.json"
 echo 'PASS repeat restoration without re-extracting identical media'
+
+# Security regression: attacker-controlled X-Forwarded-For must not bypass
+# IP login-throttling unless REMOTE_ADDR is on an explicit trusted proxy list.
+php -r '
+require "assets/php/auth.php";
+$_SERVER["REMOTE_ADDR"]="203.0.113.11";
+$_SERVER["HTTP_X_FORWARDED_FOR"]="198.51.100.23";
+$_SERVER["HTTP_CLIENT_IP"]="192.0.2.1";
+putenv("MEMAR_TRUSTED_PROXIES");
+if (auth_client_ip()!=="203.0.113.11") exit(1);
+putenv("MEMAR_TRUSTED_PROXIES=203.0.113.11");
+if (auth_client_ip()!=="198.51.100.23") exit(2);
+$_SERVER["HTTP_X_FORWARDED_FOR"]="198.51.100.23, 192.0.2.1";
+if (auth_client_ip()!=="203.0.113.11") exit(3);
+' || { echo "FAIL origin IP spoofing controls" >&2; exit 1; }
+echo 'PASS no untrusted forwarded-IP login-throttle bypass'
+
+# All new backups must reside outside the PHP document root.
+curl -sS -b "$tmp/cookies" -o "$tmp/unsafe-backup-path.json" \
+  --data-urlencode action=save_dir --data-urlencode "csrf_token=$token" \
+  --data-urlencode "backup_dir=$(pwd)/backups/public" "$base/assets/php/db_backup.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(($j["success"]??true)!==false)exit(1);' "$tmp/unsafe-backup-path.json"
+curl -sS -b "$tmp/cookies" -o "$tmp/safe-backup-path.json" \
+  --data-urlencode action=save_dir --data-urlencode "csrf_token=$token" \
+  --data-urlencode "backup_dir=ci-security" "$base/assets/php/db_backup.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"]))exit(1);' "$tmp/safe-backup-path.json"
+curl -sS -b "$tmp/cookies" -o "$tmp/safe-backup.json" \
+  --data-urlencode action=backup --data-urlencode "csrf_token=$token" "$base/assets/php/db_backup.php"
+php -r '
+$j=json_decode(file_get_contents($argv[1]),true);
+if(empty($j["success"]))exit(1);
+$path=$j["data"]["path"]??"";
+$root=realpath(".");
+$resolved=realpath($path);
+if(!$resolved||str_starts_with($resolved,$root."/"))exit(2);
+' "$tmp/safe-backup.json"
+echo 'PASS backup exports cannot be served from public website paths'
