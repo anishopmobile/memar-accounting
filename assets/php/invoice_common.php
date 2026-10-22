@@ -1493,7 +1493,6 @@ function convertInvoice(mysqli $mysqli, int $invoiceId): array
     $mysqli->begin_transaction();
     try {
         require_once __DIR__ . '/accounting_ledger.php';
-        ledger_assert_party($mysqli,$isSales?'customer':'supplier',(int)($isSales?$inv['customer_id']:$inv['supplier_id']));
         $lockIds = $allPids;
         foreach (array_keys($convCompReq) as $cpid) {
             $lockIds[] = (int) $cpid;
@@ -1523,6 +1522,7 @@ function convertInvoice(mysqli $mysqli, int $invoiceId): array
             $stocks[$cpid] = applyStockChange($mysqli, (int) $cpid, $stocks[$cpid], money_mul('-1', $need), $invoiceId, $finalType, 'create');
         }
 
+        ledger_assert_party($mysqli,$isSales?'customer':'supplier',(int)($isSales?$inv['customer_id']:$inv['supplier_id']));
         $stmt = $mysqli->prepare('UPDATE invoices SET type = ?, invoice_number = ? WHERE id = ?');
         $stmt->bind_param('ssi', $finalType, $newNumber, $invoiceId);
         $stmt->execute();
