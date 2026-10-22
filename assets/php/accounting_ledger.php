@@ -148,3 +148,29 @@ function ledger_set_opening(mysqli $db,string $kind,int $party,string $amount,st
         $st->bind_param('siss',$kind,$party,$amount,$note);$st->execute();$st->close();$db->commit();
     }catch(Throwable $e){$db->rollback();throw $e;}
 }
+
+/** Allocate an existing advance/overpayment to an invoice without moving money again. */
+function ledger_allocate_existing(mysqli $db,int $receiptId,int $invoiceId,string $amount): void {
+    $value=ledger_money($amount);$db->begin_transaction();
+    try {
+        // Lock parent party first, then payment and invoice.
+        $st=$db->prepare('SELECT party_kind,party_id,direction,state FROM accounting_receipts WHERE id=?');
+        $st->bind_param('i',$receiptId);$st->execute();$pre=$st->get_result()->fetch_assoc();$st->close();
+        if(!$pre || $pre['state']!=='posted')throw new InvalidArgumentException('سند دریافت/پرداخت یافت نشد.');
+        ledger_assert_party($db,$pre['party_kind'],(int)$pre['party_id']);
+        $st=$db->prepare('SELECT * FROM accounting_receipts WHERE id=? FOR UPDATE');
+        $st->bind_param('i',$receiptId);$st->execute();$receipt=$st->get_result()->fetch_assoc();$st->close();
+        $st=$db->prepare('SELECT COALESCE(SUM(amount),0) sum_paid FROM accounting_allocations WHERE receipt_id=?');
+        $st->bind_param('i',$receiptId);$st->execute();$used=$st->get_result()->fetch_assoc()['sum_paid'];$st->close();
+        if(money_cmp(money_add($used,$value),$receipt['amount'])>0)throw new InvalidArgumentException('اعتبار استفاده‌نشده کافی نیست.');
+        $balance=ledger_invoice_balance($db,$invoiceId,true);$inv=$balance['invoice'];
+        $expected=$pre['party_kind']==='customer'?'sales_invoice':'purchase_invoice';
+        $fk=$pre['party_kind']==='customer'?'customer_id':'supplier_id';
+        $direction=$pre['party_kind']==='customer'?'in':'out';
+        if($inv['type']!==$expected || (int)$inv[$fk] !== (int)$pre['party_id'] || $receipt['direction']!==$direction)throw new InvalidArgumentException('سند با فاکتور انتخابی سازگار نیست.');
+        if($balance['needs_review'] || money_cmp($value,$balance['balance'])>0)throw new InvalidArgumentException('مانده فاکتور برای تخصیص کافی نیست.');
+        $st=$db->prepare('INSERT INTO accounting_allocations (receipt_id,invoice_id,amount) VALUES(?,?,?) ON DUPLICATE KEY UPDATE amount=amount+VALUES(amount)');
+        $st->bind_param('iis',$receiptId,$invoiceId,$value);$st->execute();$st->close();
+        ledger_update_invoice_status($db,$invoiceId);$db->commit();
+    }catch(Throwable $e){$db->rollback();throw $e;}
+}
