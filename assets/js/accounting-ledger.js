@@ -4,6 +4,7 @@ $(function () {
     var root = $('#ledgerApp');
     if (!root.length) return;
     var csrf = root.data('csrf'), current = null, selection = null, partyRequest = null;
+    var pendingPaymentSignature=null, pendingPaymentToken=null;
     var endpoint = 'assets/php/ledger/ledger_action.php';
     function escapeHtml(v) { return $('<span/>').text(v == null ? '' : String(v)).html(); }
     function money(v) { return window.Currency.format(v == null ? '0' : v); }
@@ -159,7 +160,11 @@ $(function () {
         var refund=$('#ledgerDirection').val()==='reverse';
         if(refund && String($('#ledgerNote').val()||'').trim().length<8)return alert('برای استرداد وجه، توضیح مستند حداقل ۸ کاراکتر لازم است.');
         if(!confirm((refund?'استرداد واقعی':'تراکنش مالی')+' با مبلغ '+money(baseAmount)+' ثبت شود؟'))return;
-        var key=newToken();
+        var signature=JSON.stringify([$('#ledgerKind').val(),$('#ledgerParty').val(),$('#ledgerDirection').val(),baseAmount,$('#ledgerDate').val(),$('#ledgerMethod').val(),$('#ledgerReference').val(),$('#ledgerNote').val(),allocations]);
+        if(signature!==pendingPaymentSignature||!pendingPaymentToken){
+            pendingPaymentSignature=signature;pendingPaymentToken=newToken();
+        }
+        var key=pendingPaymentToken;
         var btn=$('#ledgerSubmit').prop('disabled',true);
         $.post(endpoint, {
             csrf_token:csrf, party_kind:$('#ledgerKind').val(),party_id:$('#ledgerParty').val(),
@@ -167,7 +172,7 @@ $(function () {
             direction:($('#ledgerKind').val()==='customer' ? (refund?'disbursement':'receipt') : (refund?'receipt':'disbursement')),
             reference_no:$('#ledgerReference').val(),note:$('#ledgerNote').val(),
             allocations:JSON.stringify(allocations),request_token:key
-        }).done(function(res){if(!res.success){alert(res.message||'ثبت ناموفق بود');return;}alert('تراکنش ثبت شد.');loadAccount();})
+        }).done(function(res){if(!res.success){alert(res.message||'ثبت ناموفق بود');return;}pendingPaymentSignature=null;pendingPaymentToken=null;alert('تراکنش ثبت شد.');loadAccount();})
         .fail(function(xhr){alert((xhr.responseJSON||{}).message||'خطای ثبت تراکنش');})
         .always(function(){btn.prop('disabled',false);});
     });
