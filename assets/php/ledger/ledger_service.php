@@ -399,3 +399,29 @@ function ledger_void_payment(mysqli $db,string $kind,int $partyId,int $paymentId
         return ['voided_payment_id'=>$paymentId,'affected_invoices'=>$ids];
     } catch(Throwable $e){$db->rollback();throw $e;}
 }
+
+/**
+ * Credit-backed allocations must not re-use cash already refunded.
+ * Returns and openings can also create party credit but are not cash receipts.
+ * This intentionally limits the reuse of PAYMENT funds to their net unapplied cash.
+ */
+function ledger_unapplied_cash_pool(mysqli $db,string $kind,int $partyId): string {
+    if(!in_array($kind,['customer','supplier'],true)||$partyId<1)
+        throw new InvalidArgumentException('طرف حساب نامعتبر است.');
+    $normal=$kind==='customer'?'receipt':'disbursement';
+    $s=$db->prepare("SELECT
+        COALESCE(SUM(CASE WHEN p.direction=? THEN p.amount ELSE -p.amount END),0) net_payments
+        FROM ledger_payments p
+        WHERE p.party_kind=? AND p.party_id=? AND p.voided_at IS NULL");
+    $s->bind_param('ssi',$normal,$kind,$partyId);$s->execute();
+    $net=$s->get_result()->fetch_assoc()['net_payments'];$s->close();
+    $s=$db->prepare("SELECT
+        COALESCE((SELECT SUM(a.amount) FROM ledger_allocations a JOIN ledger_payments p ON p.id=a.payment_id
+                 WHERE p.party_kind=? AND p.party_id=? AND p.voided_at IS NULL),0) +
+        COALESCE((SELECT SUM(a.amount) FROM ledger_credit_allocations a JOIN ledger_payments p ON p.id=a.payment_id
+                 WHERE p.party_kind=? AND p.party_id=? AND p.voided_at IS NULL),0) used");
+    $s->bind_param('sisi',$kind,$partyId,$kind,$partyId);$s->execute();
+    $used=$s->get_result()->fetch_assoc()['used'];$s->close();
+    $available=money_sub($net,$used);
+    return money_cmp($available,'0')>0?$available:'0.00';
+}
