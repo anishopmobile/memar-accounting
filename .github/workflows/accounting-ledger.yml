@@ -1,0 +1,26 @@
+name: Accounting Ledger CI
+on:
+  push:
+    branches:
+      - feature/accounting-ledger-receipts-payments
+  pull_request:
+    paths:
+      - 'assets/php/ledger/**'
+      - 'assets/php/invoice_common.php'
+      - 'assets/php/db.php'
+      - '.github/workflows/accounting-ledger.yml'
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mysqli, bcmath, mbstring
+      - name: Syntax check accounting files
+        run: |
+          find assets/php/ledger -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l assets/php/db.php
+          php -l assets/php/invoice_common.php
