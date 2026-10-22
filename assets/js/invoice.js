@@ -584,9 +584,9 @@ $(function () {
                     : (p[priceKey] || 0);
                 var unitsJson = JSON.stringify(units);
                 html += '<tr>'
+                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id) + '</td>'
                     + '<td>' + esc(p.code) + '</td>'
                     + '<td>' + esc(p.barcode) + '</td>'
-                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id) + '</td>'
                     + '<td>' + esc(p.name) + '</td>'
                     + '<td>' + esc(p.unit) + '</td>'
                     + '<td>' + window.Currency.formatNumber(price) + '</td>'
