@@ -286,9 +286,7 @@ $(function () {
         var paymentTypes = '<option value="cash">نقدی</option>'
             + '<option value="pos" selected>کارت خوان</option>'
             + '<option value="bank_transfer">واریز وجه</option>';
-        var statuses = '<option value="unpaid">پرداخت نشده</option>'
-            + '<option value="paid" selected>پرداخت شده</option>'
-            + '<option value="partial">پرداخت جزئی</option>';
+        var statuses = '<span id="invPaymentStatus" class="money-cell">محاسبه خودکار</span>';
         var typeOpts = isSales
             ? '<option value="sales_invoice">فاکتور فروش</option><option value="sales_proforma">پیش فاکتور فروش</option>'
             : '<option value="purchase_invoice">فاکتور خرید</option><option value="purchase_proforma">پیش فاکتور خرید</option>';
@@ -303,7 +301,7 @@ $(function () {
             + '<div class="form-row"><label>شماره فاکتور</label><input id="invNumber" type="text" readonly value="' + escAttr(data ? data.invoice_number : (isEdit ? '' : 'به صورت خودکار')) + '"></div>'
             + '<div class="form-row"><label>نوع</label><select id="invType">' + typeOpts.replace('value="' + typeVal + '"', 'value="' + typeVal + '" selected') + '</select></div>'
             + '<div class="form-row"><label>نوع پرداخت</label><select id="invPaymentType">' + paymentTypes + '</select></div>'
-            + '<div class="form-row"><label>وضعیت پرداخت</label><select id="invPaymentStatus">' + statuses + '</select></div>'
+            + '<div class="form-row"><label>وضعیت پرداخت</label>' + statuses + '</div>'
             + '<div class="form-row"><label>تاریخ (شمسی)</label>'
             + '<input type="text" id="invDateDisplay" class="inv-date-display" readonly="readonly" autocomplete="off" placeholder="۱۴۰۵/۰۵/۲۳" style="direction:ltr;text-align:center;">'
             + '<input type="hidden" id="invDate" name="invoice_date" value="' + escAttr(data ? data.invoice_date : todayISO()) + '">'
@@ -323,7 +321,10 @@ $(function () {
             + '<div class="form-row"><label>مبلغ مشمول مالیات</label><div id="invTaxable" class="money-cell">0</div></div>'
             + '<div class="form-row"><label>مالیات</label><div id="invTax" class="money-cell">0</div></div>'
             + '<div class="form-row"><label>مبلغ قابل پرداخت</label><div id="invPayable" class="money-cell strong">0</div></div>'
+            + '<div class="form-row"><label>مبلغ دریافت/پرداخت اولیه (' + window.Currency.label + ')</label><input id="invInitialPayment" type="number" min="0" step="1" value="0" ' + (isEdit || /proforma/.test(typeVal) ? 'disabled' : '') + '></div>'
+            + '<div class="form-row"><label>مانده فاکتور</label><div id="invRemaining" class="money-cell strong">0</div></div>'
             + '</div>'
+            + (isEdit && !/proforma/.test(typeVal) ? '<div class="card" id="invSettlementPanel"><h3>دریافت‌ها و پرداخت‌های فاکتور</h3><div id="invSettlementHistory">در حال بارگذاری...</div><div class="form-grid"><div class="form-row"><label>مبلغ تراکنش جدید</label><input type="number" id="invReceiptAmount" min="1" step="1"></div><div class="form-row"><label>روش</label><select id="invReceiptMethod">' + paymentTypes + '</select></div><div class="form-row"><label>شماره پیگیری</label><input id="invReceiptReference" type="text" maxlength="120"></div></div><div id="invAllocationOptions"></div><button type="button" class="button" id="invRegisterReceipt">ثبت دریافت / پرداخت جدید</button></div>' : '')
             + '<div class="form-row"><label>مبلغ به حروف</label><div id="invWords" class="words-cell"></div></div>'
             + '<div class="form-row"><label>یادداشت</label><textarea id="invNote" rows="2">' + esc(data ? data.note : '') + '</textarea></div>'
             + '<div class="form-actions">'
@@ -332,18 +333,20 @@ $(function () {
             + '</div>'
             + '</div>';
 
-        $('#invoiceFormView').html(html);
+        $('#invoiceFormView').html(html).data('settled', data ? parseFloat(showBase(data.settled_amount || '0')) || 0 : 0);
         $('#invoiceListView').hide();
         $('#invoiceFormView').show();
 
         if (data && data.payment_type) $('#invPaymentType').val(data.payment_type);
-        if (data && data.payment_status) $('#invPaymentStatus').val(data.payment_status);
+        $('#invInitialPayment').data('auto', !isEdit && !/proforma/.test(typeVal));
+        if (data) $('#invPaymentStatus').text(({paid:'پرداخت شده',unpaid:'پرداخت نشده',partial:'پرداخت جزئی'})[data.payment_status] || '—');
         if (data && data.items) {
             data.items.forEach(function (it) {
                 addItemRow(it.product_id, it.product_name, it.unit_price, it.quantity, it.discount, it.product_code, it.units || [], it.unit_id, it.media_id);
             });
         }
         recalcs();
+        if (isEdit && !/proforma/.test(typeVal)) loadInvoiceSettlement();
         bindFormEvents();
         initDatePicker();
     }
@@ -420,6 +423,12 @@ $(function () {
         $('#invTax').text(splitNum(Math.round(tax)) + ' ' + window.Currency.label);
         $('#invPayable').text(splitNum(Math.round(payable)) + ' ' + window.Currency.label);
         $('#invWords').text(amountToWords(payable));
+        var $initial = $('#invInitialPayment');
+        if ($initial.data('auto')) $initial.val(Math.round(payable));
+        var currentPaid = currentInvoiceId ? Number($('#invoiceFormView').data('settled') || 0) : (parseFloat($initial.val()) || 0);
+        var due = payable - currentPaid;
+        $('#invRemaining').text(splitNum(Math.round(due)) + ' ' + window.Currency.label);
+        if (!currentInvoiceId) $('#invPaymentStatus').text(due <= 0 ? 'پرداخت شده' : currentPaid > 0 ? 'پرداخت جزئی' : 'پرداخت نشده');
     }
 
     function bindFormEvents() { /* رویدادها به‌صورت delegate روی document بسته شده‌اند */ }
@@ -454,6 +463,7 @@ $(function () {
 
     $(document).on('click', '#invoiceBackToList, #invoiceFormCancel', function () { showList(); });
     $(document).on('input', '#invItemsTable .ii-price, #invItemsTable .ii-qty, #invItemsTable .ii-disc, #invDiscount', function () { recalcs(); });
+    $(document).on('input', '#invInitialPayment', function () { $(this).data('auto', false); recalcs(); });
     $(document).on('click', '.ii-remove', function () { $(this).closest('tr').remove(); recalcs(); });
     $(document).on('click', '#invAddProduct', function () { openProductModal(); });
     $(document).on('click', '#invAddService', function () { openServiceModal(); });
@@ -715,7 +725,8 @@ $(function () {
             invoice_id: currentInvoiceId,
             type: $('#invType').val(),
             payment_type: $('#invPaymentType').val(),
-            payment_status: $('#invPaymentStatus').val(),
+            payment_status: 'unpaid',
+            initial_payment_amount: $('#invInitialPayment').prop('disabled') ? '0' : ($('#invInitialPayment').val() || '0'),
             invoice_date: gDate,
             discount: $('#invDiscount').val() || '0',
             note: $('#invNote').val(),
