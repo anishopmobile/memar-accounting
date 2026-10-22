@@ -6,6 +6,7 @@
 require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/invoice_common.php';
+require_once __DIR__ . '/accounting_ledger.php';
 require_once __DIR__ . '/media_common.php';
 
 $id = trim((string) ($_GET['id'] ?? ''));
@@ -24,5 +25,11 @@ if ((int)(media_settings($mysqli)[$flag] ?? 0) === 1) {
         $item['media_id'] = (int)($map[(int)$item['product_id']]['id'] ?? 0);
     }
     unset($item);
+}
+if(in_array($invoice['type'],['sales_invoice','purchase_invoice'],true)) {
+    $finance=acct_invoice_outstanding($mysqli,(int)$invoice['id']);
+    $invoice['paid_amount']=$finance['paid'];
+    $invoice['remaining_amount']=$finance['remaining'];
+    $invoice['unreconciled_payment']=$finance['unreconciled'];
 }
 respond_json(true, '', $invoice);
