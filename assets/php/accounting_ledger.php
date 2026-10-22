@@ -48,6 +48,11 @@ function acct_invoice_outstanding(mysqli $db, int $id, bool $lock = false): arra
     $stmt->bind_param('i',$id);$stmt->execute();$r=$stmt->get_result();
     $paid=money_add($inv['legacy_paid_amount'] ?? '0',($r?$r->fetch_assoc()['s']:'0'));
     $stmt->close();
+    if ($inv['type']==='sales_invoice') {
+        $stmt=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_return_allocations WHERE invoice_id=?');
+        $stmt->bind_param('i',$id);$stmt->execute();$res=$stmt->get_result();
+        $paid=money_add($paid,$res?$res->fetch_assoc()['s']:'0');$stmt->close();
+    }
     return ['invoice'=>$inv,'paid'=>$paid,'remaining'=>money_sub($inv['payable_amount'],$paid),'unreconciled'=>$unreconciled];
 }
 function acct_update_status(mysqli $db,int $id): void {
@@ -149,13 +154,23 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
     $stmt=$db->prepare('SELECT amount FROM account_opening_balances WHERE party_kind=? AND party_id=?');
     $stmt->bind_param('si',$kind,$partyId);$stmt->execute();$res=$stmt->get_result();$row=$res?$res->fetch_assoc():null;$stmt->close();
     $opening=$row['amount']??'0';
-    $returnCredits='0';
+    $returnCredits='0';$returns=[];
     if ($kind==='customer') {
-        $stmt=$db->prepare('SELECT COALESCE(SUM(payable_amount),0) AS s FROM sales_returns WHERE customer_id=?');
-        $stmt->bind_param('i',$partyId);$stmt->execute();$returnCredits=$stmt->get_result()->fetch_assoc()['s'];$stmt->close();
+        $stmt=$db->prepare('SELECT r.id,r.return_number,r.return_date,r.payable_amount,
+          COALESCE((SELECT SUM(amount) FROM account_return_allocations WHERE return_id=r.id),0) used
+          FROM sales_returns r WHERE r.customer_id=? ORDER BY r.return_date,r.id');
+        $stmt->bind_param('i',$partyId);$stmt->execute();$res=$stmt->get_result();
+        while($res && ($row=$res->fetch_assoc())) {
+            $available=money_sub($row['payable_amount'],$row['used']);
+            $returns[]=['id'=>(int)$row['id'],'number'=>$row['return_number'],
+                 'date'=>$row['return_date'],'amount'=>$row['payable_amount'],
+                 'allocated'=>$row['used'],'available'=>$available];
+            $returnCredits=money_add($returnCredits,$available);
+        }
+        $stmt->close();
     }
     $balance=money_sub(money_add($total,$opening),money_add($unallocated,$returnCredits));
-    return ['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'has_opening_balance'=>$row!==null,'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'return_credit'=>$returnCredits,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
+    return ['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'has_opening_balance'=>$row!==null,'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'return_credit'=>$returnCredits,'returns'=>$returns,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
 }
 
 /** Apply existing unallocated credit to one final invoice. */
@@ -309,4 +324,33 @@ function acct_reverse_payment(mysqli $db,int $paymentId,string $reason,string $t
         $db->commit();
         return ['payment_id'=>$reverseId,'duplicate'=>false];
     } catch(Throwable $e){$db->rollback();throw $e;}
+}
+
+/** Allocate documented sales return credit without pretending cash was received. */
+function acct_allocate_return_credit(mysqli $db,int $returnId,int $invoiceId,$rawAmount): array {
+    $amount=acct_decimal($rawAmount,true);
+    $db->begin_transaction();
+    try {
+        $stmt=$db->prepare('SELECT customer_id FROM sales_returns WHERE id=?');
+        $stmt->bind_param('i',$returnId);$stmt->execute();$res=$stmt->get_result();$stub=$res?$res->fetch_assoc():null;$stmt->close();
+        if(!$stub || !$stub['customer_id'])throw new InvalidArgumentException('سند برگشت یافت نشد.');
+        $customerId=(int)$stub['customer_id'];
+        acct_party_lock($db,'customer',$customerId);
+        $stmt=$db->prepare('SELECT id,customer_id,payable_amount FROM sales_returns WHERE id=? FOR UPDATE');
+        $stmt->bind_param('i',$returnId);$stmt->execute();$ret=$stmt->get_result()->fetch_assoc();$stmt->close();
+        $v=acct_invoice_outstanding($db,$invoiceId,true);
+        if($v['unreconciled'] || $v['invoice']['type']!=='sales_invoice' ||
+            (int)$v['invoice']['customer_id']!==$customerId)
+            throw new InvalidArgumentException('فاکتور مقصد معتبر نیست یا نیازمند تطبیق تاریخی است.');
+        $stmt=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_return_allocations WHERE return_id=?');
+        $stmt->bind_param('i',$returnId);$stmt->execute();$used=$stmt->get_result()->fetch_assoc()['s'];$stmt->close();
+        if(money_cmp($amount,money_sub($ret['payable_amount'],$used))>0 ||
+           money_cmp($amount,$v['remaining'])>0)
+            throw new InvalidArgumentException('مبلغ تخصیص از اعتبار برگشت یا مانده فاکتور بیشتر است.');
+        $stmt=$db->prepare('INSERT INTO account_return_allocations(return_id,invoice_id,amount) VALUES(?,?,?) ON DUPLICATE KEY UPDATE amount=amount+VALUES(amount)');
+        $stmt->bind_param('iis',$returnId,$invoiceId,$amount);$stmt->execute();$stmt->close();
+        acct_update_status($db,$invoiceId);
+        $db->commit();
+        return ['return_id'=>$returnId,'invoice_id'=>$invoiceId];
+    }catch(Throwable $e){$db->rollback();throw $e;}
 }
