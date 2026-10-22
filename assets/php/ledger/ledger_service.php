@@ -390,6 +390,9 @@ function ledger_void_payment(mysqli $db,string $kind,int $partyId,int $paymentId
         // creating a positive debt by voiding an older credit.
         $expected=$kind==='customer'?'receipt':'disbursement';
         if($p['direction']===$expected) {
+            $s=$db->prepare('SELECT COUNT(*) n FROM ledger_payments WHERE party_kind=? AND party_id=? AND direction<>? AND voided_at IS NULL');
+            $s->bind_param('sis',$kind,$partyId,$expected);$s->execute();$hasRefund=(int)$s->get_result()->fetch_assoc()['n'];$s->close();
+            if($hasRefund>0)throw new DomainException('حساب دارای استرداد وجه است؛ برای حفظ تطبیق بانکی این سند را مستقیم باطل نکنید.');
             $account=ledger_party_summary($db,$kind,$partyId);
             if(money_cmp($account['balance'],'0')<0 &&
                money_cmp($account['credit'],$p['amount'])<0)
