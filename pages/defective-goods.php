@@ -133,7 +133,7 @@ if ($dgExportQs) { $dgExportUrl .= '?' . http_build_query($dgExportQs); }
                             <td class="product-thumb-cell">
                                 <?php $defPhoto = (int)($dgRow['defective_media_id'] ?? 0); ?>
                                 <img class="media-thumb" loading="lazy" decoding="async" width="46" height="46"
-                                     data-id="<?php echo $defPhoto; ?>"
+                                     data-id="<?php echo $defPhoto; ?>" data-defective-id="<?php echo (int)$dgRow['id']; ?>"
                                      src="<?php echo $defPhoto ? 'assets/php/media_file.php?id=' . $defPhoto . '&amp;size=thumb' : 'assets/img/product-placeholder.svg'; ?>"
                                      alt="تصویر کالای معیوب">
                             </td>
