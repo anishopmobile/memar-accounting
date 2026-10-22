@@ -253,3 +253,11 @@ function ledger_record_opening(mysqli $db,string $kind,int $partyId,string $sign
         $db->commit();return ['opening_id'=>$id];
     }catch(Throwable $e){$db->rollback();throw $e;}
 }
+
+/** Derived status cache for legacy invoice lists. Must be called within caller's DB transaction if one is open. */
+function ledger_sync_invoice_status(mysqli $db,int $invoiceId): array {
+    $balance=ledger_invoice_balance($db,$invoiceId,true);
+    $s=$db->prepare('UPDATE invoices SET payment_status=? WHERE id=?');
+    $s->bind_param('si',$balance['status'],$invoiceId);$s->execute();$s->close();
+    return $balance;
+}
