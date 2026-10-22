@@ -171,3 +171,69 @@ function ledger_party_details(mysqli $db,string $kind,int $id): array {
     $s->bind_param('si',$kind,$id);$s->execute();$payments=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
     return ['summary'=>$summary,'invoices'=>$invoices,'payments'=>$payments];
 }
+
+/**
+ * Consume an earlier unapplied receipt/disbursement without moving money again.
+ * Immutable allocation row + unique token; never creates fake receipts.
+ */
+function ledger_apply_credit(mysqli $db,string $kind,int $partyId,int $paymentId,int $invoiceId,$amountRaw,string $token): array {
+    ledger_initialize_legacy($db);
+    if(!in_array($kind,['customer','supplier'],true)||$partyId<1||$paymentId<1||$invoiceId<1
+      ||!preg_match('/^[a-zA-Z0-9_-]{16,64}$/D',$token))throw new InvalidArgumentException('درخواست تخصیص اعتبار نامعتبر است.');
+    $amount=ledger_decimal($amountRaw);
+    if(money_cmp($amount,'0')<=0)throw new InvalidArgumentException('مبلغ باید مثبت باشد.');
+    $db->begin_transaction();
+    try{
+        $partyTable=$kind==='customer'?'customers':'suppliers';
+        $s=$db->prepare("SELECT id FROM $partyTable WHERE id=? FOR UPDATE");$s->bind_param('i',$partyId);$s->execute();$party=$s->get_result()->fetch_assoc();$s->close();
+        if(!$party)throw new DomainException('طرف حساب یافت نشد.');
+        $s=$db->prepare('SELECT payment_id,invoice_id,amount FROM ledger_credit_allocations WHERE request_token=?');
+        $s->bind_param('s',$token);$s->execute();$old=$s->get_result()->fetch_assoc();$s->close();
+        if($old){
+            if((int)$old['payment_id']!==$paymentId||(int)$old['invoice_id']!==$invoiceId||money_cmp($old['amount'],$amount)!==0)
+                throw new DomainException('شناسه تخصیص با درخواست قبلی مغایرت دارد.');
+            $db->commit();return ['duplicate'=>true];
+        }
+        $s=$db->prepare('SELECT party_kind,party_id,amount,voided_at FROM ledger_payments WHERE id=? FOR UPDATE');
+        $s->bind_param('i',$paymentId);$s->execute();$payment=$s->get_result()->fetch_assoc();$s->close();
+        if(!$payment||$payment['voided_at']!==null||$payment['party_kind']!==$kind||(int)$payment['party_id']!==$partyId)
+            throw new DomainException('تراکنش متعلق به طرف حساب نیست یا باطل شده است.');
+        $s=$db->prepare('SELECT COALESCE((SELECT SUM(amount) FROM ledger_allocations WHERE payment_id=?),0)+COALESCE((SELECT SUM(amount) FROM ledger_credit_allocations WHERE payment_id=?),0) allocated');
+        $s->bind_param('ii',$paymentId,$paymentId);$s->execute();$used=$s->get_result()->fetch_assoc()['allocated'];$s->close();
+        if(money_cmp($amount,money_sub($payment['amount'],$used))>0)throw new DomainException('اعتبار پرداخت کافی نیست.');
+        $balance=ledger_invoice_balance($db,$invoiceId,true);
+        if($balance['party_kind']!==$kind||$balance['party_id']!==$partyId)
+            throw new DomainException('فاکتور متعلق به این طرف حساب نیست.');
+        if($balance['legacy_classification']==='requires_reconciliation')
+            throw new DomainException('مبلغ پرداخت جزئی تاریخی ابتدا باید تعیین شود.');
+        if(money_cmp($amount,$balance['due'])>0)throw new DomainException('تخصیص بیشتر از مانده فاکتور است.');
+        $s=$db->prepare('INSERT INTO ledger_credit_allocations(payment_id,invoice_id,amount,request_token) VALUES(?,?,?,?)');
+        $s->bind_param('iiss',$paymentId,$invoiceId,$amount,$token);$s->execute();$s->close();
+        $balance=ledger_invoice_balance($db,$invoiceId,true);
+        $s=$db->prepare('UPDATE invoices SET payment_status=? WHERE id=?');
+        $s->bind_param('si',$balance['status'],$invoiceId);$s->execute();$s->close();
+        $db->commit();return ['duplicate'=>false,'invoice_status'=>$balance['status'],'invoice_due'=>$balance['due']];
+    }catch(Throwable $e){$db->rollback();throw $e;}
+}
+
+/** Opening balance: one immutable snapshot per party, signed decimal. */
+function ledger_record_opening(mysqli $db,string $kind,int $partyId,string $signedAmount,string $effectiveOn,string $note): array {
+    ledger_initialize_legacy($db);
+    if(!in_array($kind,['customer','supplier'],true)||$partyId<1||!preg_match('/^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/D',$signedAmount)
+        ||!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$effectiveOn)
+        ||!checkdate((int)substr($effectiveOn,5,2),(int)substr($effectiveOn,8,2),(int)substr($effectiveOn,0,4)))
+        throw new InvalidArgumentException('مانده افتتاحیه یا تاریخ نامعتبر است.');
+    $note=trim($note);if(strlen($note)<8||strlen($note)>3000)throw new InvalidArgumentException('دلیل افتتاح حساب باید ثبت شود.');
+    $table=$kind==='customer'?'customers':'suppliers';
+    $db->begin_transaction();
+    try {
+        $s=$db->prepare("SELECT id FROM $table WHERE id=? FOR UPDATE");$s->bind_param('i',$partyId);$s->execute();$party=$s->get_result()->fetch_assoc();$s->close();
+        if(!$party)throw new DomainException('طرف حساب یافت نشد.');
+        $s=$db->prepare('SELECT id FROM ledger_openings WHERE party_kind=? AND party_id=?');
+        $s->bind_param('si',$kind,$partyId);$s->execute();$existing=$s->get_result()->fetch_assoc();$s->close();
+        if($existing)throw new DomainException('مانده افتتاحیه قبلاً ثبت شده و قابل بازنویسی نیست.');
+        $s=$db->prepare('INSERT INTO ledger_openings(party_kind,party_id,signed_amount,effective_on,note) VALUES(?,?,?,?,?)');
+        $s->bind_param('sisss',$kind,$partyId,$signedAmount,$effectiveOn,$note);$s->execute();$id=(int)$db->insert_id;$s->close();
+        $db->commit();return ['opening_id'=>$id];
+    }catch(Throwable $e){$db->rollback();throw $e;}
+}
