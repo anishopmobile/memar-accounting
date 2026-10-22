@@ -79,7 +79,7 @@ if ($result) {
                             <td><?php echo number_format($customer['total_spent']); ?></td>
                             <td><?php echo number_format($customer['debt']); ?></td>
                             <td>
-                                <button class="button-secondary small edit-customer" type="button">ویرایش</button>
+                                <a class="button-secondary small" href="?page=accounting&amp;party_kind=customer&amp;party_id=<?php echo (int) $customer['id']; ?>">صورت‌حساب</a> <button class="button-secondary small edit-customer" type="button">ویرایش</button>
                                 <button class="button-danger small delete-customer" type="button">حذف</button>
                             </td>
                         </tr>
