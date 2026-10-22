@@ -118,19 +118,23 @@ jobs:
           require "assets/php/db.php";
           $mysqli->query("INSERT INTO users(username,password_hash) VALUES (\"acct_ci_browser\",\"".password_hash("test",PASSWORD_DEFAULT)."\")");
           $uid=(int)$mysqli->insert_id;
-          $mysqli->query("INSERT INTO customers(first_name,last_name,phone) VALUES (\"CI Customer\",\"Test\",\"010123123\")");
-          $cid=(int)$mysqli->insert_id;
-          $mysqli->query("INSERT INTO suppliers(first_name,last_name,phone) VALUES (\"CI Supplier\",\"Test\",\"010123124\")");
-          $sid=(int)$mysqli->insert_id;
+          $pairs=[];
+          for($ix=0;$ix<2;$ix++) {
+            $mysqli->query("INSERT INTO customers(first_name,last_name,phone) VALUES (\"CI Customer\",\"Test\",\"010123123\")");
+            $cid=(int)$mysqli->insert_id;
+            $mysqli->query("INSERT INTO suppliers(first_name,last_name,phone) VALUES (\"CI Supplier\",\"Test\",\"010123124\")");
+            $sid=(int)$mysqli->insert_id;
+            $pairs[]=$cid.":".$sid;
+          }
           session_id("ci-tabler-browser-123456789");
           session_start();
           $_SESSION["auth_user_id"]=$uid;
           $_SESSION["auth_user"]="acct_ci_browser";
           $_SESSION["csrf_token"]="ci-accounting-browser-token";
           session_write_close();
-          echo $cid." ".$sid;
+          echo implode(",", $pairs);
           ')"
-          read -r cid sid <<< "$ids"
+          test -n "$ids"
           php -S 127.0.0.1:8872 -t . > /tmp/accounting-browser.log 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true; tail -100 /tmp/accounting-browser.log' EXIT
@@ -138,4 +142,4 @@ jobs:
             if curl -fsS http://127.0.0.1:8872/login.php -o /dev/null; then break; fi
             sleep .2
           done
-          ACCOUNTING_CUSTOMER_ID="$cid" ACCOUNTING_SUPPLIER_ID="$sid" node assets/js/tests/accounting_ui.test.cjs
+          ACCOUNTING_PARTY_PAIRS="$ids" node assets/js/tests/accounting_ui.test.cjs
