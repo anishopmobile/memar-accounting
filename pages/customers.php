@@ -97,6 +97,7 @@ if ($result) {
             <button class="modal-close" id="closeCustomerModal" type="button">×</button>
         </div>
         <form id="customerForm" method="post" action="assets/php/save_customer.php">
+    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
             <input type="hidden" name="customer_id" id="customerId" value="">
             <div class="form-grid">
                 <div class="form-row"><label>نام <span class="required">*</span></label><input type="text" name="first_name" required></div>

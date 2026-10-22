@@ -43,6 +43,14 @@ if ($action === 'change_password') {
     if (!$result['ok']) {
         respond_error($result['message'], 422);
     }
+    // Keep the initiating session valid; other sessions will be revoked on
+    // their next periodic password-fingerprint check.
+    $freshUser = auth_user_by_id($userId);
+    if ($freshUser) {
+        $_SESSION['auth_password_fingerprint'] = hash('sha256', (string)$freshUser['password_hash']);
+        $_SESSION['auth_validated_at'] = time();
+        session_regenerate_id(true);
+    }
     respond_json(true, $result['message']);
 }
 

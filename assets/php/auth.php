@@ -13,6 +13,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/client_ip.php';
 require_once __DIR__ . '/auth/auth_users.php';
 require_once __DIR__ . '/auth/auth_rate_limiter.php';
 require_once __DIR__ . '/auth/auth_settings.php';
@@ -32,6 +33,16 @@ if (session_status() === PHP_SESSION_NONE) {
     ]);
 
     session_start();
+}
+
+// Conservative security headers on authenticated and login pages. PDF/image
+// endpoints may set their own content headers later; no CSP until inline
+// legacy script styles are migrated to external assets.
+if (!headers_sent()) {
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 }
 
 /* ==================== CSRF (مشترک login/register + boot) ==================== */
@@ -75,15 +86,7 @@ function auth_last_failure(): string
 
 function auth_client_ip(): string
 {
-    foreach (['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR'] as $header) {
-        if (!empty($_SERVER[$header])) {
-            $ip = trim(explode(',', (string) $_SERVER[$header])[0]);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return $ip;
-            }
-        }
-    }
-    return (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    return memar_client_ip();
 }
 
 /**
@@ -94,20 +97,10 @@ function auth_client_ip(): string
  */
 function is_authenticated(): bool
 {
-    $id = $_SESSION['auth_user_id'] ?? null;
-    if ($id !== null) {
-        $int = filter_var($id, FILTER_VALIDATE_INT);
-        if ($int !== false && $int > 0) {
-            return true;
-        }
-    }
-
-    $legacy = $_SESSION['auth_user'] ?? null;
-    if (is_string($legacy) && $legacy !== '') {
-        return true;
-    }
-
-    return false;
+    $id = filter_var($_SESSION['auth_user_id'] ?? null, FILTER_VALIDATE_INT);
+    // Historical username-only sessions were not bound to a validated
+    // database user ID; force them to log in normally instead.
+    return $id !== false && $id !== null && $id > 0;
 }
 
 /** شناسه‌ی کاربر واردشده (فقط برای جلسات جدید). */
@@ -206,6 +199,8 @@ function authenticate(string $username, string $password): bool
     session_regenerate_id(true);
     $_SESSION['auth_user_id'] = (int) $user['id'];
     $_SESSION['auth_user'] = (string) $user['username'];
+    $_SESSION['auth_validated_at'] = time();
+    $_SESSION['auth_password_fingerprint'] = hash('sha256', (string)$user['password_hash']);
 
     return true;
 }
@@ -234,7 +229,23 @@ function logout_user(): void
 function require_login(): void
 {
     if (is_authenticated()) {
-        return;
+        // Re-check deleted/deactivated accounts or passwords changed in
+        // another session. One lightweight lookup per minute per session
+        // avoids adding DB work to every authenticated image request.
+        $now = time();
+        if ($now - (int)($_SESSION['auth_validated_at'] ?? 0) < 60) return;
+        $user = auth_user_by_id((int)$_SESSION['auth_user_id']);
+        $storedTag = (string)($_SESSION['auth_password_fingerprint'] ?? '');
+        if ($user && (int)($user['is_active'] ?? 0) === 1) {
+            $actualTag = hash('sha256', (string)$user['password_hash']);
+            if ($storedTag === '' || hash_equals($storedTag, $actualTag)) {
+                $_SESSION['auth_password_fingerprint'] = $actualTag;
+                $_SESSION['auth_validated_at'] = $now;
+                return;
+            }
+        }
+        logout_user();
+        // Fall through to normal 401 / login redirect response.
     }
 
     $script = basename((string) ($_SERVER['SCRIPT_FILENAME'] ?? ''));

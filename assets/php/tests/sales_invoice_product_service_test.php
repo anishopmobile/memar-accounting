@@ -27,6 +27,14 @@ if (php_sapi_name() !== 'cli') {
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../invoice_common.php';
 
+$sipTestUsername = 'sip_smoke_' . bin2hex(random_bytes(5));
+$sipTestHash = password_hash('SipSmoke234', PASSWORD_DEFAULT);
+$sipAuthStmt = $mysqli->prepare('INSERT INTO users(username,password_hash) VALUES(?,?)');
+$sipAuthStmt->bind_param('ss',$sipTestUsername,$sipTestHash);
+$sipAuthStmt->execute();
+$sipTestUserId = (int)$sipAuthStmt->insert_id;
+$sipAuthStmt->close();
+
 $pass = 0;
 $fail = 0;
 $failures = [];
@@ -133,7 +141,7 @@ function endpoint_search(array $params): array
 <?php
 session_start();
 if (session_status() === PHP_SESSION_ACTIVE) {
-    $_SESSION['auth_user'] = 'memar';
+    $_SESSION['auth_user_id'] = {ID};
 }
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $_SERVER['HTTP_ACCEPT'] = 'application/json';
@@ -143,7 +151,8 @@ if (is_array($params)) {
 }
 include {ROOT} . '/assets/php/invoice_products.php';
 CHILD;
-    $child = str_replace('{ROOT}', var_export($root, true), $child);
+    $child = str_replace(['{ROOT}','{ID}'],
+        [var_export($root,true), (string)$GLOBALS['sipTestUserId']], $child);
     $tmp = tempnam(sys_get_temp_dir(), 'sip_') . '.php';
     file_put_contents($tmp, $child);
     $paramsFile = tempnam(sys_get_temp_dir(), 'sipp_');
@@ -340,6 +349,8 @@ $mysqli->query("DELETE FROM product_units WHERE product_id IN (SELECT id FROM pr
 $mysqli->query("DELETE FROM products WHERE code LIKE 'T-SIP-%'");
 $mysqli->query("DELETE FROM customers WHERE first_name = 'تست مشتری فروش کالا-خدمت'");
 $mysqli->query("DELETE FROM suppliers WHERE company_name = 'تست تامین فروش کالا-خدمت'");
+$cleanSipAuth=$mysqli->prepare('DELETE FROM users WHERE id=?');
+$cleanSipAuth->bind_param('i',$sipTestUserId);$cleanSipAuth->execute();$cleanSipAuth->close();
 $mysqli->close();
 
 echo "\n==============================\n";

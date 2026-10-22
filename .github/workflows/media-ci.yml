@@ -3,8 +3,13 @@ on:
   push:
     branches:
       - feature/product-media-library-20261022
+      - security/hardening-review-20261022
   pull_request:
     paths:
+      - 'assets/php/**'
+      - 'tests/security_hardening_test.php'
+      - '.htaccess'
+      - '.gitignore'
       - 'assets/php/media_*.php'
       - 'assets/js/media-ui.js'
       - 'pages/**'
@@ -46,6 +51,8 @@ jobs:
         run: |
           set -euo pipefail
           for f in assets/js/*.js assets/vendor/dropzone/dropzone.min.js; do node --check "$f"; done
+      - name: Security baselines, trusted proxies and repository safety
+        run: php tests/security_hardening_test.php
       - name: Database schema and financial invariants
         shell: bash
         run: |

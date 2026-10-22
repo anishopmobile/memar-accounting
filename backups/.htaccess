@@ -1,0 +1,4 @@
+# Existing webroot backups must never be directly downloadable.
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
