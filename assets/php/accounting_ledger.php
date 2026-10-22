@@ -150,7 +150,7 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
     $invoices=[];$total='0';$uncertain=0;
     while ($row=$res->fetch_assoc()) {
         $v=acct_invoice_outstanding($db,(int)$row['id']);
-        $invoices[]=['id'=>(int)$row['id'],'number'=>$row['invoice_number'],'date'=>$row['invoice_date'],'total'=>$row['payable_amount'],'paid'=>$v['paid'],'remaining'=>$v['remaining'],'unreconciled'=>$row['legacy_paid_amount']===null];
+        $invoices[]=['id'=>(int)$row['id'],'number'=>$row['invoice_number'],'date'=>$row['invoice_date'],'total'=>$row['payable_amount'],'historical_paid'=>$row['legacy_paid_amount'],'paid'=>$v['paid'],'remaining'=>$v['remaining'],'unreconciled'=>$row['legacy_paid_amount']===null];
         if ($row['legacy_paid_amount']===null) $uncertain++;
         else $total=money_add($total,$v['remaining']);
     }
@@ -186,7 +186,9 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
         $stmt->close();
     }
     $balance=money_sub(money_add($total,$opening),money_add($unallocated,$returnCredits));
-    return ['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'has_opening_balance'=>$hasOpening,'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'return_credit'=>$returnCredits,'returns'=>$returns,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
+    $statement=['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'has_opening_balance'=>$hasOpening,'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'return_credit'=>$returnCredits,'returns'=>$returns,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
+    $statement['movements']=acct_party_timeline($statement);
+    return $statement;
 }
 
 /** Apply existing unallocated credit to one final invoice. */
@@ -381,4 +383,51 @@ function acct_allocate_return_credit(mysqli $db,int $returnId,int $invoiceId,$ra
         $db->commit();
         return ['return_id'=>$returnId,'invoice_id'=>$invoiceId];
     }catch(Throwable $e){$db->rollback();throw $e;}
+}
+
+/**
+ * Auditable chronological party ledger. Settlement allocations do not create
+ * money and therefore do not appear twice. Legacy settlements are labeled
+ * "historical", never mixed into today's cash movement.
+ */
+function acct_party_timeline(array $statement): array {
+    $items=[];
+    $append=static function(string $date,string $description,string $debit,string $credit,int $order) use (&$items): void {
+        $items[]=['date'=>$date,'description'=>$description,'debit'=>$debit,'credit'=>$credit,'order'=>$order];
+    };
+    $opening=(string)$statement['opening_balance'];
+    if(money_cmp($opening,'0')!==0) {
+        $append('0000-00-00','مانده افتتاحیه',money_cmp($opening,'0')>0?$opening:'0',
+            money_cmp($opening,'0')<0?money_abs($opening):'0',0);
+    }
+    foreach($statement['invoices'] as $invoice) {
+        $append((string)$invoice['date'],'فاکتور '.$invoice['number'],(string)$invoice['total'],'0',10);
+        if ($invoice['historical_paid']===null)continue;
+        if(money_cmp($invoice['historical_paid'],'0')>0)
+            $append((string)$invoice['date'],'تسویه تاریخی '.$invoice['number'].' (بدون گردش صندوق)',
+                '0',(string)$invoice['historical_paid'],20);
+    }
+    foreach($statement['returns']??[] as $return) {
+        $append((string)$return['date'],'برگشت از فروش '.$return['number'],'0',(string)$return['amount'],30);
+    }
+    $expected=$statement['party_kind']==='customer'?'in':'out';
+    foreach($statement['payments'] as $payment) {
+        $credit=$payment['direction']===$expected;
+        $label=($credit?'دریافت/پرداخت ':'استرداد/سند اصلاحی ').'#'.$payment['id'];
+        if($payment['is_reversal'])$label='سند معکوس #'.$payment['id'];
+        $append((string)$payment['date'],$label,
+            $credit?'0':(string)$payment['amount'],$credit?(string)$payment['amount']:'0',40);
+    }
+    usort($items,static function(array $a,array $b): int {
+        $order=strcmp($a['date'],$b['date']);
+        return $order!==0?$order:$a['order']<=>$b['order'];
+    });
+    $running='0';
+    foreach($items as &$item) {
+        $running=money_add($running,money_sub($item['debit'],$item['credit']));
+        $item['balance']=$running;
+        unset($item['order']);
+    }
+    unset($item);
+    return $items;
 }
