@@ -52,8 +52,8 @@ function ledger_party_summary(mysqli $db,string $kind,int $id): array {
     $s=$db->prepare('SELECT COALESCE(SUM(CASE WHEN direction=? THEN amount ELSE -amount END),0) v FROM ledger_payments WHERE party_kind=? AND party_id=? AND voided_at IS NULL');
     $dir=$kind==='customer'?'receipt':'disbursement';$s->bind_param('ssi',$dir,$kind,$id);
     $s->execute();$payments=$s->get_result()->fetch_assoc()['v'];$s->close();
-    $s=$db->prepare('SELECT signed_amount FROM ledger_openings WHERE party_kind=? AND party_id=?');
-    $s->bind_param('si',$kind,$id);$s->execute();$opening=$s->get_result()->fetch_assoc()['signed_amount']??'0';$s->close();
+    $s=$db->prepare('SELECT id,signed_amount FROM ledger_openings WHERE party_kind=? AND party_id=?');
+    $s->bind_param('si',$kind,$id);$s->execute();$openingRow=$s->get_result()->fetch_assoc();$opening=$openingRow['signed_amount']??'0';$s->close();
     $returned='0';
     if($kind==='customer') {
         $s=$db->prepare('SELECT COALESCE(SUM(payable_amount),0) AS returned FROM sales_returns WHERE customer_id=?');
@@ -61,7 +61,7 @@ function ledger_party_summary(mysqli $db,string $kind,int $id): array {
     }
     $balance=money_sub(money_add($invoices,$opening),money_add(money_add($legacy,$payments),$returned));
     return ['total_invoices'=>money_round($invoices),'sales_returns'=>money_round($returned),'paid_historically'=>money_round($legacy),
-        'payments'=>money_round($payments),'opening'=>money_round($opening),
+        'payments'=>money_round($payments),'opening'=>money_round($opening),'opening_recorded'=>(bool)$openingRow,
         'balance'=>$balance,'debt'=>money_cmp($balance,'0')>0?$balance:'0.00',
         'credit'=>money_cmp($balance,'0')<0?money_abs($balance):'0.00'];
 }
