@@ -131,6 +131,20 @@ function media_product_list(mysqli $db, int $productId): array
     return $rows;
 }
 
+/** Media belonging to one defective entry (not the product's changing gallery). */
+function media_defective_list(mysqli $db, int $defectiveId): array
+{
+    $stmt = $db->prepare('SELECT m.id,m.original_filename,dm.sort_order
+        FROM defective_media dm JOIN media m ON m.id=dm.media_id
+        WHERE dm.defective_id=? ORDER BY dm.sort_order,dm.media_id');
+    $stmt->bind_param('i',$defectiveId); $stmt->execute();
+    $res=$stmt->get_result(); $rows=[];
+    while ($res && ($row=$res->fetch_assoc())) {
+        $row['url']=media_image_url((int)$row['id']); $rows[]=$row;
+    }
+    $stmt->close(); return $rows;
+}
+
 function media_decode_ids($raw): array
 {
     if (!is_string($raw)) {
@@ -181,6 +195,25 @@ function media_sync_product(mysqli $db, int $productId, string $json): void
     foreach ($ids as $order => $id) {
         $stmt->bind_param('iii', $productId, $id, $order);
         $stmt->execute();
+    }
+    $stmt->close();
+}
+
+/** Caller must hold the defective registration's transaction. */
+function media_sync_defective(mysqli $db, int $defectiveId, string $json): void
+{
+    $ids = media_decode_ids($json);
+    if ($ids) {
+        $in = implode(',',array_fill(0,count($ids),'?'));
+        $stmt=$db->prepare("SELECT COUNT(*) AS c FROM media WHERE id IN ($in)");
+        $stmt->bind_param(str_repeat('i',count($ids)),...$ids); $stmt->execute();
+        $count=(int)($stmt->get_result()->fetch_assoc()['c']??0);
+        $stmt->close();
+        if ($count !== count($ids)) throw new InvalidArgumentException('رسانه انتخاب‌شده وجود ندارد.');
+    }
+    $stmt=$db->prepare('INSERT INTO defective_media(defective_id,media_id,sort_order) VALUES (?,?,?)');
+    foreach ($ids as $order=>$id) {
+        $stmt->bind_param('iii',$defectiveId,$id,$order); $stmt->execute();
     }
     $stmt->close();
 }
