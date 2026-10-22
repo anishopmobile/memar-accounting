@@ -17,6 +17,22 @@ try {
             $result=ledger_reconcile_partial($mysqli,(int)$id,parseMoneyInput((string)($_POST['paid_amount']??'')),(string)($_POST['explanation']??''));
             ledger_respond(200,['success'=>true,'data'=>$result]);
         }
+        if(($_POST['action']??'')==='apply_credit') {
+            $kind=(string)($_POST['party_kind']??'');
+            $pid=filter_var($_POST['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            $paymentId=filter_var($_POST['payment_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            $invoiceId=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            if(!$pid||!$paymentId||!$invoiceId)throw new InvalidArgumentException('شناسه نامعتبر است.');
+            ledger_respond(200,['success'=>true,'data'=>ledger_apply_credit($mysqli,$kind,(int)$pid,(int)$paymentId,(int)$invoiceId,
+              parseMoneyInput((string)($_POST['amount']??'')),(string)($_POST['request_token']??''))]);
+        }
+        if(($_POST['action']??'')==='opening') {
+            $kind=(string)($_POST['party_kind']??'');
+            $pid=filter_var($_POST['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            if(!$pid)throw new InvalidArgumentException('طرف حساب نامعتبر است.');
+            ledger_respond(200,['success'=>true,'data'=>ledger_record_opening($mysqli,$kind,(int)$pid,
+              parseMoneyInput((string)($_POST['signed_amount']??'')),(string)($_POST['effective_on']??''),(string)($_POST['note']??''))]);
+        }
         $input=[
             'party_kind'=>$_POST['party_kind']??'',
             'party_id'=>$_POST['party_id']??'',
