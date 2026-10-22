@@ -47,8 +47,33 @@ try {
     unset($item);
     $documentDiscount = trim((string) ($_POST['discount'] ?? '0'));
     $documentDiscount = parseMoneyInput($documentDiscount === '' ? '0' : $documentDiscount);
-} catch (InvalidArgumentException $e) {
-    respond_error($e->getMessage(), 422);
+    $initialPayments = [];
+    $rawPayments = $_POST['initial_payments'] ?? '[]';
+    if (!is_string($rawPayments)) throw new InvalidArgumentException('اطلاعات پرداخت معتبر نیست.');
+    $decodedPayments = json_decode($rawPayments, true, 64, JSON_THROW_ON_ERROR);
+    if (!is_array($decodedPayments) || count($decodedPayments) > 10) throw new InvalidArgumentException('تعداد پرداخت‌ها نامعتبر است.');
+    foreach ($decodedPayments as $payment) {
+        if (!is_array($payment)) throw new InvalidArgumentException('سطر پرداخت نامعتبر است.');
+        $paymentAmount = parseMoneyInput((string)($payment['amount'] ?? ''));
+        $priorAllocations = $payment['allocations'] ?? [];
+        if (!is_array($priorAllocations) || count($priorAllocations) > 100) throw new InvalidArgumentException('تخصیص فاکتور نامعتبر است.');
+        $convertedAllocations = [];
+        foreach ($priorAllocations as $allocation) {
+            if (!is_array($allocation)) throw new InvalidArgumentException('تخصیص فاکتور نامعتبر است.');
+            $convertedAllocations[] = ['invoice_id'=>$allocation['invoice_id']??null,
+                'amount'=>parseMoneyInput((string)($allocation['amount']??''))];
+        }
+        $initialPayments[] = [
+            'amount'=>$paymentAmount,
+            'method'=>(string)($payment['method']??''),
+            'paid_on'=>(string)($payment['paid_on']??($_POST['invoice_date']??'')),
+            'reference_no'=>(string)($payment['reference_no']??''),
+            'note'=>(string)($payment['note']??''),
+            'allocations'=>$convertedAllocations
+        ];
+    }
+} catch (InvalidArgumentException|JsonException $e) {
+    respond_error('مشخصات مبلغ یا پرداخت نامعتبر است: '.$e->getMessage(), 422);
 }
 
 
@@ -63,6 +88,7 @@ $in = [
     'client_token'   => trim((string) ($_POST['client_token'] ?? '')),
     'tax_rate'       => isset($_POST['tax_rate']) ? trim((string) $_POST['tax_rate']) : null,
     'items'          => $items,
+    'initial_payments' => $initialPayments,
 ];
 
 if ($invoiceId === '') {
