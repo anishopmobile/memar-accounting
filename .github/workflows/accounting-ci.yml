@@ -1,0 +1,57 @@
+name: Accounting Ledger CI
+on:
+  push:
+    branches:
+      - feature/accounting-ledger-settlements
+  pull_request:
+    branches: [main]
+    paths:
+      - 'assets/php/accounting_*.php'
+      - 'assets/php/invoice_*.php'
+      - 'assets/js/invoice.js'
+      - 'assets/js/accounting.js'
+      - 'pages/accounting.php'
+      - 'pages/customers.php'
+      - 'pages/suppliers.php'
+      - 'pages/report-*debt.php'
+      - '.github/workflows/accounting-ci.yml'
+
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mysqlnd, mbstring, bcmath, gd
+          coverage: none
+      - name: Lint all application PHP
+        run: |
+          set -euo pipefail
+          php -l index.php
+          find assets/php pages -name '*.php' -type f -print0 | xargs -0 -n1 php -l
+      - name: Parse UI JavaScript
+        run: |
+          node --check assets/js/invoice.js
+          node --check assets/js/accounting.js
+      - name: Accounting ledger MySQL integration
+        run: php assets/php/tests/accounting_ledger_test.php
+      - name: Financial regression suite
+        run: |
+          php assets/php/tests/currency_mysql_test.php
+          php assets/php/tests/sales_return_test.php
+          php assets/php/tests/multi_unit_inventory_test.php
+          php assets/php/tests/dashboard_sales_metrics_test.php
