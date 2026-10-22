@@ -97,9 +97,10 @@ $(function () {
             var pays='';
             (current.payments||[]).forEach(function(p){
                 pays+='<tr><td>'+escapeHtml(p.paid_on)+'</td><td>'+escapeHtml((p.direction===($('#ledgerKind').val()==='customer'?'receipt':'disbursement')?'دریافت/پرداخت':'استرداد')+' - '+(({cash:'نقدی',pos:'کارت‌خوان',bank_transfer:'انتقال بانکی'})[p.method]||p.method))
-                    +'</td><td>'+money(p.amount)+'</td><td>'+escapeHtml(p.reference_no)+'</td><td>'+escapeHtml(p.note)+'</td></tr>';
+                    +'</td><td>'+money(p.amount)+'</td><td>'+escapeHtml(p.reference_no)+'</td><td>'+escapeHtml(p.note)+(p.voided_at?' (باطل‌شده)':'')+'</td>'
+                    +'<td>'+(p.voided_at?'ابطال شده':'<button type="button" class="button-danger small ledger-void" data-payment-id="'+escapeHtml(p.id)+'">ابطال ثبت اشتباه</button>')+'</td></tr>';
             });
-            $('#ledgerPayments').html(pays||'<tr><td colspan="5">تراکنشی ثبت نشده است.</td></tr>');
+            $('#ledgerPayments').html(pays||'<tr><td colspan="6">تراکنشی ثبت نشده است.</td></tr>');
             var creditPayments=$('#ledgerCreditPayment').empty().append('<option value="">انتخاب پرداخت دارای مانده آزاد</option>');
             (current.payments||[]).forEach(function(p){
                 if(p.voided_at!==null || sameCurrency(p.unapplied||'0','0')<=0)return;
@@ -169,6 +170,17 @@ $(function () {
         }).done(function(res){if(!res.success){alert(res.message||'ثبت ناموفق بود');return;}alert('تراکنش ثبت شد.');loadAccount();})
         .fail(function(xhr){alert((xhr.responseJSON||{}).message||'خطای ثبت تراکنش');})
         .always(function(){btn.prop('disabled',false);});
+    });
+    root.on('click','.ledger-void',function(){
+        if(!current)return;
+        var id=String($(this).data('payment-id'));
+        var reason=window.prompt('برای ابطال ثبت اشتباه، علت مستند (حداقل ۱۲ کاراکتر) را وارد کنید. این گزینه استرداد واقعی وجه نیست.');
+        if(reason===null)return;
+        reason=String(reason).trim();
+        if(reason.length<12)return alert('توضیح مستند حداقل ۱۲ کاراکتر لازم است.');
+        if(!confirm('تراکنش شماره '+id+' به‌عنوان ثبت اشتباه باطل شود؟'))return;
+        postLedger({action:'void_payment',party_kind:$('#ledgerKind').val(),party_id:$('#ledgerParty').val(),
+            payment_id:id,reason:reason},function(){alert('سند بدون حذف تاریخچه باطل شد.');loadAccount();});
     });
     $('#ledgerCreditForm').on('submit',function(e){
         e.preventDefault();if(!current)return;
