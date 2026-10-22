@@ -49,7 +49,8 @@ function countPdfBarcodeInk(pdfPath, pageNumber, prefix) {
 }
 const base = 'http://127.0.0.1:8872';
 const cookie = {name:'PHPSESSID',value:'ci-tabler-browser-123456789',domain:'127.0.0.1',path:'/',sameSite:'Lax',httpOnly:true};
-const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAV4BAX6b7A8AAAAASUVORK5CYII=','base64');
+// Valid 5x5 PNG (not a truncated/broken stream); secure server re-encoding requires decodable pixels.
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAIAAAACDbGyAAAAFElEQVR4nGM0KDjCgASYGFABqXwAbcQBbpO6xs8AAAAASUVORK5CYII=','base64');
 (async function () {
   const rasterDir = fs.mkdtempSync(path.join(os.tmpdir(),'memar-pdf-ink-'));
   const browser = await chromium.launch({headless:true});
