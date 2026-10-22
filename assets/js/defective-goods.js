@@ -175,6 +175,9 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
     $(document).on('submit', '#defRegForm', function (e) {
         e.preventDefault();
         var $btn = $('#defSubmit');
+        if (window.MediaEditor && !window.MediaEditor.canSave('defective')) {
+            showResult('آپلود تصاویر هنوز کامل نشده است.', false);return;
+        }
         $btn.prop('disabled', true).text('در حال ثبت...');
         var resetBtn = function () { $btn.prop('disabled', false).text('ثبت کالای معیوب'); };
 
@@ -194,7 +197,8 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
             quantity: qty,
             defective_date: dateIso,
             reason: reason,
-            description: String($('#defDescription').val() || '').trim()
+            description: String($('#defDescription').val() || '').trim(),
+            media_ids: $('[data-media-editor="defective"] input[name="media_ids"]').val() || '[]'
         };
         $.post('assets/php/defective_goods_action.php', payload)
             .done(function (res) {
@@ -203,6 +207,7 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
                     $('#defQuantity').val('');
                     $('#defReason').val('');
                     $('#defDescription').val('');
+                    if (window.MediaEditor) window.MediaEditor.reset('defective');
                     if (res.data) {
                         picked.stock = String(res.data.stock_after);
                         $('#defCurrentStock').text(picked.stock + ' ' + picked.unit);
@@ -238,7 +243,7 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
         var rows = data.rows || [];
         var html;
         if (!rows.length) {
-            html = '<tr class="empty-state-row"><td colspan="9" class="empty-state">رکوردی یافت نشد</td></tr>';
+            html = '<tr class="empty-state-row"><td colspan="10" class="empty-state">رکوردی یافت نشد</td></tr>';
         } else {
             html = '';
             rows.forEach(function (r) {
@@ -246,6 +251,7 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
                     + '<td>' + esc(r.row_no) + '</td>'
                     + '<td>' + esc(r.defective_date_jalali) + '</td>'
                     + '<td>' + esc(r.product_name) + '</td>'
+                    + '<td class="product-thumb-cell"><img class="media-thumb" loading="lazy" decoding="async" width="46" height="46" data-id="' + Number(r.defective_media_id || 0) + '" src="' + (Number(r.defective_media_id) ? 'assets/php/media_file.php?id=' + Number(r.defective_media_id) + '&size=thumb' : 'assets/img/product-placeholder.svg') + '" alt=""></td>'
                     + '<td dir="ltr">' + esc(r.product_barcode) + '</td>'
                     + '<td dir="ltr">' + esc(r.product_code) + '</td>'
                     + '<td>' + esc(r.quantity_display) + ' ' + esc(r.product_unit) + '</td>'
@@ -374,11 +380,13 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
         $('#defQuantity').val('');
         $('#defReason').val('');
         $('#defDescription').val('');
+        if (window.MediaEditor) window.MediaEditor.reset('defective');
         $('#defDate').val(todayISO());
         $('#defDateDisplay').val(gregInputToJalaliStr(todayISO()));
         $('#defResult').text('').css('color', '');
     });
 
+    if (window.MediaEditor) window.MediaEditor.prepare('defective', 0);
     initRegisterDatePicker();
     initFilterDatePickers();
 });
