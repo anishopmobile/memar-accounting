@@ -40,15 +40,44 @@ require_csrf_or_fail();
  */
 function resolveBackupDir($dir)
 {
-    $dir = trim($dir);
-    if ($dir === '') {
-        return '';
+    $dir = trim((string)$dir);
+    if ($dir === '') return '';
+    $webroot = realpath(dirname(__DIR__, 2));
+    if (!$webroot) throw new RuntimeException('پوشه سایت در دسترس نیست.');
+
+    // Relative backup names live OUTSIDE the document root, even on Apache
+    // hosts where .htaccess is disabled. Block .. traversal and weird names.
+    $absolute = preg_match('#^(?:[A-Za-z]:[\\\\/]|/|\\\\)#', $dir) === 1;
+    if (!$absolute) {
+        if (!preg_match('/^[a-zA-Z0-9_\\-]{1,80}$/D', $dir)) {
+            throw new InvalidArgumentException('نام پوشه پشتیبان باید کوتاه و بدون مسیر پیمایش باشد.');
+        }
+        $dir = dirname($webroot) . DIRECTORY_SEPARATOR . 'memar_private_backups'
+            . DIRECTORY_SEPARATOR . $dir;
     }
-    $webroot = realpath(__DIR__ . '/../..');
-    if (preg_match('#^[A-Za-z]:[\\\\/]#', $dir) || $dir[0] === '/' || $dir[0] === '\\') {
-        return rtrim($dir, '/\\');
+
+    $normalized = str_replace('\\\\', '/', $dir);
+    $real = realpath($dir);
+    // For a path not yet created, check its existing ancestor and lexical
+    // segments to avoid symlinks that resolve into the webroot.
+    $candidate = $real ?: $normalized;
+    if (preg_match('#(?:^|/)\\.\\.(?:/|$)#', str_replace('\\\\', '/', $candidate))) {
+        throw new InvalidArgumentException('مسیر پشتیبان شامل پیمایش غیرمجاز است.');
     }
-    return $webroot . DIRECTORY_SEPARATOR . 'backups' . DIRECTORY_SEPARATOR . $dir;
+    $base = str_replace('\\\\', '/', $webroot);
+    $check = str_replace('\\\\', '/', $candidate);
+    if ($check === $base || str_starts_with($check, $base . '/')) {
+        throw new InvalidArgumentException('مسیر پشتیبان باید خارج از پوشه عمومی سایت باشد.');
+    }
+    $ancestor = $candidate;
+    while (!file_exists($ancestor) && dirname($ancestor) !== $ancestor) $ancestor = dirname($ancestor);
+    if (($resolvedAncestor = realpath($ancestor)) !== false) {
+        $a = str_replace('\\\\', '/', $resolvedAncestor);
+        if ($a === $base || str_starts_with($a, $base . '/')) {
+            throw new InvalidArgumentException('مسیر پشتیبان به داخل پوشه عمومی سایت اشاره می‌کند.');
+        }
+    }
+    return $dir;
 }
 
 /* ---------- ذخیره آدرس پوشه پشتیبان ---------- */
