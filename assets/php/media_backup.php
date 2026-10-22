@@ -127,41 +127,55 @@ function media_full_backup_restore(mysqli $db, string $archive, callable $restor
                 || !hash_equals($expectedHash, hash_file('sha256',$dest)))) {
                 throw new RuntimeException('Conflicting existing media file');
             }
+            if ($existing) {
+                // The destination itself was verified against the signed-format
+                // manifest (SHA-256+byte count). The ZIP copy is not used, so
+                // avoid re-inflating and hashing thousands of identical files.
+                // Missing files always get streamed and checksum-verified.
+                continue;
+            }
             $stream = $zip->getStream('media/' . $relative);
             if (!$stream) throw new RuntimeException('Missing ZIP media data');
-            // Keep the checksum check even when the file already exists, but
-            // avoid expensive duplicate staging/copying of thousands of pictures.
             $context = hash_init('sha256');
             $count = 0;
-            if ($existing) {
-                $count = hash_update_stream($context, $stream);
-                fclose($stream);
-            } else {
-                $stagedPath = $stageRoot . '/' . $relative;
-                $out = fopen($stagedPath, 'wb');
-                if (!$out) { fclose($stream); throw new RuntimeException('Cannot write staged file'); }
+            $stagedPath = $stageRoot . '/' . $relative;
+            $out = fopen($stagedPath, 'wb');
+            if (!$out) { fclose($stream); throw new RuntimeException('Cannot write staged file'); }
+            try {
                 while (!feof($stream)) {
                     $chunk = fread($stream, 65536);
-                    if ($chunk === false) { fclose($stream); fclose($out); throw new RuntimeException('ZIP read failed'); }
+                    if ($chunk === false) throw new RuntimeException('ZIP read failed');
                     if ($chunk === '') break;
                     hash_update($context, $chunk);
                     $length = strlen($chunk);
-                    if (fwrite($out, $chunk) !== $length) {
-                        fclose($stream); fclose($out); throw new RuntimeException('Cannot write staged file');
+                    $written = 0;
+                    while ($written < $length) {
+                        $n = fwrite($out, substr($chunk,$written));
+                        if ($n === false || $n === 0) throw new RuntimeException('Cannot write staged file');
+                        $written += $n;
                     }
                     $count += $length;
                 }
+            } finally {
                 fclose($out); fclose($stream);
-                $staged[] = [$stagedPath, $dest];
             }
             if ($count !== $expectedBytes || !hash_equals($expectedHash, hash_final($context))) {
                 throw new RuntimeException('Media checksum mismatch');
             }
+            $staged[] = [$stagedPath, $dest];
         }
         // Keep pre-restore SQL in a private temporary file for recovery.
         $priorSql = $dumpSql();
         if (!is_string($priorSql) || $priorSql === '') throw new RuntimeException('Current database backup failed');
         $sqlRecovery = $stageRoot . '/pre-restore.sql';
+        // A same-version backup may be restored repeatedly while many photos
+        // already exist. When *both* SQL bytes and every media SHA already
+        // match, doing destructive DROP/CREATE SQL is unnecessary.
+        $unchangedSql = hash_equals((string)$manifest['sql_sha256'], hash('sha256',$priorSql));
+        if (!$staged && $unchangedSql) {
+            return ['files'=>count($manifest['files']),'new_media_files'=>0,
+                'database_restored'=>true,'sql_skipped_identical'=>true];
+        }
         if (file_put_contents($sqlRecovery, $priorSql, LOCK_EX) === false) throw new RuntimeException('Cannot stage rollback');
         unset($priorSql);
         foreach ($staged as [$source,$dest]) {
@@ -179,7 +193,8 @@ function media_full_backup_restore(mysqli $db, string $archive, callable $restor
             }
             throw new RuntimeException('Database restore failed: ' . $error);
         }
-        return ['files'=>count($manifest['files']),'new_media_files'=>count($staged),'database_restored'=>true];
+        return ['files'=>count($manifest['files']),'new_media_files'=>count($staged),'database_restored'=>true,
+            'sql_skipped_identical'=>false];
     } finally {
         $zip->close();
         if (isset($stageRoot) && is_dir($stageRoot)) {
