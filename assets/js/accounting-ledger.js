@@ -11,14 +11,40 @@ $(function () {
         try { return window.Currency.toBase(String(v == null ? '' : v)); } catch (e) { return null; }
     }
     function sameCurrency(a,b) {
-        function cents(s){ var p=String(s).split('.');return Number(p[0])*100+Number((p[1]||'').padEnd(2,'0')); }
+        function cents(s) {
+            var str=String(s).trim(),negative=str.charAt(0)==='-';
+            if(negative)str=str.slice(1);
+            var p=str.split('.');
+            var value=Number(p[0])*100+Number((p[1]||'').padEnd(2,'0'));
+            return negative?-value:value;
+        }
         return cents(a)-cents(b);
+    }
+    function newToken(){
+        var bytes=new Uint8Array(24);
+        window.crypto.getRandomValues(bytes);
+        return Array.from(bytes,function(v){return v.toString(16).padStart(2,'0');}).join('');
+    }
+    function todayISO() {
+        var now=new Date(),local=new Date(now.getTime()-now.getTimezoneOffset()*60000);
+        return local.toISOString().slice(0,10);
+    }
+    function postLedger(data,onSuccess) {
+        data.csrf_token=csrf;
+        $.post(endpoint,data).done(function(res) {
+            if (!res.success) {alert(res.message||'ثبت انجام نشد.');return;}
+            onSuccess(res.data);
+        }).fail(function(xhr){alert((xhr.responseJSON||{}).message||'خطای ارتباط یا ثبت عملیات.');});
     }
     function presentPartyList(rows) {
         var box=$('#ledgerParty').empty().append($('<option/>').val('').text('انتخاب کنید'));
         rows.forEach(function(r){ $('<option/>').val(r.id).text(r.name+' ('+(r.phone||'')+')').appendTo(box);});
         if(selection && String(selection.id)) {
             box.val(String(selection.id));
+            if(!box.val()) {
+                $('<option/>').val(selection.id).text('طرف حساب انتخاب‌شده').appendTo(box);
+                box.val(String(selection.id));
+            }
             if(box.val()) {loadAccount(); return;}
         }
     }
@@ -40,7 +66,7 @@ $(function () {
             if(!res.success){alert(res.message||'خطا');return;}
             current=res.data;
             $('#ledgerAccount').prop('hidden',false);
-            $('#ledgerPartyName').text($('#ledgerParty option:selected').text());
+            $('#ledgerPartyName').text((current.party.name||'')+' ('+(current.party.phone||'')+')');
             $('#ledgerTotal').text(money(current.summary.total_invoices));
             $('#ledgerDebt').text(money(current.summary.debt));
             $('#ledgerCredit').text(money(current.summary.credit));
@@ -61,8 +87,23 @@ $(function () {
                     +'</td><td>'+money(p.amount)+'</td><td>'+escapeHtml(p.reference_no)+'</td><td>'+escapeHtml(p.note)+'</td></tr>';
             });
             $('#ledgerPayments').html(pays||'<tr><td colspan="5">تراکنشی ثبت نشده است.</td></tr>');
+            var creditPayments=$('#ledgerCreditPayment').empty().append('<option value="">انتخاب پرداخت دارای مانده آزاد</option>');
+            (current.payments||[]).forEach(function(p){
+                if(p.voided_at!==null || sameCurrency(p.unapplied||'0','0')<=0)return;
+                $('<option/>').val(p.id).text('#'+p.id+' - '+p.paid_on+' - '+money(p.unapplied)).appendTo(creditPayments);
+            });
+            var creditInvoices=$('#ledgerCreditInvoice').empty().append('<option value="">انتخاب فاکتور</option>');
+            var reconciliation=$('#ledgerReconcileInvoice').empty().append('<option value="">انتخاب فاکتور تاریخی</option>');
+            current.invoices.forEach(function(inv){
+                if(inv.legacy_classification==='requires_reconciliation'){
+                    $('<option/>').val(inv.id).text(inv.invoice_number+' ('+money(inv.total)+')').appendTo(reconciliation);
+                }else if(sameCurrency(inv.due,'0')>0){
+                    $('<option/>').val(inv.id).text(inv.invoice_number+' ('+money(inv.due)+')').appendTo(creditInvoices);
+                }
+            });
+            $('#ledgerOpeningForm button').prop('disabled',sameCurrency(current.summary.opening||'0','0')!==0);
             $('#ledgerAmount').val('');$('#ledgerPaymentForm')[0].reset();
-            $('#ledgerDate').val(new Date().toLocaleDateString('en-CA'));
+            $('#ledgerDate,#ledgerOpeningDate').val(todayISO());
             showAllocation();
         }).fail(function(xhr){alert((xhr.responseJSON||{}).message||'خطا در بارگذاری حساب.');});
     }
@@ -94,7 +135,7 @@ $(function () {
         });
         if(error)return alert('مبلغ نامعتبر است.');
         if(!confirm('تراکنش مالی با مبلغ '+money(baseAmount)+' ثبت شود؟'))return;
-        var key=String(Date.now())+'_'+Math.random().toString(36).slice(2)+'_ledger';
+        var key=newToken();
         var btn=$('#ledgerSubmit').prop('disabled',true);
         $.post(endpoint, {
             csrf_token:csrf, party_kind:$('#ledgerKind').val(),party_id:$('#ledgerParty').val(),
@@ -104,6 +145,30 @@ $(function () {
         }).done(function(res){if(!res.success){alert(res.message||'ثبت ناموفق بود');return;}alert('تراکنش ثبت شد.');loadAccount();})
         .fail(function(xhr){alert((xhr.responseJSON||{}).message||'خطای ثبت تراکنش');})
         .always(function(){btn.prop('disabled',false);});
+    });
+    $('#ledgerCreditForm').on('submit',function(e){
+        e.preventDefault();if(!current)return;
+        var amount=decimal($('#ledgerCreditAmount').val()),pid=$('#ledgerCreditPayment').val(),iid=$('#ledgerCreditInvoice').val();
+        if(!pid||!iid||amount===null||sameCurrency(amount,'0')<=0)return alert('مبلغ یا مقصد تخصیص نامعتبر است.');
+        if(!confirm('اعتبار قبلی بدون تراکنش نقدی جدید به فاکتور تخصیص داده شود؟'))return;
+        postLedger({action:'apply_credit',party_kind:$('#ledgerKind').val(),party_id:$('#ledgerParty').val(),
+            payment_id:pid,invoice_id:iid,amount:$('#ledgerCreditAmount').val(),request_token:newToken()},function(){alert('اعتبار اعمال شد.');loadAccount();});
+    });
+    $('#ledgerOpeningForm').on('submit',function(e){
+        e.preventDefault();if(!current)return;
+        var raw=$('#ledgerOpeningAmount').val(),amount=decimal(raw);
+        if(amount===null)return alert('مانده افتتاحیه نامعتبر است.');
+        if(!confirm('مانده افتتاحیه قابل ویرایش نیست. ثبت شود؟'))return;
+        postLedger({action:'opening',party_kind:$('#ledgerKind').val(),party_id:$('#ledgerParty').val(),
+            signed_amount:raw,effective_on:$('#ledgerOpeningDate').val(),note:$('#ledgerOpeningNote').val()},function(){alert('مانده افتتاحیه ثبت شد.');loadAccount();});
+    });
+    $('#ledgerReconcileForm').on('submit',function(e){
+        e.preventDefault();if(!current)return;
+        var iid=$('#ledgerReconcileInvoice').val(),amount=decimal($('#ledgerReconcileAmount').val());
+        if(!iid||amount===null||sameCurrency(amount,'0')<0)return alert('مبلغ تاریخی نامعتبر است.');
+        if(!confirm('این اصلاح یک‌بار مصرف است و دریافت نقدی ایجاد نمی‌کند. ثبت شود؟'))return;
+        postLedger({action:'reconcile_partial',invoice_id:iid,paid_amount:$('#ledgerReconcileAmount').val(),
+            explanation:$('#ledgerReconcileExplanation').val()},function(){alert('سابقه تاریخی اصلاح شد.');loadAccount();});
     });
     var params=new URLSearchParams(location.search),kind=params.get('kind'),id=params.get('party_id');
     if(kind==='supplier'||kind==='customer')$('#ledgerKind').val(kind);
