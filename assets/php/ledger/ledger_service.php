@@ -166,6 +166,7 @@ function ledger_reconcile_partial(mysqli $db,int $invoiceId,$paidRaw,string $exp
         if($changed!==1)throw new DomainException('این فاکتور نیازمند اصلاح نیست یا قبلاً اصلاح شده است.');
         $s=$db->prepare('INSERT INTO ledger_reconciliations(invoice_id,recognized_paid,explanation) VALUES(?,?,?)');
         $s->bind_param('iss',$invoiceId,$paid,$explanation);$s->execute();$s->close();
+        ledger_sync_invoice_status($db,$invoiceId);
         $db->commit();
         return ['invoice_id'=>$invoiceId,'recognized_paid'=>$paid];
     }catch(Throwable $e){$db->rollback();throw $e;}
