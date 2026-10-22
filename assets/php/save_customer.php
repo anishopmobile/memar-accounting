@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/currency.php';
+require_once __DIR__ . '/accounting_ledger.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -38,6 +40,7 @@ if ($customer_id !== '') {
         $result->fetch();
         $result->close();
 
+        $ledger = acct_party_balances($mysqli,'customer')[$id] ?? ['balance'=>'0','gross'=>'0','unreconciled'=>false];
         $customer = [
             'id' => $id,
             'first_name' => $first_name,
@@ -50,8 +53,8 @@ if ($customer_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_spent' => number_format($total_spent ?? 0),
-            'debt' => number_format($debt ?? 0),
+            'total_spent' => formatMoneyNumber((string)$ledger['gross']),
+            'debt' => $ledger['unreconciled'] ? 'نیازمند تطبیق' : formatMoneyNumber((string)$ledger['balance']),
         ];
         echo json_encode(['success' => true, 'customer' => $customer]);
     } else {
@@ -74,8 +77,8 @@ if ($customer_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_spent' => number_format(0),
-            'debt' => number_format(0),
+            'total_spent' => formatMoneyNumber('0'),
+            'debt' => formatMoneyNumber('0'),
         ];
         echo json_encode(['success' => true, 'customer' => $customer]);
     } else {
