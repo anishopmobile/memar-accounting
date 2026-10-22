@@ -46,6 +46,10 @@ function ledger_migrate(mysqli $db): void {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY uq_ledger_opening (party_kind,party_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS ledger_metadata (
+            id TINYINT PRIMARY KEY,
+            legacy_initialized TINYINT NOT NULL DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         "CREATE TABLE IF NOT EXISTS ledger_legacy_invoices (
             invoice_id INT NOT NULL PRIMARY KEY,
             recognized_paid DECIMAL(14,2) NOT NULL,
@@ -58,4 +62,31 @@ function ledger_migrate(mysqli $db): void {
     foreach ($sql as $statement) {
         if (!$db->query($statement)) throw new RuntimeException('Ledger migration failed: '.$db->error);
     }
+}
+
+/**
+ * One-time preservation of pre-ledger invoice statuses.
+ * Historical partial invoices have UNKNOWN paid amounts and MUST be reconciled.
+ * Historical paid invoices are non-cash opening recognition, not receipts.
+ */
+function ledger_initialize_legacy(mysqli $db): void {
+    ledger_migrate($db);
+    $db->begin_transaction();
+    try {
+        $db->query("INSERT IGNORE INTO ledger_metadata(id,legacy_initialized) VALUES(1,0)");
+        $res=$db->query("SELECT legacy_initialized FROM ledger_metadata WHERE id=1 FOR UPDATE");
+        $row=$res->fetch_assoc();
+        if((int)$row['legacy_initialized']===0){
+            $db->query("INSERT IGNORE INTO ledger_legacy_invoices(invoice_id,recognized_paid,classification,reconciled_at)
+                SELECT id,
+                    CASE WHEN payment_status='paid' THEN payable_amount ELSE 0 END,
+                    CASE WHEN payment_status='paid' THEN 'historical_paid'
+                         WHEN payment_status='partial' THEN 'requires_reconciliation'
+                         ELSE 'historical_unpaid' END,
+                    CASE WHEN payment_status='partial' THEN NULL ELSE NOW() END
+                FROM invoices WHERE type IN ('sales_invoice','purchase_invoice')");
+            $db->query("UPDATE ledger_metadata SET legacy_initialized=1 WHERE id=1");
+        }
+        $db->commit();
+    }catch(Throwable $e){$db->rollback();throw $e;}
 }
