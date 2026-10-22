@@ -117,57 +117,35 @@ if ($stmt) {
     $stmt->close();
 }
 
-// ۵. محاسبه مبلغ پرداخت نشده فروش امروز
-// منطق «بدهی» مطابق بقیه برنامه: payment_status در حالت unpaid|partial
-// کل مبلغ قابل پرداخت به‌عنوان مانده شمرده می‌شود (مثل گزارش بدهی مشتریان).
-$todayUnpaid = 0;
-$stmt = $mysqli->prepare(
-    "SELECT COALESCE(
-         SUM(
-             CASE
-                 WHEN payment_status IN ('unpaid', 'partial')
-                 THEN payable_amount
-                 ELSE 0
-             END
-         ),
-         0
-     ) AS total
-     FROM invoices
-     WHERE type = 'sales_invoice'
-       AND invoice_date = ?"
-);
-if ($stmt) {
-    $stmt->bind_param('s', $todayGreg);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result ? $result->fetch_assoc() : null;
-    $todayUnpaid = (float) ($row['total'] ?? 0);
+// Amounts still unpaid on final sales invoices; payments and returns are allocated
+// separately. Historical partials with unknown paid amounts are NOT guessed.
+$unpaidSqlBase = "SELECT COALESCE(SUM(CASE WHEN i.legacy_paid_amount IS NULL THEN 0 ELSE
+   GREATEST(0,i.payable_amount-i.legacy_paid_amount-COALESCE(pa.paid,0)-COALESCE(ra.credited,0))
+   END),0) AS total,
+   COALESCE(SUM(i.legacy_paid_amount IS NULL),0) AS unknown_count
+   FROM invoices i
+   LEFT JOIN (
+      SELECT invoice_id,SUM(amount) paid FROM account_payment_allocations
+      WHERE reversed_at IS NULL GROUP BY invoice_id
+   ) pa ON pa.invoice_id=i.id
+   LEFT JOIN (
+      SELECT invoice_id,SUM(amount) credited FROM account_return_allocations GROUP BY invoice_id
+   ) ra ON ra.invoice_id=i.id
+   WHERE i.type='sales_invoice' AND ";
+$todayUnpaid=0;$todayUnknown=0;
+$stmt=$mysqli->prepare($unpaidSqlBase."i.invoice_date=?");
+if($stmt) {
+    $stmt->bind_param('s',$todayGreg);$stmt->execute();
+    $row=$stmt->get_result()->fetch_assoc();
+    $todayUnpaid=(float)($row['total']??0);$todayUnknown=(int)($row['unknown_count']??0);
     $stmt->close();
 }
-
-// ۶. محاسبه مبلغ پرداخت نشده فروش ماه جاری
-$monthlyUnpaid = 0;
-$stmt = $mysqli->prepare(
-    "SELECT COALESCE(
-         SUM(
-             CASE
-                 WHEN payment_status IN ('unpaid', 'partial')
-                 THEN payable_amount
-                 ELSE 0
-             END
-         ),
-         0
-     ) AS total
-     FROM invoices
-     WHERE type = 'sales_invoice'
-       AND invoice_date BETWEEN ? AND ?"
-);
-if ($stmt) {
-    $stmt->bind_param('ss', $monthStartGreg, $monthEndGreg);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result ? $result->fetch_assoc() : null;
-    $monthlyUnpaid = (float) ($row['total'] ?? 0);
+$monthlyUnpaid=0;$monthlyUnknown=0;
+$stmt=$mysqli->prepare($unpaidSqlBase."i.invoice_date BETWEEN ? AND ?");
+if($stmt) {
+    $stmt->bind_param('ss',$monthStartGreg,$monthEndGreg);$stmt->execute();
+    $row=$stmt->get_result()->fetch_assoc();
+    $monthlyUnpaid=(float)($row['total']??0);$monthlyUnknown=(int)($row['unknown_count']??0);
     $stmt->close();
 }
 // ═══════════════════════════════════════════════════════════════════
@@ -273,9 +251,9 @@ foreach ($salesByDay as $date => $amount) {
             </div>
         </div>
         <div class="metric-value-large"><?php echo formatMoney(number_format($todaySales, 2, '.', '')); ?></div>
-        <?php if ($todayUnpaid > 0): ?>
+        <?php if ($todayUnpaid > 0 || $todayUnknown > 0): ?>
         <div class="metric-unpaid-amount">
-            مبلغ پرداخت نشده: <?php echo formatMoney(number_format($todayUnpaid, 2, '.', '')); ?>
+            مانده باز فاکتورهای امروز: <?php echo formatMoney(number_format($todayUnpaid, 2, '.', '')); ?><?php if ($todayUnknown > 0): ?> | <?php echo $todayUnknown; ?> فاکتور نیازمند تطبیق تاریخی<?php endif; ?>
         </div>
         <?php endif; ?>
     </div>
@@ -287,9 +265,9 @@ foreach ($salesByDay as $date => $amount) {
             </div>
         </div>
         <div class="metric-value-large"><?php echo formatMoney(number_format($monthlySales, 2, '.', '')); ?></div>
-        <?php if ($monthlyUnpaid > 0): ?>
+        <?php if ($monthlyUnpaid > 0 || $monthlyUnknown > 0): ?>
         <div class="metric-unpaid-amount">
-            مبلغ پرداخت نشده: <?php echo formatMoney(number_format($monthlyUnpaid, 2, '.', '')); ?>
+            مانده باز فاکتورهای ماه: <?php echo formatMoney(number_format($monthlyUnpaid, 2, '.', '')); ?><?php if ($monthlyUnknown > 0): ?> | <?php echo $monthlyUnknown; ?> فاکتور نیازمند تطبیق تاریخی<?php endif; ?>
         </div>
         <?php endif; ?>
     </div>
