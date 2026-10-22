@@ -159,6 +159,7 @@ $(function () {
                 + '<td>' + stLbl + '</td>'
                 + '<td>' + fmtRial(r.payable_amount) + ' ' + window.Currency.label + '</td>'
                 + '<td class="invoice-actions">'
+                + (!isPro ? '<a class="button-secondary small" href="?page=accounting-ledger&kind=' + (isSales ? 'customer' : 'supplier') + '&party_id=' + encodeURIComponent(isSales ? r.customer_id : r.supplier_id) + '">دریافت / پرداخت</a> ' : '')
                 + '<button class="button-secondary small invoice-edit" data-id="' + r.id + '" type="button">مشاهده/ویرایش</button> '
                 + (isPro ? '<button class="button-secondary small invoice-convert" data-id="' + r.id + '" type="button">تبدیل به قطعی</button> ' : '')
                 + (isSales ? '<button class="button-secondary small invoice-pdf" data-id="' + r.id + '" data-number="' + escAttr(r.invoice_number) + '" type="button">تولید و چاپ فاکتور</button> ' : '')
@@ -286,8 +287,8 @@ $(function () {
         var paymentTypes = '<option value="cash">نقدی</option>'
             + '<option value="pos" selected>کارت خوان</option>'
             + '<option value="bank_transfer">واریز وجه</option>';
-        var statuses = '<option value="unpaid">پرداخت نشده</option>'
-            + '<option value="paid" selected>پرداخت شده</option>'
+        var statuses = '<option value="unpaid" selected>پرداخت نشده</option>'
+            + '<option value="paid">پرداخت شده</option>'
             + '<option value="partial">پرداخت جزئی</option>';
         var typeOpts = isSales
             ? '<option value="sales_invoice">فاکتور فروش</option><option value="sales_proforma">پیش فاکتور فروش</option>'
@@ -303,7 +304,7 @@ $(function () {
             + '<div class="form-row"><label>شماره فاکتور</label><input id="invNumber" type="text" readonly value="' + escAttr(data ? data.invoice_number : (isEdit ? '' : 'به صورت خودکار')) + '"></div>'
             + '<div class="form-row"><label>نوع</label><select id="invType">' + typeOpts.replace('value="' + typeVal + '"', 'value="' + typeVal + '" selected') + '</select></div>'
             + '<div class="form-row"><label>نوع پرداخت</label><select id="invPaymentType">' + paymentTypes + '</select></div>'
-            + '<div class="form-row"><label>وضعیت پرداخت</label><select id="invPaymentStatus">' + statuses + '</select></div>'
+            + '<div class="form-row"><label>وضعیت پرداخت (محاسبه خودکار)</label><select id="invPaymentStatus" disabled>' + statuses + '</select></div>'
             + '<div class="form-row"><label>تاریخ (شمسی)</label>'
             + '<input type="text" id="invDateDisplay" class="inv-date-display" readonly="readonly" autocomplete="off" placeholder="۱۴۰۵/۰۵/۲۳" style="direction:ltr;text-align:center;">'
             + '<input type="hidden" id="invDate" name="invoice_date" value="' + escAttr(data ? data.invoice_date : todayISO()) + '">'
