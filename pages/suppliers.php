@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../assets/php/db.php';
+require_once __DIR__ . '/../assets/php/accounting_ledger.php';
+require_once __DIR__ . '/../assets/php/currency.php';
 
 $suppliers = [];
 $query = "
@@ -31,6 +33,13 @@ if ($result) {
     }
     $result->free();
 }
+$balances = acct_party_balances($mysqli, 'supplier');
+foreach ($suppliers as &$acctRow) {
+    $ledger = $balances[(int)$acctRow['id']] ?? ['balance'=>'0','unreconciled'=>false];
+    $acctRow['unpaid'] = $ledger['balance'];
+    $acctRow['unreconciled_history'] = $ledger['unreconciled'];
+}
+unset($acctRow);
 ?>
 <div class="card">
     <div class="page-actions">
@@ -82,7 +91,7 @@ if ($result) {
                             <td><?php echo htmlspecialchars($supplier['phone'] ?? ''); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($supplier['address'] ?? '')); ?></td>
                             <td><?php echo number_format($supplier['total_purchases']); ?></td>
-                            <td><?php echo number_format($supplier['unpaid']); ?></td>
+                            <td><?php echo ($supplier['unreconciled_history'] ? 'نیازمند تطبیق' : formatMoneyNumber((string) $supplier['unpaid'])); ?></td>
                             <td>
                                 <button class="button-secondary small edit-supplier" type="button">ویرایش</button>
                                 <button class="button-danger small delete-supplier" type="button">حذف</button>
