@@ -733,6 +733,13 @@ function getInvoice(mysqli $mysqli, int $invoiceId): ?array
     }
 
     $inv['items'] = $items;
+    if (isFinal($inv['type'])) {
+        require_once __DIR__ . '/accounting_ledger.php';
+        $finance=ledger_invoice_balance($mysqli,$invoiceId);
+        $inv['settled_amount']=$finance['settled'];
+        $inv['remaining_amount']=$finance['balance'];
+        $inv['legacy_needs_review']=$finance['needs_review'];
+    }
     return $inv;
 }
 
@@ -1679,6 +1686,13 @@ function listInvoices(mysqli $mysqli, array $filter): array
             $r['party_name'] = $partyCache['s'][$sid];
         }
         $r['invoice_date_shamsi'] = $r['invoice_date'] ? jdate('j F Y', strtotime($r['invoice_date'])) : '';
+        if (isFinal($r['type'])) {
+            require_once __DIR__ . '/accounting_ledger.php';
+            $finance=ledger_invoice_balance($mysqli,(int)$r['id']);
+            $r['settled_amount']=$finance['settled'];
+            $r['remaining_amount']=$finance['balance'];
+            $r['legacy_needs_review']=$finance['needs_review'];
+        }
         unset($r);
     }
 
