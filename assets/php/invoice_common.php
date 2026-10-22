@@ -965,6 +965,11 @@ function createInvoice(mysqli $mysqli, array $in): array
             }
         }
 
+        // Consume any previous unapplied credit without re-booking cash.
+        if (isFinal($type)) {
+            acct_apply_credit($mysqli, isSales($type)?'customer':'supplier', $partyId, $invoiceId, true);
+        }
+
         // Book money independently of the invoice, in the SAME DB transaction.
         // Advance for a proforma stays unallocated until conversion.
         $initial = (string)($in['initial_payment'] ?? '0');
@@ -1182,6 +1187,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
 
     $mysqli->begin_transaction();
     try {
+        acct_lock_party($mysqli,isSales($newType)?'customer':'supplier',(int)$in['party_id']);
         if (isFinal($newType)) {
             /* کالاهای عادی (به‌جز بسته‌ها) — همان منطق دلتم قبلی */
             $oldNorm = [];
@@ -1510,6 +1516,7 @@ function convertInvoice(mysqli $mysqli, int $invoiceId): array
             $chunk=money_cmp($remaining,$advance['amount'])<0?$remaining:$advance['amount'];
             acct_allocate($mysqli,(int)$advance['id'],$invoiceId,$chunk,$partyKind,$partyId);
         }
+        acct_apply_credit($mysqli,$partyKind,$partyId,$invoiceId,true);
         acct_sync_invoice($mysqli,$invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'پیش‌فاکتور با موفقیت به فاکتور قطعی تبدیل شد.', 'invoice_id' => $invoiceId];
