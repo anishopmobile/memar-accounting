@@ -160,3 +160,63 @@ of more than ten distinct files to the library.
 
 No files in Excel import/export, banking, or payment were changed for these
 follow-up fixes. **Do not merge until the reviewer signs off on staging.**
+
+
+## Gallery, folder smoothness, security and large-backup follow-up
+
+The product and defective-goods thumbnail viewer now requests the **linked gallery**
+from the existing `media_api.php?action=product` / `action=defective`
+read-only endpoints. It opens immediately with the cached thumbnail, loads only
+one full-size original at a time, and supports next/previous buttons, an image
+strip, keyboard arrows, Escape, and touch swipe. Unsaved product editors use
+their currently selected media IDs without an extra database round-trip.
+Single-media library and category images retain simple single-image view.
+No change is made to stored invoice item snapshots, totals, or inventory math.
+
+The library's folder selector is cached per page session and reads folder
+counts through a single indexed aggregate query. Moving a media item updates
+only its current card and the local folder counts. The whole grid is not
+replaced by a reload, and the active folder remains selected. Navigating to a
+different page or opening a new page may legitimately load its content via AJAX.
+
+For ZIP recovery, after checking the destination file's byte count and
+SHA-256 against the manifest, already-correct images are not decompressed from
+the ZIP a second time. **Missing** images are always decompressed, staged and
+SHA-256 verified before use. If the current SQL dump hash also exactly matches
+the backup and no images are missing, the restore avoids destructive SQL replay.
+A file inside a ZIP that is not used because an identical verified copy already
+exists is not fully decompressed solely for archival checking; run an independent
+backup archive-integrity check before moving archives to long-term storage.
+First-time full restores remain necessarily limited by storage and SQL import
+speed. Backup creation and the transaction/rollback handling for changed SQL
+remain in place.
+
+The settings endpoint for store logo, stamp and signature is now authenticated
+and CSRF-protected. All **new** uploaded branding images, including the app
+menu logo, undergo genuine MIME/dimension validation, a size cap and GD
+decode/re-encoding into a randomly named local JPEG/PNG/WebP file; forged
+Content-Type and extensions are not trusted. Old configured image files are
+still respected for backwards compatibility. The UI restricts its file dialog
+to the supported formats. The installer must keep `assets/uploads` in a
+non-executable static-files web-server location.
+
+### Release verification specifically requested
+
+- A product with three images: open its thumbnail in product list, sales and
+  purchase pickers, invoice lines and inventory reports; navigate all images,
+  including arrow keys/swipe and image strip. Try an unsaved editor with a
+  newly uploaded image and an existing image selected from the library.
+- Create multiple logical folders; move a photo between folders while the
+  manager is open, confirm no page reload, the filter remains selected and
+  both folders work after a **manual** browser refresh. Check behavior with
+  1000+ images/50+ folders as a performance comparison.
+- Restore the same ZIP twice into a staging clone to validate the no-copy
+  path; remove one media original, restore and ensure it is verified/recreated.
+  Perform a full restore on a fresh staging clone to measure first-time cost
+  independently of already-present files. Re-check prices, stock and totals.
+- In store settings upload JPEG/PNG/WebP logo, stamp and signature, reload the
+  page and generate PDF with all three. Test an invalid or disguised file and
+  a missing CSRF token: both must be rejected. Re-check the separate app menu
+  logo and confirm previously uploaded images still display.
+- Confirm no Excel import/export or payment source files changed. Hold
+  `main` until the staging results have been approved by the user.
