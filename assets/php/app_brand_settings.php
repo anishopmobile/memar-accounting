@@ -2,7 +2,7 @@
 /** UI-only app branding; independent of the invoice store logo and payment. */
 declare(strict_types=1);
 require_once __DIR__ . '/boot.php';
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/safe_store_image.php';
 
 function brand_settings_data(mysqli $mysqli): array {
     $r = $mysqli->query('SELECT display_mode, logo_path FROM app_brand_settings WHERE id = 1');
@@ -37,31 +37,15 @@ if (!in_array($mode, ['name','logo','logo_name'], true)) {
 $logo = $settings['logo_path'];
 $newPath = null;
 if (isset($_FILES['brand_logo']) && ($_FILES['brand_logo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
-    $upload = $_FILES['brand_logo'];
-    if (($upload['error'] ?? -1) !== UPLOAD_ERR_OK || ($upload['size'] ?? 0) <= 0
-        || ($upload['size'] ?? 0) > 2 * 1024 * 1024
-        || !is_uploaded_file((string) ($upload['tmp_name'] ?? ''))) {
-        respond_error('فایل لوگو باید یک تصویر معتبر حداکثر ۲ مگابایتی باشد.', 422);
+    try {
+        $saved = store_image_save($_FILES['brand_logo'], 'brand_logo', 2 * 1024 * 1024);
+    } catch (Throwable $e) {
+        if (!($e instanceof InvalidArgumentException)) error_log('brand image upload: '.$e->getMessage());
+        respond_error($e instanceof InvalidArgumentException
+            ? $e->getMessage() : 'بارگذاری امن لوگو امکان‌پذیر نیست.', 422);
     }
-    // Validate actual bytes instead of trusting uploaded MIME/extension.
-    $info = @getimagesize($upload['tmp_name']);
-    $mime = $info['mime'] ?? '';
-    $formats = ['image/png'=>'png', 'image/jpeg'=>'jpg', 'image/webp'=>'webp'];
-    if (!isset($formats[$mime]) || ($info[0] ?? 0) > 3000 || ($info[1] ?? 0) > 3000
-        || ($info[0] ?? 0) < 1 || ($info[1] ?? 0) < 1) {
-        respond_error('لوگو باید PNG، JPG یا WebP معتبر با ابعاد حداکثر ۳۰۰۰ پیکسل باشد.', 422);
-    }
-    $dir = __DIR__ . '/../uploads';
-    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
-        respond_error('پوشه نگهداری لوگو در دسترس نیست.', 500);
-    }
-    $file = 'brand_' . bin2hex(random_bytes(16)) . '.' . $formats[$mime];
-    $newPath = $dir . '/' . $file;
-    if (!move_uploaded_file($upload['tmp_name'], $newPath)) {
-        respond_error('آپلود لوگو ناموفق بود.', 500);
-    }
-    @chmod($newPath, 0644);
-    $logo = 'assets/uploads/' . $file;
+    $newPath = $saved['absolute'];
+    $logo = $saved['path'];
 }
 if ($mode !== 'name' && !brand_local_image($logo)) {
     if ($newPath !== null) { @unlink($newPath); }
