@@ -164,4 +164,28 @@ $now=$mysqli->query('SELECT void_reason FROM ledger_payments WHERE id='.(int)$vo
 ck(str_contains($now['void_reason'],'mistaken'),'documented void explanation survives');
 try{ledger_void_payment($mysqli,'customer',$voidParty,(int)$voidPayment['payment_id'],'Attempt to void same payment a second time');throw new RuntimeException('double void accepted');}
 catch(DomainException $e){ck(true,'duplicate void rejected');}
+// Two independent PHP requests race to allocate 80 each to a 100 invoice.
+$raceParty=addParty($mysqli,'customer');
+$raceInvoice=addInvoice($mysqli,'customer',$raceParty,'100.00');
+$worker=__DIR__.'/accounting_ledger_race_worker.php';
+$cmd=escapeshellarg(PHP_BINARY).' '.escapeshellarg($worker).' customer '.(int)$raceParty.' '.(int)$raceInvoice;
+$spec=[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']];
+$children=[];
+for($i=0;$i<2;$i++){
+    $proc=proc_open($cmd,$spec,$pipes,null,['CI'=>'true']);
+    if(!is_resource($proc))throw new RuntimeException('Unable to run concurrent PHP test.');
+    fclose($pipes[0]);
+    $children[]=[$proc,$pipes];
+}
+$statuses=[];
+foreach($children as [$proc,$pipes]) {
+    $stdout=stream_get_contents($pipes[1]);fclose($pipes[1]);
+    $stderr=stream_get_contents($pipes[2]);fclose($pipes[2]);
+    $code=proc_close($proc);
+    $statuses[]=$code;
+    echo 'RACE CHILD status='.$code.' '.trim($stdout).' '.trim($stderr)."\n";
+}
+sort($statuses);
+ck($statuses===[0,3],'concurrent settlement permits exactly one of two 80/100 transactions');
+ck(ledger_invoice_balance($mysqli,$raceInvoice)['due']==='20.00','concurrency preserves invoice 20 balance');
 echo "ALL ACCOUNTING LEDGER MYSQL INTEGRATION CHECKS PASSED\n";
