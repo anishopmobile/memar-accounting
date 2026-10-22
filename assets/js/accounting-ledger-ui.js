@@ -56,6 +56,14 @@ $(function() {
         +'<td>'+(!p.is_reversal&&!p.is_reversed&&!zero(p.unallocated)&&p.direction===(kind==='customer'?'in':'out')?'<button type="button" class="button-secondary small acctUseCredit" data-id="'+p.id+'" data-available="'+safe(p.unallocated)+'">تخصیص اعتبار</button>':'')+' '+(!p.is_reversal&&!p.is_reversed?'<button type="button" class="button-secondary small acctReverse" data-id="'+p.id+'">ثبت سند اصلاحی</button>':'ابطال‌شده')+'</td></tr>';
     });
     out+='</tbody></table></div>';
+    if(kind==='customer' && (s.returns||[]).length) {
+      out+='<h3>اعتبارهای برگشت از فروش</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>سند برگشت</th><th>مبلغ</th><th>مصرف‌شده</th><th>اعتبار باقی‌مانده</th><th></th></tr></thead><tbody>';
+      (s.returns||[]).forEach(function(q) {
+        out+='<tr><td>'+safe(q.number)+'</td><td>'+fmt(q.amount)+'</td><td>'+fmt(q.allocated)+'</td><td>'+fmt(q.available)+'</td><td>'+
+        (!zero(q.available)?'<button type="button" class="button-secondary small acctApplyReturn" data-id="'+q.id+'" data-available="'+safe(q.available)+'">تخصیص اعتبار به فاکتور</button>':'—')+'</td></tr>';
+      });
+      out+='</tbody></table></div>';
+    }
     $('#acctContent').html(out);
     $('#acctDate').val(new Date().toLocaleDateString('en-CA'));
     loadCashAccounts();updateTotals();
@@ -105,6 +113,18 @@ $(function() {
     var id=$(this).data('id'),value=prompt('مبلغ واقعی پرداخت‌شده قبلی را وارد کنید ('+window.Currency.label+'). از حدس زدن خودداری کنید.','0');
     if(value===null)return;
     $.post('assets/php/accounting_ledger_action.php',{action:'reconcile_legacy',csrf_token:csrf,invoice_id:id,historical_paid:value})
+      .done(load).fail(fail);
+  });
+  $(document).on('click','.acctApplyReturn',function(){
+    var returnId=Number($(this).data('id')),available=String($(this).data('available'));
+    var targets=(statement.invoices||[]).filter(function(i){return !i.unreconciled&&!zero(i.remaining);});
+    if(!targets.length){alert('فاکتور باز برای تخصیص اعتبار برگشت وجود ندارد.');return;}
+    var invoiceId=prompt('شناسه فاکتور مقصد: '+targets.map(function(i){return i.id+' ('+i.number+')';}).join('،'),String(targets[0].id));
+    if(invoiceId===null)return;
+    if(!targets.some(function(i){return String(i.id)===invoiceId})){alert('فاکتور مقصد معتبر نیست.');return;}
+    var amount=prompt('مبلغ اعتبار برگشت برای تخصیص ('+window.Currency.label+')',input(available));
+    if(amount===null)return;
+    $.post('assets/php/accounting_ledger_action.php',{action:'apply_return_credit',csrf_token:csrf,return_id:returnId,invoice_id:invoiceId,amount:amount})
       .done(load).fail(fail);
   });
   $(document).on('click','.acctUseCredit',function(){
