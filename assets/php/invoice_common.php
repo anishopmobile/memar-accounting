@@ -963,6 +963,44 @@ function createInvoice(mysqli $mysqli, array $in): array
             }
         }
 
+        // Initial receipts/disbursements must commit in the SAME transaction as the invoice.
+        // Proforma deposits are unapplied party credits until conversion to a final invoice.
+        $initialPayments = $in['initial_payments'] ?? [];
+        if (!is_array($initialPayments) || count($initialPayments) > 10) {
+            throw new InvalidArgumentException('اطلاعات پرداخت اولیه نامعتبر است.');
+        }
+        foreach ($initialPayments as $paymentIndex => $payment) {
+            if (!is_array($payment)) throw new InvalidArgumentException('پرداخت اولیه نامعتبر است.');
+            $amount = ledger_decimal($payment['amount'] ?? '');
+            if (money_cmp($amount,'0') <= 0) throw new InvalidArgumentException('مبلغ پرداخت باید مثبت باشد.');
+            $allocations = $payment['allocations'] ?? [];
+            if (!$allocations && isFinal($type)) {
+                $balance = ledger_invoice_balance($mysqli, $invoiceId, true);
+                $due = $balance['due'];
+                if (money_cmp($due, '0') > 0) {
+                    $towardCurrent = money_cmp($amount,$due) >= 0 ? $due : $amount;
+                    $allocations = [['invoice_id'=>$invoiceId,'amount'=>$towardCurrent]];
+                }
+            } else {
+                foreach ($allocations as &$allocation) {
+                    if (($allocation['invoice_id'] ?? null) === 'current') $allocation['invoice_id'] = $invoiceId;
+                }
+                unset($allocation);
+            }
+            $ledgerKind = isSales($type) ? 'customer' : 'supplier';
+            $referenceToken = 'initial_' . substr(hash('sha256',$invoiceId . ':' . $paymentIndex . ':' . ($clientToken ?? '')),0,54);
+            $paymentNote = trim((string)($payment['note'] ?? ''));
+            if (!isFinal($type)) $paymentNote = 'پیش‌پرداخت مرتبط با پیش‌فاکتور ' . $invoiceNumber . ' | ' . $paymentNote;
+            ledger_record_payment($mysqli,[
+                'party_kind'=>$ledgerKind,'party_id'=>$partyId,
+                'amount'=>$amount,'method'=>$payment['method'] ?? $in['payment_type'],
+                'paid_on'=>$payment['paid_on'] ?? $in['invoice_date'],
+                'reference_no'=>$payment['reference_no'] ?? '',
+                'note'=>$paymentNote,
+                'request_token'=>$referenceToken,'allocations'=>$allocations
+            ],true);
+        }
+
         $mysqli->commit();
         return ['ok' => true, 'message' => 'فاکتور با موفقیت ثبت شد.', 'invoice_id' => $invoiceId];
     } catch (Exception $e) {
