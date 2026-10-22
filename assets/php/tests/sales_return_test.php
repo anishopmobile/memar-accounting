@@ -20,6 +20,16 @@ require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../sales_return_common.php';
 require_once __DIR__ . '/../sales_return_pdf_data.php';
 
+// Endpoint subprocesses must use a real database-bound authenticated user,
+// not a legacy username-only session (which is intentionally no longer valid).
+$srTestAuthUsername = 'sr_smoke_' . bin2hex(random_bytes(5));
+$srTestAuthHash = password_hash('SrSmokeOnly234', PASSWORD_DEFAULT);
+$srAuthStmt = $mysqli->prepare('INSERT INTO users (username, password_hash) VALUES (?,?)');
+$srAuthStmt->bind_param('ss', $srTestAuthUsername, $srTestAuthHash);
+$srAuthStmt->execute();
+$srTestAuthId = (int)$srAuthStmt->insert_id;
+$srAuthStmt->close();
+
 $pass = 0;
 $fail = 0;
 $failures = [];
@@ -424,13 +434,13 @@ function t_run_child(string $code): string
     return $out;
 }
 $saveAbs = realpath(__DIR__ . '/../sales_return_save.php');
-$code1 = 'session_start();$_SESSION["auth_user"]="memar";$_SESSION["csrf_token"]="good-token";'
+$code1 = 'session_start();$_SESSION["auth_user_id"]=' . (int)$srTestAuthId . ';$_SESSION["csrf_token"]="good-token";'
     . '$_POST=["csrf_token"=>"bad-token","invoice_id"=>"1","return_date"=>"2026-01-01","note"=>"","items"=>"[]"];'
     . 'require ' . var_export($saveAbs, true) . ';';
 $out1 = t_run_child($code1);
 t_check('invalid CSRF => success false', str_contains($out1, '"success":false'), substr($out1, 0, 80));
 t_check('invalid CSRF message mentions CSRF', mb_strpos($out1, 'CSRF') !== false);
-$code2 = 'session_start();$_SESSION["auth_user"]="memar";$_SESSION["csrf_token"]="good-token";'
+$code2 = 'session_start();$_SESSION["auth_user_id"]=' . (int)$srTestAuthId . ';$_SESSION["csrf_token"]="good-token";'
     . '$_POST=["csrf_token"=>"good-token","invoice_id"=>"9999999","return_date"=>"2026-01-01","note"=>"","items"=>"[]"];'
     . 'require ' . var_export($saveAbs, true) . ';';
 $out2 = t_run_child($code2);
@@ -467,7 +477,8 @@ t_check('second writer blocked while first holds invoice lock', $blocked === tru
 echo "\n== Test L/M: PDF generation (existing mPDF architecture) ==\n";
 function t_run_pdf_endpoint(string $absEndpoint, int $id, string $mode): string
 {
-    $code = 'session_start();$_SESSION["auth_user"]="memar";'
+    global $srTestAuthId;
+    $code = 'session_start();$_SESSION["auth_user_id"]=' . (int)$srTestAuthId . ';'
         . '$_GET=["id"=>"' . $id . '","mode"=>"' . $mode . '"];'
         . 'require ' . var_export($absEndpoint, true) . ';';
     $tmp = tempnam(sys_get_temp_dir(), 'sr-pdf-');
@@ -551,6 +562,10 @@ $mysqli->query("DELETE FROM invoices WHERE id IN (SELECT ii.invoice_id FROM invo
 $mysqli->query("DELETE FROM products WHERE code LIKE 'T-SR-%'");
 $mysqli->query("DELETE FROM customers WHERE first_name LIKE 'خریدار تست%' OR first_name LIKE 'مشتری تست%'");
 $mysqli->query("DELETE FROM suppliers WHERE company_name LIKE 'تامپیر تست%'");
+$cleanupAuth = $mysqli->prepare('DELETE FROM users WHERE id = ?');
+$cleanupAuth->bind_param('i', $srTestAuthId);
+$cleanupAuth->execute();
+$cleanupAuth->close();
 
 echo "\n==============================\n";
 echo "PASS: $pass  FAIL: $fail\n";
