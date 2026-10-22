@@ -631,6 +631,76 @@ function acct_party_summary(mysqli $db,string $kind,int $id): array {
     ];
 }
 
+/**
+ * Batch balances for reports/lists: preaggregate each ledger source separately.
+ * Avoid six SQL roundtrips per party and prevent multiplication from multi-joins.
+ * Input IDs are bound integers; table names/type are hard-coded via whitelist.
+ */
+function acct_party_summaries(mysqli $db,string $kind,array $ids): array {
+    $table=acct_party_table($kind);
+    $ids=array_values(array_unique(array_filter(array_map('intval',$ids),fn($x)=>$x>0)));
+    if(!$ids)return [];
+    $fk=$kind==='customer'?'customer_id':'supplier_id';
+    $type=$kind==='customer'?'sales_invoice':'purchase_invoice';
+    $flow=$kind==='customer'?'in':'out';
+    $placeholders=implode(',',array_fill(0,count($ids),'?'));
+    $returns=$kind==='customer'
+      ? 'LEFT JOIN (SELECT customer_id party_id,SUM(payable_amount) v FROM sales_returns GROUP BY customer_id) ret ON ret.party_id=p.id'
+      : '';
+    $retExpr=$kind==='customer'?'COALESCE(ret.v,0)':'0';
+    $sql="SELECT p.id,
+          COALESCE(inv.v,0) invoiced,
+          {$retExpr} returns_total,
+          COALESCE(legacy.v,0) legacy_paid,
+          COALESCE(op.v,0) opening_total,
+          COALESCE(trans.v,0) paid_total,
+          COALESCE(pend.v,0) pending_total
+        FROM {$table} p
+        LEFT JOIN (
+           SELECT {$fk} party_id,SUM(payable_amount) v
+           FROM invoices WHERE type='{$type}' GROUP BY {$fk}
+        ) inv ON inv.party_id=p.id
+        {$returns}
+        LEFT JOIN (
+           SELECT i.{$fk} party_id,SUM(l.recognized_amount) v
+           FROM accounting_legacy_invoices l JOIN invoices i ON i.id=l.invoice_id
+           WHERE i.type='{$type}' GROUP BY i.{$fk}
+        ) legacy ON legacy.party_id=p.id
+        LEFT JOIN (
+           SELECT party_id,SUM(signed_amount) v FROM accounting_opening_entries
+           WHERE party_kind='{$kind}' GROUP BY party_id
+        ) op ON op.party_id=p.id
+        LEFT JOIN (
+           SELECT party_id,SUM(CASE WHEN flow='{$flow}' THEN amount ELSE -amount END) v
+           FROM accounting_receipts WHERE party_kind='{$kind}' AND status='posted'
+           GROUP BY party_id
+        ) trans ON trans.party_id=p.id
+        LEFT JOIN (
+           SELECT i.{$fk} party_id,COUNT(*) v
+           FROM accounting_legacy_invoices l JOIN invoices i ON i.id=l.invoice_id
+           WHERE l.verified=0 AND i.type='{$type}' GROUP BY i.{$fk}
+        ) pend ON pend.party_id=p.id
+        WHERE p.id IN ({$placeholders})";
+    $st=$db->prepare($sql);
+    $types=str_repeat('i',count($ids));
+    $st->bind_param($types,...$ids);$st->execute();$rs=$st->get_result();$out=[];
+    while($row=$rs->fetch_assoc()) {
+        $balance=bcsub(bcadd(bcsub($row['invoiced'],$row['returns_total'],2),$row['opening_total'],2),
+            bcadd($row['legacy_paid'],$row['paid_total'],2),2);
+        $out[(int)$row['id']]=[
+            'invoiced'=>$row['invoiced'],
+            'returns'=>$row['returns_total'],'legacy'=>$row['legacy_paid'],
+            'opening'=>$row['opening_total'],'net_settled'=>$row['paid_total'],
+            'balance'=>$balance,
+            'debt'=>bccomp($balance,'0',2)>0?$balance:'0.00',
+            'credit'=>bccomp($balance,'0',2)<0?bcsub('0',$balance,2):'0.00',
+            'pending_legacy'=>(int)$row['pending_total']
+        ];
+    }
+    $st->close();
+    return $out;
+}
+
 /** Exact chronological statement; positive delta increases party debt. */
 function acct_statement(mysqli $db,string $kind,int $id): array {
     $summary=acct_party_summary($db,$kind,$id);
