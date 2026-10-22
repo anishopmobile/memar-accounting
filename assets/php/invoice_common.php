@@ -971,20 +971,33 @@ function createInvoice(mysqli $mysqli, array $in): array
             }
         }
 
-        // One atomic invoice + initial receipt; proformas never create debts or cash movements.
-        $initial = (string)($in['initial_payment_amount'] ?? '0');
-        if (isFinal($type) && money_cmp($initial,'0') > 0) {
+        // Multiple payment methods can settle one invoice atomically.
+        $payments = $in['initial_payments'] ?? [];
+        if (!$payments && money_cmp((string)($in['initial_payment_amount'] ?? '0'),'0') > 0) {
+            $payments=[['amount'=>(string)$in['initial_payment_amount'],'method'=>$in['payment_type']]];
+        }
+        if (!is_array($payments)) throw new Exception('تراکنش‌های اولیه نامعتبرند.');
+        $initialTotal='0';
+        foreach ($payments as $index=>$payment) {
+            if (!is_array($payment) || !in_array($payment['method']??'',PAYMENT_TYPES,true)) {
+                throw new Exception('روش پرداخت اولیه نامعتبر است.');
+            }
+            $amount=(string)($payment['amount']??'0');
+            if (money_cmp($amount,'0') <= 0) continue;
+            $initialTotal=money_add($initialTotal,$amount);
+            if (money_cmp($initialTotal,$totals['payable_amount'])>0) throw new Exception('جمع پرداخت‌های اولیه از مبلغ فاکتور بیشتر است.');
+            if (!isFinal($type)) throw new Exception('پیش‌فاکتور نمی‌تواند پرداخت قطعی ایجاد کند.');
             require_once __DIR__ . '/accounting_ledger.php';
-            if (money_cmp($initial,$totals['payable_amount']) > 0) throw new Exception('پرداخت اولیه از مبلغ فاکتور بیشتر است.');
             ledger_post_in_tx($mysqli,[
                 'party_kind'=>isSales($type)?'customer':'supplier',
                 'party_id'=>$partyId,
                 'direction'=>isSales($type)?'in':'out',
-                'amount'=>$initial,
-                'method'=>$in['payment_type'],
+                'amount'=>$amount,
+                'method'=>$payment['method'],
                 'payment_date'=>$in['invoice_date'],
-                'request_key'=>'invoice-initial-'.$invoiceId,
-                'allocations'=>[['invoice_id'=>$invoiceId,'amount'=>$initial]]
+                'reference_number'=>substr((string)($payment['reference_number']??''),0,120),
+                'request_key'=>'invoice-initial-'.$invoiceId.'-'.$index,
+                'allocations'=>[['invoice_id'=>$invoiceId,'amount'=>$amount]]
             ]);
         }
         if (isFinal($type)) {
