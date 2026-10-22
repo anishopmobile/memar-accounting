@@ -190,7 +190,9 @@ $(function() {
   $(document).on('click','.acctReconcile',function(){
     var id=$(this).data('id'),value=prompt('مبلغ واقعی پرداخت‌شده قبلی را وارد کنید ('+window.Currency.label+'). از حدس زدن خودداری کنید.','0');
     if(value===null)return;
-    $.post('assets/php/accounting_ledger_action.php',{action:'reconcile_legacy',csrf_token:csrf,invoice_id:id,historical_paid:value})
+    var reason=prompt('مستند تعیین مبلغ پرداخت‌شده تاریخی را وارد کنید (حداقل ۵ نویسه):','بر اساس رسید پرداخت یا سوابق حسابداری');
+    if(reason===null)return;
+    $.post('assets/php/accounting_ledger_action.php',{action:'reconcile_legacy',csrf_token:csrf,invoice_id:id,historical_paid:value,reason:reason})
       .done(load).fail(fail);
   });
   $(document).on('click','.acctApplyReturn',function(){
