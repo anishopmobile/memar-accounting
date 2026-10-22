@@ -194,6 +194,35 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAIAAAACDbGyAAAAFElEQVR
       assert.equal(await page.locator('#defReportTable').count(),1);
       console.log('PASS defective-goods '+width+'px');
     }
+    // Account chip is a real dropdown and About Us is absent from top-level routes.
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({width,height:850});
+      await page.goto(base+'/index.php?page=dashboard');
+      assert.equal(await page.locator('.main-nav a[href="?page=about-us"]').count(),0,
+        'About Us must not remain a top-level nav item');
+      if (width < 1025) await page.locator('#sidebarOpen').click();
+      const toggle = page.locator('.account-nav-dropdown > .user-chip');
+      await toggle.click();
+      assert.equal(await toggle.getAttribute('aria-expanded'),'true','account dropdown expanded');
+      assert.equal(await page.locator('#accountNavMenu a[href="?page=account"]').count(),1,
+        'account settings remains reachable');
+      const about = page.locator('#accountNavMenu a[href="?page=about-us"]');
+      assert.equal(await about.isVisible(),true,'About Us is a visible account submenu option');
+      await page.keyboard.press('Escape');
+      assert.equal(await toggle.getAttribute('aria-expanded'),'false','Escape closes account menu');
+      await toggle.click();
+      await about.click();
+      await page.waitForURL('**?page=about-us');
+      assert.equal(await page.locator('h1').first().textContent(),'درباره ما',
+        'About Us remains a functioning authenticated page');
+      if (width < 1025) await page.locator('#sidebarOpen').click();
+      await page.locator('.account-nav-dropdown > .user-chip').click();
+      await page.locator('#accountNavMenu a[href="?page=account"]').click();
+      await page.waitForURL('**?page=account');
+      assert.equal(await page.locator('h1').first().textContent(),'حساب کاربری',
+        'account page remains reachable in account menu');
+      console.log('PASS account dropdown/About Us/navigation '+width+'px');
+    }
     await context.close();
   } finally {
     await browser.close();
