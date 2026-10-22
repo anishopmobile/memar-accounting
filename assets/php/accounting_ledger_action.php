@@ -122,8 +122,9 @@ try {
         $mysqli->begin_transaction();
         try {
             acct_party_lock($mysqli,$kind,(int)$id);
-            $stmt=$mysqli->prepare('INSERT INTO account_opening_balances(party_kind,party_id,amount,note) VALUES(?,?,?,?)');
-            $stmt->bind_param('siss',$kind,$id,$base,$note);$stmt->execute();$stmt->close();
+            $createdBy=auth_user_id();
+            $stmt=$mysqli->prepare('INSERT INTO account_opening_balances(party_kind,party_id,amount,note,created_by) VALUES(?,?,?,?,?)');
+            $stmt->bind_param('sissi',$kind,$id,$base,$note,$createdBy);$stmt->execute();$stmt->close();
             $mysqli->commit();
         } catch (Throwable $e) {$mysqli->rollback();throw $e;}
         respond_json(true,'مانده افتتاحیه ثبت شد.',['party_id'=>(int)$id]);
