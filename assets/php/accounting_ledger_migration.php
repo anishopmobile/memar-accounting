@@ -65,6 +65,18 @@ function migrate_accounting_ledger(mysqli $db): void
     if ($allocationCol && $allocationCol->num_rows===0) {
         $db->query("ALTER TABLE account_payment_allocations ADD COLUMN reversed_at DATETIME NULL");
     }
+    $db->query("CREATE TABLE IF NOT EXISTS account_return_allocations (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        return_id INT NOT NULL,
+        invoice_id INT NOT NULL,
+        amount DECIMAL(14,2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_ara_pair(return_id,invoice_id),
+        KEY idx_ara_invoice(invoice_id),
+        CONSTRAINT fk_ara_return FOREIGN KEY(return_id) REFERENCES sales_returns(id) ON DELETE RESTRICT,
+        CONSTRAINT fk_ara_invoice FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
+        CONSTRAINT chk_ara_amount CHECK(amount>0)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $db->query("CREATE TABLE IF NOT EXISTS account_opening_balances (
         party_kind ENUM('customer','supplier') NOT NULL,
         party_id INT NOT NULL,
