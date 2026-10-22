@@ -608,6 +608,12 @@ function createSalesReturn(mysqli $mysqli, array $in): array
 
 function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
 {
+    // A return already used as customer credit is immutable; preserve ledger history.
+    $ledgerCheck = $mysqli->prepare('SELECT 1 FROM account_return_allocations WHERE return_id=? LIMIT 1');
+    $ledgerCheck->bind_param('i',$returnId);$ledgerCheck->execute();$ledgerCheck->store_result();
+    $ledgerUsed=$ledgerCheck->num_rows>0;$ledgerCheck->close();
+    if($ledgerUsed) return ['ok'=>false,'message'=>'سند برگشت دارای اعتبار تخصیص‌یافته قابل ویرایش یا حذف نیست.'];
+
     $valid = sr_validate_basic_input($in);
     if (!$valid['ok']) {
         return ['ok' => false, 'message' => $valid['message']];
@@ -797,6 +803,12 @@ function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
 
 function deleteSalesReturn(mysqli $mysqli, int $returnId): array
 {
+    // A return already used as customer credit is immutable; preserve ledger history.
+    $ledgerCheck = $mysqli->prepare('SELECT 1 FROM account_return_allocations WHERE return_id=? LIMIT 1');
+    $ledgerCheck->bind_param('i',$returnId);$ledgerCheck->execute();$ledgerCheck->store_result();
+    $ledgerUsed=$ledgerCheck->num_rows>0;$ledgerCheck->close();
+    if($ledgerUsed) return ['ok'=>false,'message'=>'سند برگشت دارای اعتبار تخصیص‌یافته قابل ویرایش یا حذف نیست.'];
+
     $mysqli->begin_transaction();
     try {
         $stmt = $mysqli->prepare('SELECT * FROM sales_returns WHERE id = ? FOR UPDATE');
