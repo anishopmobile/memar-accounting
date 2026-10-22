@@ -24,8 +24,8 @@ function ledger_invoice_balance(mysqli $db, int $invoiceId, bool $lock=false): a
     $inv=$s->get_result()->fetch_assoc();$s->close();
     if (!$inv) throw new DomainException('فاکتور یافت نشد.');
     [$kind,$pid] = ledger_party_type($inv);
-    $s=$db->prepare('SELECT COALESCE(SUM(a.amount),0) AS allocated FROM ledger_allocations a JOIN ledger_payments p ON p.id=a.payment_id WHERE a.invoice_id=? AND p.voided_at IS NULL');
-    $s->bind_param('i',$invoiceId);$s->execute();$row=$s->get_result()->fetch_assoc();$s->close();
+    $s=$db->prepare('SELECT COALESCE((SELECT SUM(a.amount) FROM ledger_allocations a JOIN ledger_payments p ON p.id=a.payment_id WHERE a.invoice_id=? AND p.voided_at IS NULL),0) + COALESCE((SELECT SUM(a.amount) FROM ledger_credit_allocations a JOIN ledger_payments p ON p.id=a.payment_id WHERE a.invoice_id=? AND p.voided_at IS NULL),0) AS allocated');
+    $s->bind_param('ii',$invoiceId,$invoiceId);$s->execute();$row=$s->get_result()->fetch_assoc();$s->close();
     $s=$db->prepare('SELECT recognized_paid,classification FROM ledger_legacy_invoices WHERE invoice_id=?');
     $s->bind_param('i',$invoiceId);$s->execute();$legacy=$s->get_result()->fetch_assoc();$s->close();
     $base=$legacy ? $legacy['recognized_paid'] : '0';
@@ -167,7 +167,7 @@ function ledger_party_details(mysqli $db,string $kind,int $id): array {
            'total'=>$v['total'],'paid'=>$v['paid'],'due'=>$v['due'],'status'=>$v['status'],
            'legacy_classification'=>$v['legacy_classification']];
     }
-    $s=$db->prepare('SELECT id,direction,amount,method,paid_on,reference_no,note,voided_at FROM ledger_payments WHERE party_kind=? AND party_id=? ORDER BY id DESC LIMIT 150');
+    $s=$db->prepare('SELECT p.id,p.direction,p.amount,p.method,p.paid_on,p.reference_no,p.note,p.voided_at, (p.amount-COALESCE((SELECT SUM(a.amount) FROM ledger_allocations a WHERE a.payment_id=p.id),0)-COALESCE((SELECT SUM(a.amount) FROM ledger_credit_allocations a WHERE a.payment_id=p.id),0)) AS unapplied FROM ledger_payments p WHERE p.party_kind=? AND p.party_id=? ORDER BY p.id DESC LIMIT 150');
     $s->bind_param('si',$kind,$id);$s->execute();$payments=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
     return ['summary'=>$summary,'invoices'=>$invoices,'payments'=>$payments];
 }
