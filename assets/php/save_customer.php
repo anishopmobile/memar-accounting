@@ -1,5 +1,9 @@
 <?php
+require_once __DIR__ . '/boot.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/currency.php';
+require_once __DIR__ . '/accounting/ledger.php';
+require_csrf_or_fail();
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -31,12 +35,10 @@ if ($customer_id !== '') {
         $id = (int) $customer_id;
         $stmt->close();
 
-        $result = $mysqli->prepare('SELECT total_spent, debt FROM customers WHERE id = ?');
-        $result->bind_param('i', $id);
-        $result->execute();
-        $result->bind_result($total_spent, $debt);
-        $result->fetch();
-        $result->close();
+        $ledger = acct_party_summary($mysqli,'customer',$id);
+        $total_spent = $ledger['invoiced'];
+        $debt = $ledger['debt'];
+        $credit = $ledger['credit'];
 
         $customer = [
             'id' => $id,
@@ -50,8 +52,9 @@ if ($customer_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_spent' => number_format($total_spent ?? 0),
-            'debt' => number_format($debt ?? 0),
+            'total_spent' => formatMoneyNumber($total_spent),
+            'debt' => formatMoneyNumber($debt),
+            'credit' => formatMoneyNumber($credit),
         ];
         echo json_encode(['success' => true, 'customer' => $customer]);
     } else {
@@ -74,8 +77,9 @@ if ($customer_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_spent' => number_format(0),
-            'debt' => number_format(0),
+            'total_spent' => formatMoneyNumber('0'),
+            'debt' => formatMoneyNumber('0'),
+            'credit' => formatMoneyNumber('0'),
         ];
         echo json_encode(['success' => true, 'customer' => $customer]);
     } else {
