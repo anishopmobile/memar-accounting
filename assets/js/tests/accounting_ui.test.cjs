@@ -25,7 +25,7 @@ async function openInvoice(page,route,id) {
   await btn.waitFor({state:'visible',timeout:15000});
   await btn.click();
   await page.locator('#accountingModal.open').waitFor({state:'visible',timeout:10000});
-  await page.locator('#acctPaymentRows .acctCashAccount option').first().waitFor({timeout:10000});
+  await page.waitForFunction(()=>!!document.querySelector('#acctPaymentRows .acctCashAccount')?.value,null,{timeout:10000});
 }
 async function submitBatch(page,amounts) {
   if(amounts.length>1) {
