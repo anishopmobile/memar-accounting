@@ -13,6 +13,7 @@
  */
 
 require_once __DIR__ . '/invoice_common.php';
+require_once __DIR__ . '/ledger/ledger_service.php';
 
 /* ============================================================
  * ۱) شماره سند برگشت فروش (اتمیک — reuse جدول invoice_sequences)
@@ -582,6 +583,7 @@ function createSalesReturn(mysqli $mysqli, array $in): array
         sr_insert_return_items($mysqli, $returnId, $items);
         sr_apply_stock_for_items($mysqli, $items, $returnId, 'create');
 
+        ledger_sync_invoice_status($mysqli, $invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'برگشت فروش با موفقیت ثبت شد.', 'return_id' => $returnId, 'return_number' => $returnNumber];
     } catch (Exception $e) {
@@ -770,6 +772,7 @@ function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
         $stmt->execute();
         $stmt->close();
 
+        ledger_sync_invoice_status($mysqli, $invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'برگشت فروش با موفقیت ویرایش شد.', 'return_id' => $returnId];
     } catch (Exception $e) {
@@ -845,6 +848,7 @@ function deleteSalesReturn(mysqli $mysqli, int $returnId): array
         $stmt->execute();
         $stmt->close();
 
+        ledger_sync_invoice_status($mysqli, $invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'برگشت فروش با موفقیت حذف شد.', 'return_id' => $returnId];
     } catch (Exception $e) {
