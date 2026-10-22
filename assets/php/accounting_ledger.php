@@ -63,7 +63,7 @@ function acct_update_status(mysqli $db,int $id): void {
     $stmt->bind_param('si',$status,$id);$stmt->execute();$stmt->close();
 }
 /** One payment may settle multiple invoices; any unallocated amount is a party credit. */
-function acct_record_payment(mysqli $db,array $input): array {
+function acct_record_payment(mysqli $db,array $input,bool $insideTransaction=false): array {
     $kind=acct_party_kind((string)($input['party_kind']??''));
     $id=(int)($input['party_id']??0);
     $expectedDirection=$kind==='customer'?'in':'out';
@@ -92,7 +92,7 @@ function acct_record_payment(mysqli $db,array $input): array {
         $sum=money_add($sum,$value);
     }
     if (money_cmp($sum,$amount)>0) throw new InvalidArgumentException('مجموع تخصیص‌ها از مبلغ پرداخت بیشتر است.');
-    $db->begin_transaction();
+    if (!$insideTransaction) $db->begin_transaction();
     try {
         $cashAccountId=acct_resolve_cash_account($db,$method,$input['cash_account_id']??null);
         acct_party_lock($db,$kind,$id); // consistent lock order: party then invoice.
@@ -111,7 +111,7 @@ function acct_record_payment(mysqli $db,array $input): array {
         if ($existing) {
             if (!hash_equals((string)($existing['request_hash']??''),$requestHash))
                 throw new InvalidArgumentException('شناسه تکراری برای پرداخت متفاوت استفاده شده است.');
-            $db->commit();return ['payment_id'=>(int)$existing['id'],'duplicate'=>true];
+            if (!$insideTransaction) $db->commit();return ['payment_id'=>(int)$existing['id'],'duplicate'=>true];
         }
         foreach ($alloc as $invoiceId=>$value) {
             $v=acct_invoice_outstanding($db,(int)$invoiceId,true);
@@ -122,18 +122,19 @@ function acct_record_payment(mysqli $db,array $input): array {
                 throw new InvalidArgumentException('فاکتور متعلق به این طرف حساب نیست.');
             if (money_cmp($value,$v['remaining'])>0) throw new InvalidArgumentException('تخصیص از مانده فاکتور بیشتر است.');
         }
-        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token,cash_account_id,source_proforma_id,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)');
+        $batchToken=$input['batch_token']??null;
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token,cash_account_id,source_proforma_id,request_hash,batch_token) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)');
         $sourceDbId = $sourceId ?: null;
-        $stmt->bind_param('sisssssssiis',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId,$sourceDbId,$requestHash);
+        $stmt->bind_param('sisssssssiiss',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId,$sourceDbId,$requestHash,$batchToken);
         $stmt->execute();$paymentId=(int)$stmt->insert_id;$stmt->close();
         foreach ($alloc as $invoiceId=>$value) {
             $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount) VALUES(?,?,?)');
             $stmt->bind_param('iis',$paymentId,$invoiceId,$value);$stmt->execute();$stmt->close();
             acct_update_status($db,(int)$invoiceId);
         }
-        $db->commit();
+        if (!$insideTransaction) $db->commit();
         return ['payment_id'=>$paymentId,'duplicate'=>false,'credit'=>money_sub($amount,$sum)];
-    } catch (Throwable $e) { $db->rollback();throw $e; }
+    } catch (Throwable $e) { if (!$insideTransaction) $db->rollback(); throw $e; }
 }
 /** Signed party balance: positive means customer owes us / we owe supplier. */
 function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
