@@ -74,4 +74,20 @@ try {makePayment($mysqli,'customer',$customer,'100',[['invoice_id'=>$legacy,'amo
 catch(DomainException $e){ck(true,'unknown historical partial is blocked');}
 ledger_reconcile_partial($mysqli,$legacy,'2500','Historical bank deposit confirmed by source record');
 ck(ledger_invoice_balance($mysqli,$legacy)['due']==='7500.00','historical partial reconciliation');
+$refund=ledger_record_payment($mysqli,[
+  'party_kind'=>'supplier','party_id'=>$creditSupplier,'direction'=>'receipt',
+  'method'=>'bank_transfer','paid_on'=>date('Y-m-d'),'reference_no'=>'REF-CI',
+  'note'=>'Confirmed supplier return of unapplied money','amount'=>'1000000',
+  'request_token'=>bin2hex(random_bytes(20)),'allocations'=>[]
+]);
+ck($refund['unallocated']==='0.00','real refund is not reusable invoice credit');
+ck(ledger_party_summary($mysqli,'supplier',$creditSupplier)['credit']==='0.00','supplier refund extinguishes 1m credit');
+try {
+  ledger_record_payment($mysqli,[
+    'party_kind'=>'supplier','party_id'=>$creditSupplier,'direction'=>'receipt','method'=>'cash',
+    'paid_on'=>date('Y-m-d'),'reference_no'=>'INVALID','note'=>'Invalid excessive refund',
+    'amount'=>'1','request_token'=>bin2hex(random_bytes(20)),'allocations'=>[]
+  ]);
+  throw new RuntimeException('excess refund should fail');
+} catch(DomainException $e) {ck(true,'over-refund denied');}
 echo "ALL ACCOUNTING LEDGER MYSQL INTEGRATION CHECKS PASSED\n";
