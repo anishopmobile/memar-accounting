@@ -12,9 +12,9 @@ try {
         if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
         if ($action === 'folders') {
             $folders = [];
-            $result = $mysqli->query('SELECT f.id, f.name,
-                (SELECT COUNT(*) FROM media m WHERE m.folder_id=f.id) AS media_count
-                FROM media_folders f ORDER BY f.name, f.id');
+            $result = $mysqli->query('SELECT f.id, f.name, COUNT(m.id) AS media_count
+                FROM media_folders f LEFT JOIN media m ON m.folder_id=f.id
+                GROUP BY f.id, f.name ORDER BY f.name, f.id');
             while ($result && ($row = $result->fetch_assoc())) $folders[] = $row;
             respond_json(true, '', ['folders'=>$folders]);
         }
