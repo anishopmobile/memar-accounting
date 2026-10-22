@@ -130,7 +130,7 @@ function splitNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
                 var html = '';
                 if (!rows.length) html = '<tr><td colspan="6" class="empty-state">کالایی یافت نشد.</td></tr>';
                 rows.forEach(function (p) {
-                    var img = p.media_id === undefined ? '' : '<img class="media-thumb" loading="lazy" decoding="async" width="38" height="38" data-id="' + Number(p.media_id || 0) + '" alt="" src="' +
+                    var img = p.media_id === undefined ? '' : '<img class="media-thumb" loading="lazy" decoding="async" width="38" height="38" data-id="' + Number(p.media_id || 0) + '" data-product-id="' + Number(p.id) + '" alt="" src="' +
                     (Number(p.media_id) ? 'assets/php/media_file.php?id=' + Number(p.media_id) + '&size=thumb' : 'assets/img/product-placeholder.svg') + '" style="vertical-align:middle;margin-left:5px">';
                 html += '<tr>'
                         + '<td>' + esc(p.code) + '</td>'
