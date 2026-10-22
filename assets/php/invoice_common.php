@@ -970,19 +970,29 @@ function createInvoice(mysqli $mysqli, array $in): array
             acct_apply_credit($mysqli, isSales($type)?'customer':'supplier', $partyId, $invoiceId, true);
         }
 
-        // Book money independently of the invoice, in the SAME DB transaction.
-        // Advance for a proforma stays unallocated until conversion.
-        $initial = (string)($in['initial_payment'] ?? '0');
-        if (money_cmp($initial, '0') > 0) {
+        // Book every initial method separately in the same database transaction.
+        // Proforma receipts are advances, never final settlement until conversion.
+        $initials = $in['initial_payments'] ?? [];
+        if (!$initials && money_cmp((string)($in['initial_payment'] ?? '0'), '0') > 0) {
+            $initials = [[
+                'amount' => (string)$in['initial_payment'],
+                'method' => (string)$in['payment_type'],
+                'date' => (string)(($in['initial_payment_date'] ?? '') ?: $in['invoice_date']),
+                'reference' => (string)($in['initial_payment_reference'] ?? ''),
+                'account' => (string)($in['initial_payment_account'] ?? ''),
+                'note' => (string)($in['initial_payment_note'] ?? '')
+            ]];
+        }
+        foreach ($initials as $index => $initial) {
             acct_post($mysqli, isSales($type) ? 'customer' : 'supplier', $partyId,
-                isSales($type) ? 'in' : 'out', $initial, $in['payment_type'],
-                ($in['initial_payment_date'] ?? '') ?: $in['invoice_date'],
-                (string)($in['initial_payment_reference'] ?? ''),
-                (string)($in['initial_payment_account'] ?? ''),
-                'پرداخت هنگام ثبت فاکتور — '.(string)($in['initial_payment_note'] ?? ''),
+                isSales($type) ? 'in' : 'out', $initial['amount'], $initial['method'],
+                ($initial['date'] ?? '') ?: $in['invoice_date'],
+                (string)($initial['reference'] ?? ''),
+                (string)($initial['account'] ?? ''),
+                'پرداخت هنگام ثبت فاکتور — '.(string)($initial['note'] ?? ''),
                 isFinal($type) ? $invoiceId : null,
                 isFinal($type) ? null : $invoiceId,
-                $clientToken ? 'invoice-initial-'.$invoiceId : '', true, true);
+                'invoice-initial-'.$invoiceId.'-'.(int)$index, true, true);
         }
         acct_sync_invoice($mysqli, $invoiceId);
         $mysqli->commit();
