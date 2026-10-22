@@ -191,11 +191,12 @@
             {page:libraryPage,term:libraryTerm,usage:libraryUsage,folder:libraryFolder} : null;
         active = name;
         selectedInPicker.clear();
-        libraryPage = 1; libraryTerm = ''; libraryUsage = 'all'; libraryFolder = 'all';
+        libraryPage = 1; libraryTerm = ''; libraryUsage = 'all';
+        libraryFolder = managerSnapshot ? managerSnapshot.folder : 'all';
         ensureModal();
         $('#mediaPickerSearch').val('');
         $('#mediaPickerUsage').val('all');
-        $('#mediaPickerFolder').val('all');
+        $('#mediaPickerFolder').val(libraryFolder);
         loadFolders();
         modal.prop('hidden', false);
         $('#mediaPickerConfirm').toggle(!!name);
@@ -297,19 +298,39 @@
     $(document).on('change', '#mediaPickerUsage', function () { libraryUsage = $(this).val(); libraryPage = 1; loadPicker(); });
     $(document).on('change', '#mediaPickerFolder', function () { libraryFolder = String($(this).val()); libraryPage = 1; loadPicker(); });
     $(document).on('click', '.media-create-folder', function () {
-        var name = prompt('نام پوشه جدید تصاویر را وارد کنید:');
-        if (name === null) return;
-        name = name.trim();
-        if (!name) return;
+        var button = $(this);
+        $('.media-folder-create-form').remove();
+        $('.media-create-folder').show();
+        button.hide();
+        $('<form class="media-folder-create-form" autocomplete="off">'
+            + '<input type="text" class="media-folder-name" maxlength="140" required placeholder="نام پوشه جدید" aria-label="نام پوشه">'
+            + '<button type="submit" class="button">ثبت</button>'
+            + '<button type="button" class="button-secondary media-folder-cancel">لغو</button>'
+            + '<span class="media-folder-error" role="alert"></span></form>')
+            .insertAfter(button).find('input').trigger('focus');
+    });
+    $(document).on('click','.media-folder-cancel',function(){
+        $(this).closest('.media-folder-create-form').remove();
+        $('.media-create-folder').show();
+    });
+    $(document).on('submit','.media-folder-create-form',function(e){
+        e.preventDefault();
+        var form=$(this), name=$.trim(form.find('.media-folder-name').val());
+        if(!name)return;
+        var save=form.find('button[type=submit]').prop('disabled',true);
         $.post('assets/php/media_api.php',{action:'folder_create',name:name,csrf_token:csrf()},function(res){
-            if (!res || !res.success) {alert((res && res.message)||'ایجاد پوشه ناموفق بود.');return;}
-            libraryFolder = String(res.data.id);
-            loadFolders().done(function () {
+            if(!res || !res.success){form.find('.media-folder-error').text((res && res.message)||'ایجاد پوشه ناموفق بود.');return;}
+            form.remove();
+            $('.media-create-folder').show();
+            libraryFolder=String(res.data.id);
+            libraryPage=1;
+            loadFolders().done(function(){
                 $('#mediaPickerFolder,#mediaManagerFolder').val(libraryFolder);
-                if ($('#mediaPicker').length && !$('#mediaPicker').prop('hidden')) loadPicker();
-                if ($('#mediaLibraryPage').length) loadManager();
+                if($('#mediaPicker').length && !$('#mediaPicker').prop('hidden'))loadPicker();
+                if($('#mediaLibraryPage').length)loadManager();
             });
-        },'json').fail(function(){alert('خطا در ایجاد پوشه.');});
+        },'json').fail(function(){form.find('.media-folder-error').text('خطا در ارتباط با سرور.');})
+            .always(function(){save.prop('disabled',false);});
     });
     $(document).on('click', '#mediaPrev', function () { libraryPage = Math.max(1, libraryPage-1); loadPicker(); });
     $(document).on('click', '#mediaNext', function () { libraryPage++; loadPicker(); });
