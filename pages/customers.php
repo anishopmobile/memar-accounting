@@ -80,7 +80,7 @@ if ($result) {
                             <td><?php echo htmlspecialchars($customer['national_code'] ?? ''); ?></td>
                             <td><?php echo htmlspecialchars($customer['phone'] ?? ''); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($customer['address'] ?? '')); ?></td>
-                            <td><?php echo number_format($customer['total_spent']); ?></td>
+                            <td><?php echo formatMoneyNumber((string)$customer['total_spent']); ?></td>
                             <td><?php echo formatMoneyNumber($customer['debt']); ?><?php if ((int)$customer['pending_legacy']>0): ?> ⚠<?php endif; ?></td>
                         <td><?php echo formatMoneyNumber($customer['credit']); ?></td>
                         <td><a class="button-secondary small" href="?page=party-statement&kind=customer&id=<?php echo (int)$customer['id']; ?>">صورت‌حساب</a></td>
