@@ -11,7 +11,7 @@ function migrate_accounting_ledger(mysqli $db): void
         applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     // Schema work runs once per revision, not for every invoice/image request.
-    $schemaRevision='ledger_schema_v4_20261022';
+    $schemaRevision='ledger_schema_v5_20261022';
     $ready=$db->prepare('SELECT 1 FROM accounting_migrations WHERE migration_key=? LIMIT 1');
     $ready->bind_param('s',$schemaRevision);$ready->execute();
     $exists=$ready->get_result()->fetch_assoc();$ready->close();
@@ -130,12 +130,15 @@ function migrate_accounting_ledger(mysqli $db): void
         amount DECIMAL(14,2) NOT NULL,
         created_by INT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_ara_pair(return_id,invoice_id),
+        KEY idx_ara_pair(return_id,invoice_id),
         KEY idx_ara_invoice(invoice_id),
         CONSTRAINT fk_ara_return FOREIGN KEY(return_id) REFERENCES sales_returns(id) ON DELETE RESTRICT,
         CONSTRAINT fk_ara_invoice FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
         CONSTRAINT chk_ara_amount CHECK(amount>0)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $returnPair=$db->query("SHOW INDEX FROM account_return_allocations WHERE Key_name='uq_ara_pair'");
+    if ($returnPair && $returnPair->num_rows>0)
+        $db->query("ALTER TABLE account_return_allocations DROP INDEX uq_ara_pair, ADD KEY idx_ara_pair(return_id,invoice_id)");
     $returnActorCol=$db->query("SHOW COLUMNS FROM account_return_allocations LIKE 'created_by'");
     if ($returnActorCol && $returnActorCol->num_rows===0)
         $db->query("ALTER TABLE account_return_allocations ADD COLUMN created_by INT NULL");
