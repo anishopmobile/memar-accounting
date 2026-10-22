@@ -90,13 +90,13 @@ $(function () {
                 rows+='<tr><td>'+escapeHtml(inv.invoice_number)+(locked?' <strong>نیازمند تعیین مبلغ تاریخی</strong>':'')+'</td>'
                     +'<td>'+money(inv.total)+'</td><td>'+money(inv.paid)+'</td><td>'+money(inv.due)+'</td>'
                     +'<td><input class="ledger-allocate" type="number" min="0" step="0.01" data-invoice-id="'+inv.id+'"'
-                    +' data-due="'+escapeHtml(due)+'" '+(locked||sameCurrency(due,'0')<=0?'disabled':'')
+                    +' data-due="'+escapeHtml(due)+'" data-locked="'+(locked||sameCurrency(due,'0')<=0?'1':'0')+'" '+(locked||sameCurrency(due,'0')<=0?'disabled':'')
                     +' placeholder="0" aria-label="مبلغ تخصیص فاکتور '+escapeHtml(inv.invoice_number)+'"></td></tr>';
             });
             $('#ledgerInvoices').html(rows||'<tr><td colspan="5">فاکتوری وجود ندارد.</td></tr>');
             var pays='';
             (current.payments||[]).forEach(function(p){
-                pays+='<tr><td>'+escapeHtml(p.paid_on)+'</td><td>'+escapeHtml(({cash:'نقدی',pos:'کارت‌خوان',bank_transfer:'انتقال بانکی'})[p.method]||p.method)
+                pays+='<tr><td>'+escapeHtml(p.paid_on)+'</td><td>'+escapeHtml((p.direction===($('#ledgerKind').val()==='customer'?'receipt':'disbursement')?'دریافت/پرداخت':'استرداد')+' - '+(({cash:'نقدی',pos:'کارت‌خوان',bank_transfer:'انتقال بانکی'})[p.method]||p.method))
                     +'</td><td>'+money(p.amount)+'</td><td>'+escapeHtml(p.reference_no)+'</td><td>'+escapeHtml(p.note)+'</td></tr>';
             });
             $('#ledgerPayments').html(pays||'<tr><td colspan="5">تراکنشی ثبت نشده است.</td></tr>');
@@ -134,6 +134,14 @@ $(function () {
         $('#ledgerAllocationSummary').text('تخصیص به فاکتورها: '+money(total)+' | اعتبار تخصیص‌نیافته: '+money(Math.max(0,Number(payment)-Number(total)).toFixed(2))+(invalid||sameCurrency(total,payment)>0?' | تخصیص نامعتبر است':''));
         return !invalid&&sameCurrency(total,payment)<=0;
     }
+    $('#ledgerDirection').on('change',function(){
+        var reverse=$(this).val()==='reverse';
+        $('.ledger-allocate').each(function(){
+            if(reverse)$(this).val('').prop('disabled',true);
+            else $(this).prop('disabled',$(this).attr('data-locked')==='1');
+        });
+        showAllocation();
+    });
     root.on('input','.ledger-allocate,#ledgerAmount',showAllocation);
     $('#ledgerPaymentForm').on('submit',function(e) {
         e.preventDefault();
@@ -147,12 +155,15 @@ $(function () {
             if(sameCurrency(amount,'0')>0)allocations.push({invoice_id:Number($(this).data('invoice-id')),amount:amount});
         });
         if(error)return alert('مبلغ نامعتبر است.');
-        if(!confirm('تراکنش مالی با مبلغ '+money(baseAmount)+' ثبت شود؟'))return;
+        var refund=$('#ledgerDirection').val()==='reverse';
+        if(refund && String($('#ledgerNote').val()||'').trim().length<8)return alert('برای استرداد وجه، توضیح مستند حداقل ۸ کاراکتر لازم است.');
+        if(!confirm((refund?'استرداد واقعی':'تراکنش مالی')+' با مبلغ '+money(baseAmount)+' ثبت شود؟'))return;
         var key=newToken();
         var btn=$('#ledgerSubmit').prop('disabled',true);
         $.post(endpoint, {
             csrf_token:csrf, party_kind:$('#ledgerKind').val(),party_id:$('#ledgerParty').val(),
             amount:$('#ledgerAmount').val(),paid_on:$('#ledgerDate').val(),method:$('#ledgerMethod').val(),
+            direction:($('#ledgerKind').val()==='customer' ? (refund?'disbursement':'receipt') : (refund?'receipt':'disbursement')),
             reference_no:$('#ledgerReference').val(),note:$('#ledgerNote').val(),
             allocations:JSON.stringify(allocations),request_token:key
         }).done(function(res){if(!res.success){alert(res.message||'ثبت ناموفق بود');return;}alert('تراکنش ثبت شد.');loadAccount();})
