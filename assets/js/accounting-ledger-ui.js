@@ -7,7 +7,7 @@ $(function() {
   if (!isInvoicePage && !isPartyPage) return;
   var kind=(isInvoicePage ? $('#invoiceMode').val()==='sales' : $('body').is('#customers'))?'customer':'supplier';
   var csrf=window.APP_CSRF_TOKEN;
-  var partyId=0, selectedInvoice=0, statement=null, posting=false, paymentToken='', cashAccounts=[];
+  var partyId=0, selectedInvoice=0, statement=null, posting=false, paymentToken='', cashAccounts=[], autoAllocation=true;
   var html='<div class="modal" id="accountingModal"><div class="modal-backdrop" data-close="accountingModal"></div>'
     +'<div class="modal-content" style="max-width:900px;max-height:90vh;overflow:auto">'
     +'<div class="modal-header"><h2>دریافت‌ها، پرداخت‌ها و صورت‌حساب</h2><button type="button" class="modal-close" id="acctClose">×</button></div>'
@@ -39,7 +39,7 @@ $(function() {
     (s.invoices||[]).forEach(function(i){
       out+='<tr><td>'+safe(i.number)+'</td><td>'+safe(i.date)+'</td><td>'+fmt(i.total)+'</td><td>'+fmt(i.paid)+'</td><td>'
       +(i.unreconciled?'<button type="button" class="button-secondary small acctReconcile" data-id="'+i.id+'" data-total="'+safe(i.total)+'">تطبیق پرداخت تاریخی</button>':fmt(i.remaining))
-      +'</td><td>'+(!i.unreconciled&&!zero(i.remaining)?'<input class="acctAlloc" type="number" min="0" step="0.01" data-id="'+i.id+'" data-max="'+safe(i.remaining)+'" value="'+(i.id===selectedInvoice?safe(input(i.remaining)):'0')+'" style="width:150px">':'—')+'</td></tr>';
+      +'</td><td>'+(!i.unreconciled&&!zero(i.remaining)?'<input class="acctAlloc" type="number" min="0" step="0.01" data-id="'+i.id+'" data-max="'+safe(i.remaining)+'" value="0" style="width:150px">':'—')+'</td></tr>';
     });
     out+='</tbody></table></div>';
     out+='<div class="form-grid"><div class="form-row"><label>مبلغ کل دریافت/پرداخت ('+safe(window.Currency.label)+')</label><input id="acctAmount" type="number" min="0" step="0.01"></div>'
@@ -92,7 +92,21 @@ $(function() {
     $('#acctAllocationTotal').text('تخصیص به فاکتورها: '+fmt(sum.toFixed(2))+' | اعتبار آزاد جدید: '+(total>=sum?fmt((total-sum).toFixed(2)):'نامعتبر')+(invalid?' | مقادیر نامعتبر هستند.':''));
     $('#acctSubmit').prop('disabled',invalid||posting||total<=0);
   }
-  $(document).on('input','#acctContent .acctAlloc,#acctAmount',updateTotals);
+  $(document).on('input','#acctAmount',function() {
+    if(selectedInvoice && autoAllocation) {
+      var $target=$('#acctContent .acctAlloc[data-id="'+selectedInvoice+'"]');
+      if($target.length){
+        try{
+          var entered=Number(raw($(this).val()||'0'));
+          var available=Number($target.data('max'));
+          var allocated=Math.min(Math.max(entered,0),available);
+          $target.val(input(allocated.toFixed(2)));
+        }catch(e){}
+      }
+    }
+    updateTotals();
+  });
+  $(document).on('input','#acctContent .acctAlloc',function(){autoAllocation=false;updateTotals();});
   $(document).on('click','#acctSubmit',function(){
     if(posting)return;
     var allocations=[],sum=0,amount;
@@ -146,7 +160,7 @@ $(function() {
       var $actions=$(this).children('td').last();
       $('<button type="button" class="button-secondary small acctPartyOpen">صورت حساب / دریافت و پرداخت</button>').data('id',id).appendTo($actions);
     });
-    $(document).on('click','.acctPartyOpen',function(){partyId=Number($(this).data('id'));selectedInvoice=0;show();load();});
+    $(document).on('click','.acctPartyOpen',function(){partyId=Number($(this).data('id'));selectedInvoice=0;autoAllocation=false;show();load();});
   }
   $(document).on('click','#acctRefund',function(){
     var amount=prompt('مبلغ استرداد از اعتبار ('+window.Currency.label+')',input(String(Math.abs(Number(statement.balance)))));
@@ -179,7 +193,7 @@ $(function() {
     openInvoice:function(i){
       if(!i || !i.id)return;
       partyId=Number(kind==='customer'?i.customer_id:i.supplier_id);
-      selectedInvoice=/proforma/.test(i.type)?0:Number(i.id);show();load();
+      selectedInvoice=/proforma/.test(i.type)?0:Number(i.id);autoAllocation=selectedInvoice>0;show();load();
     }
   };
   $(document).on('click','.invoice-accounting',function(){
