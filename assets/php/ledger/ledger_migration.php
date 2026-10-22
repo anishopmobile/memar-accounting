@@ -17,6 +17,7 @@ function ledger_migrate(mysqli $db): void {
             reference_no VARCHAR(120) NULL,
             note TEXT NULL,
             request_token VARCHAR(64) NOT NULL,
+            payload_hash CHAR(64) NOT NULL,
             voided_at DATETIME NULL,
             void_reason TEXT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
