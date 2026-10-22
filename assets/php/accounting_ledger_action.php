@@ -12,7 +12,7 @@ try {
     if ($_SERVER['REQUEST_METHOD']==='GET' && $action==='accounts') {
         $res=$mysqli->query('SELECT id,name,account_type FROM accounting_cash_accounts WHERE is_active=1 ORDER BY account_type,id');
         $accounts=[];while($res && ($row=$res->fetch_assoc()))$accounts[]=$row;
-        respond_json(true,'حساب‌ها',['accounts'=>$accounts]);
+        respond_json(true,'حساب‌ها',['accounts'=>$accounts,'today'=>date('Y-m-d')]);
     }
     if ($_SERVER['REQUEST_METHOD']==='GET' && $action==='statement') {
         $kind=(string)($_GET['party_kind']??'');
