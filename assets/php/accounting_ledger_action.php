@@ -118,7 +118,7 @@ try {
         $base=parseMoneyInput($raw);
         if (!preg_match('/^-?\\d{1,12}(?:\\.\\d{1,2})?$/D',$base)) throw new InvalidArgumentException('مانده افتتاحیه نامعتبر است.');
         $note=trim((string)($_POST['note']??''));
-        if (mb_strlen($note)>2000) throw new InvalidArgumentException('توضیح بیش از حد مجاز است.');
+        if (mb_strlen($note)<5 || mb_strlen($note)>2000) throw new InvalidArgumentException('برای مانده افتتاحیه یک توضیح مستند حداقل پنج‌حرفی ثبت کنید.');
         $mysqli->begin_transaction();
         try {
             acct_party_lock($mysqli,$kind,(int)$id);
@@ -131,6 +131,8 @@ try {
     if ($action==='reconcile_legacy') {
         $invoiceId=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         $amount=acct_decimal(parseMoneyInput((string)($_POST['historical_paid']??'')));
+        $reason=trim((string)($_POST['reason']??''));
+        if (mb_strlen($reason)<5 || mb_strlen($reason)>2000) throw new InvalidArgumentException('مستند تطبیق پرداخت تاریخی الزامی است (۵ تا ۲۰۰۰ نویسه).');
         if (!$invoiceId) throw new InvalidArgumentException('فاکتور نامعتبر است.');
         $mysqli->begin_transaction();
         try {
@@ -139,6 +141,10 @@ try {
             if (!$inv || !in_array($inv['type'],['sales_invoice','purchase_invoice'],true)
                 || $inv['legacy_paid_amount']!==null) throw new InvalidArgumentException('این فاکتور نیازی به تطبیق تاریخی ندارد.');
             if (money_cmp($amount,$inv['payable_amount'])>0) throw new InvalidArgumentException('پرداخت تاریخی از مبلغ فاکتور بیشتر است.');
+            $previousStatus=$inv['payment_status'];$performedBy=auth_user_id();
+            $stmt=$mysqli->prepare('INSERT INTO account_legacy_reconciliations(invoice_id,historical_paid_amount,old_payment_status,reason,performed_by) VALUES(?,?,?,?,?)');
+            $stmt->bind_param('isssi',$invoiceId,$amount,$previousStatus,$reason,$performedBy);
+            $stmt->execute();$stmt->close();
             $stmt=$mysqli->prepare('UPDATE invoices SET legacy_paid_amount=? WHERE id=? AND legacy_paid_amount IS NULL');
             $stmt->bind_param('si',$amount,$invoiceId);$stmt->execute();$stmt->close();
             acct_update_status($mysqli,(int)$invoiceId);
