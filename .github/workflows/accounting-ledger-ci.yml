@@ -53,3 +53,38 @@ jobs:
           php assets/php/tests/currency_mysql_test.php
           php assets/php/tests/sales_invoice_product_service_test.php
           php assets/php/tests/sales_return_test.php
+          php assets/php/tests/product_bundling_test.php
+          php assets/php/tests/defective_return_test.php
+      - name: Security and authentication HTTP regressions
+        run: |
+          php assets/php/tests/auth_http_test.php
+          bash assets/php/tests/currency_security_smoke.sh
+
+  accounting-browser:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mysqlnd, bcmath, mbstring, gd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install CI-only browser runner
+        run: |
+          npm install --no-save --no-audit --ignore-scripts --package-lock=false playwright@1.56.0
+          npx playwright install --with-deps chromium
+      - name: Existing UI and RTL browser regressions
+        run: bash assets/php/tests/tabler_browser_smoke.sh
