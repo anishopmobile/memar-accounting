@@ -43,13 +43,22 @@ try {
       'method'=>'cash','allocations'=>[['invoice_id'=>$sales,'amount'=>'3000000']]
     ]);}catch(InvalidArgumentException $e){$reject=true;}
     testok($reject,'cannot overallocate outstanding invoice');
-    ledger_post_in_tx($mysqli,[
+    $extra=ledger_post_in_tx($mysqli,[
       'party_kind'=>'customer','party_id'=>$customer,'direction'=>'in','amount'=>'3000000',
       'method'=>'cash','payment_date'=>$now,'request_key'=>'test-'.$nonce.'-excess',
       'allocations'=>[['invoice_id'=>$sales,'amount'=>'2000000']]
     ]);
     eqmoney(ledger_party_balance($mysqli,'customer',$customer)['credit'],'1000000','overpayment retained as party credit');
     testok(ledger_invoice_balance($mysqli,$sales)['invoice']['payment_status']==='paid','invoice reaches paid');
+    $reversal=ledger_reverse_receipt($mysqli,(int)$payment['receipt_id'],'Payment entered incorrectly',true);
+    testok($reversal>0,'financial reversal has independent immutable audit ID');
+    eqmoney(ledger_invoice_balance($mysqli,$sales)['balance'],'3000000','reversal reopens invoice balance');
+    eqmoney(ledger_party_balance($mysqli,'customer',$customer)['debt'],'2000000','reversed cash no longer counts as receipt');
+    ledger_allocate_existing($mysqli,(int)$extra['receipt_id'],$sales,'1000000',true);
+    eqmoney(ledger_invoice_balance($mysqli,$sales)['balance'],'2000000','unallocated credit can settle another part of invoice');
+    $reject=false;
+    try{ledger_reverse_receipt($mysqli,(int)$payment['receipt_id'],'Repeated reversal',true);}catch(InvalidArgumentException $e){$reject=true;}
+    testok($reject,'same payment cannot be reversed twice');
     $st=$mysqli->prepare("INSERT INTO accounting_openings (party_kind,party_id,opening_amount) VALUES ('supplier',?,'70000000')");
     $st->bind_param('i',$supplier);$st->execute();$st->close();
     $p=ledger_post_in_tx($mysqli,[
