@@ -80,3 +80,62 @@ jobs:
         run: |
           php assets/php/tests/currency_mysql_test.php
           php assets/php/tests/currency_test.php
+
+  accounting-browser:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mysqlnd, bcmath, mbstring, gd
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install headless browser (CI only)
+        run: |
+          npm install --no-save --ignore-scripts --no-audit --package-lock=false playwright@1.56.0
+          npx playwright install --with-deps chromium
+      - name: Run accounting E2E at desktop and mobile widths
+        env:
+          GITHUB_ACTIONS: 'true'
+        run: |
+          set -euo pipefail
+          ids="$(php -r '
+          require "assets/php/db.php";
+          $mysqli->query("INSERT INTO users(username,password_hash) VALUES (\"acct_ci_browser\",\"".password_hash("test",PASSWORD_DEFAULT)."\")");
+          $uid=(int)$mysqli->insert_id;
+          $mysqli->query("INSERT INTO customers(first_name,last_name,phone) VALUES (\"CI Customer\",\"Test\",\"010123123\")");
+          $cid=(int)$mysqli->insert_id;
+          $mysqli->query("INSERT INTO suppliers(first_name,last_name,phone) VALUES (\"CI Supplier\",\"Test\",\"010123124\")");
+          $sid=(int)$mysqli->insert_id;
+          session_id("ci-tabler-browser-123456789");
+          session_start();
+          $_SESSION["auth_user_id"]=$uid;
+          $_SESSION["auth_user"]="acct_ci_browser";
+          $_SESSION["csrf_token"]="ci-accounting-browser-token";
+          session_write_close();
+          echo $cid." ".$sid;
+          ')"
+          read -r cid sid <<< "$ids"
+          php -S 127.0.0.1:8872 -t . > /tmp/accounting-browser.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; tail -100 /tmp/accounting-browser.log' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8872/login.php -o /dev/null; then break; fi
+            sleep .2
+          done
+          ACCOUNTING_CUSTOMER_ID="$cid" ACCOUNTING_SUPPLIER_ID="$sid" node assets/js/tests/accounting_ui.test.cjs
