@@ -450,8 +450,8 @@
         gallerySelect(Math.max(0,items.findIndex(function(m){return Number(m.id)===clickedId;})));
         overlay.find('.media-gallery-close').trigger('focus');
     }
-    $(document).on('click','.media-preview,.media-thumb',function() {
-        var id = Number($(this).attr('data-id') || 0);
+    $(document).on('click','.media-preview,.media-thumb,.media-picked > img',function() {
+        var id = Number($(this).attr('data-id') || $(this).closest('.media-picked').attr('data-id') || 0);
         if (!id) return;
         var source = this, $source = $(source);
         var $owner = $source.closest('[data-media-editor]'),
