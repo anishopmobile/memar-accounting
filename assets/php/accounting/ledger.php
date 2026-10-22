@@ -219,6 +219,15 @@ function acct_invoice_balance(mysqli $db, int $id): array {
     ];
 }
 
+/** Credits transferred/refunded from a returned invoice cannot exceed its historic overpayment. */
+function acct_assert_credit_integrity(mysqli $db,int $id): void {
+    $b=acct_invoice_balance($db,$id);
+    $raw=bcsub($b['paid'],$b['net_amount'],2);
+    if(bccomp($raw,'0',2)<0)$raw='0.00';
+    if(bccomp($b['credit_assigned'],$raw,2)>0)
+        throw new InvalidArgumentException('اعتبار حاصل از برگشت قبلاً مصرف/مسترد شده؛ اصلاح این برگشت بدون تعیین تکلیف اعتبار مجاز نیست.');
+}
+
 function acct_sync_invoice(mysqli $db,int $id): void {
     $b=acct_invoice_balance($db,$id);
     if ($b['status']==='proforma') return;
