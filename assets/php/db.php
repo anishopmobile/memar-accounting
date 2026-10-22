@@ -222,6 +222,10 @@ $createInvoices = "CREATE TABLE IF NOT EXISTS invoices (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
 $mysqli->query($createInvoices);
 
+/* Accounting rollout: snapshot legacy invoices before any new invoice is recorded. */
+require_once __DIR__ . '/ledger/ledger_migration.php';
+ledger_initialize_legacy($mysqli);
+
 /* --- اقلام فاکتور --- */
 $createInvoiceItems = "CREATE TABLE IF NOT EXISTS invoice_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
