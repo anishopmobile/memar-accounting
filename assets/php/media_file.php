@@ -14,7 +14,19 @@ if (!$path) { http_response_code(404); exit; }
 header('Content-Type: ' . ($size === 'thumb' ? 'image/jpeg' : $m['mime_type']));
 header('X-Content-Type-Options: nosniff');
 header('Content-Disposition: inline');
-header('Cache-Control: private, max-age=3600');
+// Each thumbnail is an independent request: release the login session lock
+// before response streaming so gallery images load concurrently.
+if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+$stat = @stat($path);
+if (!$stat) { http_response_code(404); exit; }
+$tag = '"' . hash('sha256', (string)$m['id'] . ':' . $size . ':' . $stat['size'] . ':' . $stat['mtime']) . '"';
+header('Cache-Control: private, max-age=604800, immutable');
+header('ETag: ' . $tag);
+header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $stat['mtime']) . ' GMT');
 header('X-Frame-Options: SAMEORIGIN');
-header('Content-Length: ' . (int)filesize($path));
+if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $tag) {
+    http_response_code(304);
+    exit;
+}
+header('Content-Length: ' . (int)$stat['size']);
 readfile($path);
