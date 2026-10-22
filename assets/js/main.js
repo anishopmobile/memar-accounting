@@ -421,7 +421,7 @@ $(function() {
         if (!confirm('آیا از حذف این مشتری اطمینان دارید؟')) {
             return;
         }
-        $.post('assets/php/delete_customer.php', { customer_id: id }, function(response) {
+        $.post('assets/php/delete_customer.php', { customer_id: id, csrf_token: window.APP_CSRF_TOKEN || '' }, function(response) {
             if (response.success) {
                 $row.remove();
                 if ($('#customersTable tbody tr.customer-row').length === 0) {
@@ -441,7 +441,7 @@ $(function() {
         if (!confirm('آیا از حذف این تامین‌کننده اطمینان دارید؟')) {
             return;
         }
-        $.post('assets/php/delete_supplier.php', { supplier_id: id }, function(response) {
+        $.post('assets/php/delete_supplier.php', { supplier_id: id, csrf_token: window.APP_CSRF_TOKEN || '' }, function(response) {
             if (response.success) {
                 $row.remove();
                 if ($('#suppliersTable tbody tr.supplier-row').length === 0) {
