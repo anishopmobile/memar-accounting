@@ -1,0 +1,82 @@
+name: Accounting Ledger CI
+on:
+  push:
+    branches:
+      - feature/accounting-ledger-receivables-payables
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'assets/php/accounting/**'
+      - 'assets/php/accounting_action.php'
+      - 'assets/php/invoice*'
+      - 'assets/php/sales_return_common.php'
+      - 'assets/php/tests/accounting_ledger_test.php'
+      - 'assets/js/accounting.js'
+      - 'assets/js/invoice.js'
+      - 'pages/**'
+      - '.github/workflows/accounting-ledger.yml'
+  workflow_dispatch:
+
+jobs:
+  syntax-and-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP and Node
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, bcmath, mbstring, gd
+          coverage: none
+      - name: Lint PHP code
+        run: |
+          set -euo pipefail
+          find assets/php pages assets/invoice-pdf/templates -name '*.php' -print0 | xargs -0 -n 1 php -l
+          php -l index.php
+      - name: Check JavaScript
+        run: |
+          set -euo pipefail
+          node --check assets/js/accounting.js
+          node --check assets/js/invoice.js
+          node --check assets/js/main.js
+      - name: Static accounting guardrails
+        run: |
+          set -euo pipefail
+          grep -q 'require_csrf_or_fail()' assets/php/accounting_action.php
+          grep -q "acct_migrate" assets/php/db.php
+          grep -q 'accounting_receipts' assets/php/accounting/ledger.php
+          ! grep -q 'UPDATE payment_transactions' assets/php/accounting/ledger.php
+  accounting-mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP 8.4 with database and money extensions
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mysqlnd, bcmath, mbstring, gd
+          coverage: none
+      - name: New ledger integration tests (disposable DB)
+        run: php assets/php/tests/accounting_ledger_test.php
+      - name: Invoice and stock regression checks
+        run: |
+          php assets/php/tests/multi_unit_inventory_test.php
+          php assets/php/tests/sales_return_test.php
+          php assets/php/tests/product_bundling_test.php
+      - name: Currency conversion regression checks
+        run: |
+          php assets/php/tests/currency_mysql_test.php
+          php assets/php/tests/currency_test.php
