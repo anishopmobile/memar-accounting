@@ -1156,6 +1156,13 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
 
     $mysqli->begin_transaction();
     try {
+        // Repeat the read under a transaction lock: settlement may have changed since form load.
+        $guard=$mysqli->prepare('SELECT id FROM invoices WHERE id=? FOR UPDATE');
+        $guard->bind_param('i',$invoiceId);$guard->execute();$lockedInvoice=$guard->get_result()->fetch_assoc();$guard->close();
+        if(!$lockedInvoice) throw new Exception('فاکتور حذف شده است.');
+        if(ledger_invoice_has_financial_events($mysqli,$invoiceId))
+            throw new Exception('این فاکتور دارای سابقه تسویه است و قابل ویرایش مستقیم نیست. اصلاح باید با سند مالی مستقل انجام شود.');
+
         if (isFinal($newType)) {
             /* کالاهای عادی (به‌جز بسته‌ها) — همان منطق دلتم قبلی */
             $oldNorm = [];
@@ -1258,6 +1265,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         );
         $stmt->execute();
         $stmt->close();
+        ledger_sync_invoice_status($mysqli,$invoiceId);
 
         $mysqli->commit();
         return ['ok' => true, 'message' => 'فاکتور با موفقیت ویرایش شد.', 'invoice_id' => $invoiceId];
@@ -1321,6 +1329,12 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
 
     $mysqli->begin_transaction();
     try {
+        $guard=$mysqli->prepare('SELECT id FROM invoices WHERE id=? FOR UPDATE');
+        $guard->bind_param('i',$invoiceId);$guard->execute();$lockedInvoice=$guard->get_result()->fetch_assoc();$guard->close();
+        if(!$lockedInvoice)throw new Exception('فاکتور حذف شده است.');
+        if(ledger_invoice_has_financial_events($mysqli,$invoiceId))
+            throw new Exception('فاکتور دارای سابقه دریافت یا پرداخت است و حذف مستقیم آن ممنوع است.');
+
         $lockIds = $allPids;
         foreach (array_keys($deleteCompReq) as $cpid) {
             $lockIds[] = (int) $cpid;
@@ -1657,3 +1671,4 @@ function listInvoices(mysqli $mysqli, array $filter): array
  * (require_once چرخشی ایمن است؛ توابع در زمان فراخوانی resolve می‌شوند.)
  * ========================================================== */
 require_once __DIR__ . '/bundle_common.php';
+require_once __DIR__ . '/ledger/ledger_service.php';
