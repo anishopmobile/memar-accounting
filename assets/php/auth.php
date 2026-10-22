@@ -75,15 +75,20 @@ function auth_last_failure(): string
 
 function auth_client_ip(): string
 {
-    foreach (['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR'] as $header) {
-        if (!empty($_SERVER[$header])) {
-            $ip = trim(explode(',', (string) $_SERVER[$header])[0]);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return $ip;
-            }
-        }
+    // Never trust client-provided forwarding headers by default. Otherwise
+    // anyone can rotate X-Forwarded-For to bypass IP-based login throttling.
+    $remote = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+    if (!filter_var($remote, FILTER_VALIDATE_IP)) return 'unknown';
+    $rawProxies = (string) (getenv('MEMAR_TRUSTED_PROXIES') ?: '');
+    $trusted = array_filter(array_map('trim', explode(',', $rawProxies)));
+    if (in_array($remote, $trusted, true)) {
+        $forwarded = trim((string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
+        // Trusted reverse proxy must overwrite the incoming XFF header and
+        // send exactly one origin address; refuse ambiguous chains.
+        if (preg_match('/^[0-9a-fA-F:.]+$/D', $forwarded)
+            && filter_var($forwarded, FILTER_VALIDATE_IP)) return $forwarded;
     }
-    return (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    return $remote;
 }
 
 /**
