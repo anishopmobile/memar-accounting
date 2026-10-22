@@ -34,7 +34,13 @@
   });
   document.addEventListener('keydown', function (event) {
     if (!body.classList.contains('sidebar-open')) return;
-    if (event.key === 'Escape') { setOpen(false); return; }
+    if (event.key === 'Escape') {
+      // First Escape dismisses an account/invoice dropdown; the next Escape
+      // closes the mobile sidebar. Don't hide the user's menu before a click.
+      if (sidebar.querySelector('.nav-dropdown.open')) return;
+      setOpen(false);
+      return;
+    }
     if (event.key !== 'Tab') return;
     var items = Array.prototype.slice.call(sidebar.querySelectorAll('a[href],button:not([disabled])'))
       .filter(function (el) { return el.getClientRects().length > 0; });
