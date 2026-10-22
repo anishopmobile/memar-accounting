@@ -89,13 +89,17 @@ function ready(page,selector) {
       assert.ok(fonts.control.includes('estedadv')&&fonts.panel.includes('estedadv'));
       assert.equal(fonts.direction,'rtl');
 
-      // Dynamic invoice edit uses 3 selects created after initial DOM ready.
+      // Payment state is now ledger-derived and intentionally read-only.
+      // Searchable select remains interactive for the payment-method selector.
       await page.locator('.invoice-new[data-type="sales_invoice"]').click();
       await ready(page,'#invPaymentStatus');
       const pay=page.locator('#invPaymentStatus');
-      await pay.locator('xpath=..').locator('.hcg-select-control').click();
-      await pay.locator('xpath=..').locator('.hcg-select-option').filter({hasText:'پرداخت نشده'}).click();
-      assert.equal(await pay.inputValue(),'unpaid','dynamic invoice payment value is preserved');
+      assert.equal(await pay.isDisabled(),true,'manual payment-status changes are disabled');
+      assert.equal(await pay.inputValue(),'unpaid','new invoice starts unpaid');
+      const method=page.locator('#invPaymentType');
+      await method.locator('xpath=..').locator('.hcg-select-control').click();
+      await method.locator('xpath=..').locator('.hcg-select-option').filter({hasText:'نقدی'}).click();
+      assert.equal(await method.inputValue(),'cash','dynamic payment method select remains interactive');
       await page.locator('#invoiceBackToList').click();
 
       await page.goto(base+'/index.php?page=goods-and-services');
