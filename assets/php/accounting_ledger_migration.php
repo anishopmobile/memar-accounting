@@ -11,7 +11,7 @@ function migrate_accounting_ledger(mysqli $db): void
         applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     // Schema work runs once per revision, not for every invoice/image request.
-    $schemaRevision='ledger_schema_v5_20261022';
+    $schemaRevision='ledger_schema_v6_20261022';
     $ready=$db->prepare('SELECT 1 FROM accounting_migrations WHERE migration_key=? LIMIT 1');
     $ready->bind_param('s',$schemaRevision);$ready->execute();
     $exists=$ready->get_result()->fetch_assoc();$ready->close();
@@ -106,8 +106,10 @@ function migrate_accounting_ledger(mysqli $db): void
         payment_id BIGINT UNSIGNED NOT NULL,
         invoice_id INT NOT NULL,
         amount DECIMAL(14,2) NOT NULL,
+        client_token VARCHAR(64) NULL,
         reversed_at DATETIME NULL,
         KEY idx_apa_pair(payment_id,invoice_id),
+        UNIQUE KEY uq_apa_token(client_token),
         KEY idx_apa_invoice(invoice_id),
         CONSTRAINT fk_apa_payment FOREIGN KEY(payment_id) REFERENCES account_payments(id) ON DELETE RESTRICT,
         CONSTRAINT fk_apa_invoice FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
@@ -119,6 +121,9 @@ function migrate_accounting_ledger(mysqli $db): void
     if ($uniquePair && $uniquePair->num_rows>0) {
         $db->query("ALTER TABLE account_payment_allocations DROP INDEX uq_apa_pair, ADD KEY idx_apa_pair(payment_id,invoice_id)");
     }
+    $allocationToken=$db->query("SHOW COLUMNS FROM account_payment_allocations LIKE 'client_token'");
+    if ($allocationToken && $allocationToken->num_rows===0)
+        $db->query("ALTER TABLE account_payment_allocations ADD COLUMN client_token VARCHAR(64) NULL, ADD UNIQUE KEY uq_apa_token(client_token)");
     $allocationCol=$db->query("SHOW COLUMNS FROM account_payment_allocations LIKE 'reversed_at'");
     if ($allocationCol && $allocationCol->num_rows===0) {
         $db->query("ALTER TABLE account_payment_allocations ADD COLUMN reversed_at DATETIME NULL");
@@ -128,14 +133,19 @@ function migrate_accounting_ledger(mysqli $db): void
         return_id INT NOT NULL,
         invoice_id INT NOT NULL,
         amount DECIMAL(14,2) NOT NULL,
+        client_token VARCHAR(64) NULL,
         created_by INT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_ara_token(client_token),
         KEY idx_ara_pair(return_id,invoice_id),
         KEY idx_ara_invoice(invoice_id),
         CONSTRAINT fk_ara_return FOREIGN KEY(return_id) REFERENCES sales_returns(id) ON DELETE RESTRICT,
         CONSTRAINT fk_ara_invoice FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
         CONSTRAINT chk_ara_amount CHECK(amount>0)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $returnToken=$db->query("SHOW COLUMNS FROM account_return_allocations LIKE 'client_token'");
+    if ($returnToken && $returnToken->num_rows===0)
+        $db->query("ALTER TABLE account_return_allocations ADD COLUMN client_token VARCHAR(64) NULL, ADD UNIQUE KEY uq_ara_token(client_token)");
     $returnPair=$db->query("SHOW INDEX FROM account_return_allocations WHERE Key_name='uq_ara_pair'");
     if ($returnPair && $returnPair->num_rows>0)
         $db->query("ALTER TABLE account_return_allocations DROP INDEX uq_ara_pair, ADD KEY idx_ara_pair(return_id,invoice_id)");
