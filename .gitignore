@@ -1,0 +1,16 @@
+# Never commit production data, database backups or runtime credentials.
+/.env
+/.env.*
+/*.sql
+!/sql/
+/backups/
+/backup*/
+/*.zip
+/*.bak
+/*.log
+/assets/uploads/*
+!/assets/uploads/.htaccess
+/assets/media/
+/tmp/
+/cache/
+/.env.local
