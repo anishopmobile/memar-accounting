@@ -25,7 +25,11 @@ function acct_party_lock(mysqli $db, string $kind, int $id): void {
     if (!$r || !$r->fetch_assoc()) throw new InvalidArgumentException('طرف حساب یافت نشد.');
 }
 function acct_resolve_cash_account(mysqli $db, string $method, $provided = null): int {
-    $id = ($provided===null || $provided==='') ? 0 : (int)$provided;
+    $id=0;
+    if($provided!==null && $provided!=='') {
+        $id=filter_var($provided,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if(!$id)throw new InvalidArgumentException('شناسه حساب بانکی / صندوق نامعتبر است.');
+    }
     if ($id>0) {
         $stmt=$db->prepare('SELECT id FROM accounting_cash_accounts WHERE id=? AND account_type=? AND is_active=1');
         $stmt->bind_param('is',$id,$method);
@@ -65,7 +69,8 @@ function acct_update_status(mysqli $db,int $id): void {
 /** One payment may settle multiple invoices; any unallocated amount is a party credit. */
 function acct_record_payment(mysqli $db,array $input,bool $insideTransaction=false): array {
     $kind=acct_party_kind((string)($input['party_kind']??''));
-    $id=(int)($input['party_id']??0);
+    $id=filter_var($input['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+    if(!$id)throw new InvalidArgumentException('شناسه طرف حساب نامعتبر است.');
     $expectedDirection=$kind==='customer'?'in':'out';
     $direction=(string)($input['direction']??$expectedDirection);
     if ($direction!==$expectedDirection) throw new InvalidArgumentException('جهت پرداخت برای تسویه نامعتبر است.');
@@ -96,7 +101,10 @@ function acct_record_payment(mysqli $db,array $input,bool $insideTransaction=fal
     try {
         $cashAccountId=acct_resolve_cash_account($db,$method,$input['cash_account_id']??null);
         acct_party_lock($db,$kind,$id); // consistent lock order: party then invoice.
-        $sourceId=(int)($input['source_proforma_id']??0);
+        $sourceValue=$input['source_proforma_id']??0;
+        $sourceId=($sourceValue===0 || $sourceValue==='0' || $sourceValue===null || $sourceValue==='') ? 0
+            : filter_var($sourceValue,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if($sourceId===false)throw new InvalidArgumentException('شناسه پیش‌فاکتور نامعتبر است.');
         ksort($alloc,SORT_NUMERIC);
         $requestHash=hash('sha256',json_encode([$kind,$id,$direction,$amount,$method,$date,$ref,$note,$cashAccountId,$sourceId,$alloc],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
         $stmt=$db->prepare('SELECT id,request_hash FROM account_payments WHERE client_token=?');
@@ -296,7 +304,8 @@ function acct_party_balances(mysqli $db,string $kind): array {
 /** Refund an existing customer/supplier credit; never a new invoice settlement. */
 function acct_record_refund(mysqli $db,array $input): array {
     $kind=acct_party_kind((string)($input['party_kind']??''));
-    $partyId=(int)($input['party_id']??0);
+    $partyId=filter_var($input['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+    if(!$partyId)throw new InvalidArgumentException('شناسه طرف حساب نامعتبر است.');
     $amount=acct_decimal($input['amount']??'',true);
     $method=(string)($input['method']??'');
     if (!in_array($method,['cash','pos','bank_transfer'],true)) throw new InvalidArgumentException('روش پرداخت نامعتبر است.');
