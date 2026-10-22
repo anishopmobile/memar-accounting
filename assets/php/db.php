@@ -1,17 +1,35 @@
 <?php
-$dbHost = '127.0.0.1';
-$dbUser = 'root';
-$dbPass = '';
-$dbName = 'memar_accounting';
-
-$mysqli = new mysqli($dbHost, $dbUser, $dbPass);
-if ($mysqli->connect_errno) {
-    die('خطا در اتصال به دیتابیس: ' . $mysqli->connect_error);
+/** Database credentials must come from the server environment, NEVER Git.
+ * CI-only empty-password MySQL is explicitly isolated behind CI=true.
+ */
+$dbHost = (string)(getenv('MEMAR_DB_HOST') ?: '127.0.0.1');
+$dbName = (string)(getenv('MEMAR_DB_NAME') ?: 'memar_accounting');
+$dbUserValue = getenv('MEMAR_DB_USER');
+$dbPassValue = getenv('MEMAR_DB_PASSWORD');
+$ciDatabase = (string)getenv('CI') === 'true';
+if ($dbUserValue === false && $ciDatabase) $dbUserValue = 'root';
+if ($dbPassValue === false && $ciDatabase) $dbPassValue = '';
+if ($dbUserValue === false || trim((string)$dbUserValue) === '' || $dbPassValue === false
+    || !preg_match('/^[a-zA-Z0-9_]{1,64}$/D', $dbName)) {
+    http_response_code(503);
+    error_log('Memar database connection configuration missing/invalid.');
+    exit('پیکربندی پایگاه داده روی سرور کامل نیست.');
 }
+$dbUser = (string)$dbUserValue;
+$dbPass = (string)$dbPassValue;
 
-$mysqli->query("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-$mysqli->select_db($dbName);
-$mysqli->set_charset('utf8mb4');
+try {
+    $mysqli = new mysqli($dbHost, $dbUser, $dbPass);
+    if ($mysqli->connect_errno) throw new RuntimeException('Database unavailable');
+    $mysqli->query("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    if (!$mysqli->select_db($dbName) || !$mysqli->set_charset('utf8mb4')) {
+        throw new RuntimeException('Database unavailable');
+    }
+} catch (Throwable $e) {
+    http_response_code(503);
+    error_log('Memar database unavailable; check host/credentials/permissions.');
+    exit('ارتباط امن با پایگاه داده برقرار نشد.');
+}
 
 // Authenticated image streaming uses an existing schema and MUST NOT execute
 // migrations / table setup for every thumbnail request.
