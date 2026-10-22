@@ -65,6 +65,6 @@
       <button class="button-secondary" type="submit">ثبت اصلاح تاریخی یک‌باره</button>
     </form>
     <h3>تاریخچه دریافت / پرداخت</h3>
-    <div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>مبلغ</th><th>شماره پیگیری</th><th>توضیح</th></tr></thead><tbody id="ledgerPayments"></tbody></table></div>
+    <div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>مبلغ</th><th>شماره پیگیری</th><th>توضیح</th><th>عملیات اصلاح</th></tr></thead><tbody id="ledgerPayments"></tbody></table></div>
   </div>
 </div>
