@@ -11,7 +11,7 @@ function migrate_accounting_ledger(mysqli $db): void
         applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     // Schema work runs once per revision, not for every invoice/image request.
-    $schemaRevision='ledger_schema_v3_20261022';
+    $schemaRevision='ledger_schema_v4_20261022';
     $ready=$db->prepare('SELECT 1 FROM accounting_migrations WHERE migration_key=? LIMIT 1');
     $ready->bind_param('s',$schemaRevision);$ready->execute();
     $exists=$ready->get_result()->fetch_assoc();$ready->close();
@@ -42,6 +42,7 @@ function migrate_accounting_ledger(mysqli $db): void
         request_hash CHAR(64) NOT NULL,
         party_kind ENUM('customer','supplier') NOT NULL,
         party_id INT NOT NULL,
+        created_by INT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $db->query("CREATE TABLE IF NOT EXISTS account_payments (
@@ -60,6 +61,7 @@ function migrate_accounting_ledger(mysqli $db): void
         batch_token VARCHAR(64) NULL,
         cash_account_id INT NULL,
         reversed_payment_id BIGINT UNSIGNED NULL,
+        created_by INT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uq_ap_token(client_token),
         KEY idx_ap_account(cash_account_id),
@@ -76,6 +78,12 @@ function migrate_accounting_ledger(mysqli $db): void
     $requestHashCol=$db->query("SHOW COLUMNS FROM account_payments LIKE 'request_hash'");
     if ($requestHashCol && $requestHashCol->num_rows===0)
         $db->query("ALTER TABLE account_payments ADD COLUMN request_hash CHAR(64) NULL");
+    $actorColumn=$db->query("SHOW COLUMNS FROM account_payments LIKE 'created_by'");
+    if ($actorColumn && $actorColumn->num_rows===0)
+        $db->query("ALTER TABLE account_payments ADD COLUMN created_by INT NULL");
+    $actorBatchColumn=$db->query("SHOW COLUMNS FROM account_payment_batches LIKE 'created_by'");
+    if ($actorBatchColumn && $actorBatchColumn->num_rows===0)
+        $db->query("ALTER TABLE account_payment_batches ADD COLUMN created_by INT NULL");
     $batchColumn=$db->query("SHOW COLUMNS FROM account_payments LIKE 'batch_token'");
     if ($batchColumn && $batchColumn->num_rows===0) {
         $db->query("ALTER TABLE account_payments ADD COLUMN batch_token VARCHAR(64) NULL,
@@ -120,6 +128,7 @@ function migrate_accounting_ledger(mysqli $db): void
         return_id INT NOT NULL,
         invoice_id INT NOT NULL,
         amount DECIMAL(14,2) NOT NULL,
+        created_by INT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uq_ara_pair(return_id,invoice_id),
         KEY idx_ara_invoice(invoice_id),
@@ -127,15 +136,22 @@ function migrate_accounting_ledger(mysqli $db): void
         CONSTRAINT fk_ara_invoice FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
         CONSTRAINT chk_ara_amount CHECK(amount>0)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $returnActorCol=$db->query("SHOW COLUMNS FROM account_return_allocations LIKE 'created_by'");
+    if ($returnActorCol && $returnActorCol->num_rows===0)
+        $db->query("ALTER TABLE account_return_allocations ADD COLUMN created_by INT NULL");
     $db->query("CREATE TABLE IF NOT EXISTS account_opening_balances (
         party_kind ENUM('customer','supplier') NOT NULL,
         party_id INT NOT NULL,
         amount DECIMAL(14,2) NOT NULL DEFAULT 0,
         note TEXT NULL,
+        created_by INT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY(party_kind,party_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    $openingActorCol=$db->query("SHOW COLUMNS FROM account_opening_balances LIKE 'created_by'");
+    if ($openingActorCol && $openingActorCol->num_rows===0)
+        $db->query("ALTER TABLE account_opening_balances ADD COLUMN created_by INT NULL");
     $db->query("CREATE TABLE IF NOT EXISTS account_legacy_reconciliations (
         invoice_id INT PRIMARY KEY,
         historical_paid_amount DECIMAL(14,2) NOT NULL,
