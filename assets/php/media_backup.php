@@ -118,21 +118,45 @@ function media_full_backup_restore(mysqli $db, string $archive, callable $restor
                 || !preg_match('/^[a-f0-9]{64}$/D', (string)($item['sha256'] ?? ''))) {
                 throw new RuntimeException('Invalid media manifest item');
             }
-            $stream = $zip->getStream('media/' . $relative);
-            if (!$stream) throw new RuntimeException('Missing ZIP media data');
-            $out = fopen($stageRoot . '/' . $relative, 'wb');
-            if (!$out) { fclose($stream); throw new RuntimeException('Cannot write staged file'); }
-            stream_copy_to_stream($stream, $out);
-            fclose($out); fclose($stream);
-            if (!hash_equals($item['sha256'], hash_file('sha256', $stageRoot . '/' . $relative))
-                || filesize($stageRoot . '/' . $relative) !== (int)($item['bytes'] ?? -1)) {
-                throw new RuntimeException('Media checksum mismatch');
-            }
             $dest = $root . '/' . $relative;
-            if (is_file($dest) && !hash_equals(hash_file('sha256',$dest), $item['sha256'])) {
+            $expectedHash = (string)$item['sha256'];
+            $expectedBytes = (int)($item['bytes'] ?? -1);
+            if ($expectedBytes < 0) throw new RuntimeException('Missing media byte count');
+            $existing = is_file($dest);
+            if ($existing && (filesize($dest) !== $expectedBytes
+                || !hash_equals($expectedHash, hash_file('sha256',$dest)))) {
                 throw new RuntimeException('Conflicting existing media file');
             }
-            $staged[] = [$stageRoot . '/' . $relative, $dest];
+            $stream = $zip->getStream('media/' . $relative);
+            if (!$stream) throw new RuntimeException('Missing ZIP media data');
+            // Keep the checksum check even when the file already exists, but
+            // avoid expensive duplicate staging/copying of thousands of pictures.
+            $context = hash_init('sha256');
+            $count = 0;
+            if ($existing) {
+                $count = hash_update_stream($context, $stream);
+                fclose($stream);
+            } else {
+                $stagedPath = $stageRoot . '/' . $relative;
+                $out = fopen($stagedPath, 'wb');
+                if (!$out) { fclose($stream); throw new RuntimeException('Cannot write staged file'); }
+                while (!feof($stream)) {
+                    $chunk = fread($stream, 65536);
+                    if ($chunk === false) { fclose($stream); fclose($out); throw new RuntimeException('ZIP read failed'); }
+                    if ($chunk === '') break;
+                    hash_update($context, $chunk);
+                    $length = strlen($chunk);
+                    if (fwrite($out, $chunk) !== $length) {
+                        fclose($stream); fclose($out); throw new RuntimeException('Cannot write staged file');
+                    }
+                    $count += $length;
+                }
+                fclose($out); fclose($stream);
+                $staged[] = [$stagedPath, $dest];
+            }
+            if ($count !== $expectedBytes || !hash_equals($expectedHash, hash_final($context))) {
+                throw new RuntimeException('Media checksum mismatch');
+            }
         }
         // Keep pre-restore SQL in a private temporary file for recovery.
         $priorSql = $dumpSql();
@@ -155,7 +179,7 @@ function media_full_backup_restore(mysqli $db, string $archive, callable $restor
             }
             throw new RuntimeException('Database restore failed: ' . $error);
         }
-        return ['files'=>count($staged),'database_restored'=>true];
+        return ['files'=>count($manifest['files']),'new_media_files'=>count($staged),'database_restored'=>true];
     } finally {
         $zip->close();
         if (isset($stageRoot) && is_dir($stageRoot)) {
