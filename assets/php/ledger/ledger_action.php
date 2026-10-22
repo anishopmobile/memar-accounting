@@ -11,6 +11,12 @@ function ledger_respond(int $status,array $data): void {
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_csrf_or_fail();
+        if(($_POST['action']??'')==='reconcile_partial') {
+            $id=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            if(!$id)throw new InvalidArgumentException('فاکتور نامعتبر است.');
+            $result=ledger_reconcile_partial($mysqli,(int)$id,parseMoneyInput((string)($_POST['paid_amount']??'')),(string)($_POST['explanation']??''));
+            ledger_respond(200,['success'=>true,'data'=>$result]);
+        }
         $input=[
             'party_kind'=>$_POST['party_kind']??'',
             'party_id'=>$_POST['party_id']??'',
@@ -43,7 +49,8 @@ try {
     $kind=(string)($_GET['party_kind']??'');
     $id=filter_var($_GET['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
     if(!$id)throw new InvalidArgumentException('طرف حساب نامعتبر است.');
-    ledger_respond(200,['success'=>true,'data'=>ledger_party_summary($mysqli,$kind,(int)$id)]);
+    $details=($_GET['details']??'')==='1';
+    ledger_respond(200,['success'=>true,'data'=>$details?ledger_party_details($mysqli,$kind,(int)$id):ledger_party_summary($mysqli,$kind,(int)$id)]);
 } catch (InvalidArgumentException|DomainException $e) {
     ledger_respond(422,['success'=>false,'message'=>$e->getMessage()]);
 } catch (Throwable $e) {
