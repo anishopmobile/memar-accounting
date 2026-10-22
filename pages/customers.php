@@ -1,35 +1,8 @@
 <?php
 require_once __DIR__ . '/../assets/php/db.php';
-
-$customers = [];
-$query = "
-    SELECT 
-        c.id,
-        c.first_name,
-        c.last_name,
-        c.national_code,
-        c.phone,
-        c.economic_code,
-        c.registration_number,
-        c.address,
-        c.postal_code,
-        c.note,
-        c.created_at,
-        COALESCE(SUM(CASE WHEN i.type = 'sales_invoice' THEN i.payable_amount ELSE 0 END), 0) AS total_spent,
-        COALESCE(SUM(CASE WHEN i.type = 'sales_invoice' AND i.payment_status IN ('unpaid', 'partial') THEN i.payable_amount ELSE 0 END), 0) AS debt
-    FROM customers c
-    LEFT JOIN invoices i ON c.id = i.customer_id
-    GROUP BY c.id, c.first_name, c.last_name, c.national_code, c.phone, c.economic_code, c.registration_number, c.address, c.postal_code, c.note, c.created_at
-    ORDER BY c.created_at DESC
-";
-
-$result = $mysqli->query($query);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $customers[] = $row;
-    }
-    $result->free();
-}
+require_once __DIR__ . '/../assets/php/currency.php';
+require_once __DIR__ . '/../assets/php/ledger/ledger_reports.php';
+$customers = ledger_parties_report($mysqli, 'customer');
 ?>
 <div class="card">
     <div class="page-actions">
@@ -49,14 +22,14 @@ if ($result) {
                     <th>تلفن</th>
                     <th>آدرس</th>
                     <th>مجموع خرید</th>
-                    <th>بدهی</th>
+                    <th>بدهی</th><th>اعتبار مشتری</th>
                     <th>عملیات</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (count($customers) === 0): ?>
                     <tr class="empty-state-row">
-                        <td colspan="7" class="empty-state">مشتری‌ای یافت نشد</td>
+                        <td colspan="8" class="empty-state">مشتری‌ای یافت نشد</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($customers as $customer): ?>
@@ -74,9 +47,11 @@ if ($result) {
                             <td><?php echo htmlspecialchars($customer['national_code'] ?? ''); ?></td>
                             <td><?php echo htmlspecialchars($customer['phone'] ?? ''); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($customer['address'] ?? '')); ?></td>
-                            <td><?php echo number_format($customer['total_spent']); ?></td>
-                            <td><?php echo number_format($customer['debt']); ?></td>
+                            <td><?php echo formatMoneyNumber((string)$customer['total_spent']); ?></td>
+                            <td><?php echo formatMoneyNumber((string)$customer['debt']); ?><?php if ((int)$customer['requires_reconciliation']>0): ?><small> (پرداخت تاریخی نامشخص)</small><?php endif; ?></td>
+                            <td><?php echo formatMoneyNumber((string)$customer['credit']); ?></td>
                             <td>
+                                <a class="button-secondary small" href="?page=accounting-ledger&amp;kind=customer&amp;party_id=<?php echo (int)$customer['id']; ?>">صورت‌حساب</a>
                                 <button class="button-secondary small edit-customer" type="button">ویرایش</button>
                                 <button class="button-danger small delete-customer" type="button">حذف</button>
                             </td>
