@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../assets/php/accounting/ledger.php';
+require_once __DIR__ . '/../assets/php/currency.php';
 require_once __DIR__ . '/../assets/php/db.php';
 
 $customers = [];
@@ -26,6 +28,10 @@ $query = "
 $result = $mysqli->query($query);
 if ($result) {
     while ($row = $result->fetch_assoc()) {
+        $ledger = acct_party_summary($mysqli, 'customer', (int)$row['id']);
+        $row['debt'] = $ledger['debt'];
+        $row['credit'] = $ledger['credit'];
+        $row['pending_legacy'] = $ledger['pending_legacy'];
         $customers[] = $row;
     }
     $result->free();
@@ -49,7 +55,7 @@ if ($result) {
                     <th>تلفن</th>
                     <th>آدرس</th>
                     <th>مجموع خرید</th>
-                    <th>بدهی</th>
+                    <th>بدهی</th><th>اعتبار</th><th>صورت‌حساب</th>
                     <th>عملیات</th>
                 </tr>
             </thead>
@@ -75,7 +81,9 @@ if ($result) {
                             <td><?php echo htmlspecialchars($customer['phone'] ?? ''); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($customer['address'] ?? '')); ?></td>
                             <td><?php echo number_format($customer['total_spent']); ?></td>
-                            <td><?php echo number_format($customer['debt']); ?></td>
+                            <td><?php echo formatMoneyNumber($customer['debt']); ?><?php if ((int)$customer['pending_legacy']>0): ?> ⚠<?php endif; ?></td>
+                        <td><?php echo formatMoneyNumber($customer['credit']); ?></td>
+                        <td><a class="button-secondary small" href="?page=party-statement&kind=customer&id=<?php echo (int)$customer['id']; ?>">صورت‌حساب</a></td>
                             <td>
                                 <button class="button-secondary small edit-customer" type="button">ویرایش</button>
                                 <button class="button-danger small delete-customer" type="button">حذف</button>
