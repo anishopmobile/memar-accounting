@@ -28,7 +28,18 @@ try {
       'method'=>'pos','payment_date'=>$now,'request_key'=>'test-'.$nonce.'-sales',
       'allocations'=>[['invoice_id'=>$sales,'amount'=>'3000000']]
     ]);
-    eqmoney(ledger_invoice_balance($mysqli,$sales)['balance'],'2000000','partially paid invoice has real remainder');
+    $withoutKey=ledger_post_in_tx($mysqli,[
+      'party_kind'=>'supplier','party_id'=>$supplier,'direction'=>'out','amount'=>'100000',
+      'method'=>'cash','payment_date'=>$now,'allocations'=>[]
+    ]);
+    $withoutKeyAgain=ledger_post_in_tx($mysqli,[
+      'party_kind'=>'supplier','party_id'=>$supplier,'direction'=>'out','amount'=>'200000',
+      'method'=>'pos','payment_date'=>$now,'allocations'=>[]
+    ]);
+    testok($withoutKey['receipt_id']!==$withoutKeyAgain['receipt_id'],'multiple receipts without optional idempotency key are allowed');
+        ledger_reverse_receipt($mysqli,(int)$withoutKey['receipt_id'],'CI cleanup reverses cash',true);
+    ledger_reverse_receipt($mysqli,(int)$withoutKeyAgain['receipt_id'],'CI cleanup reverses POS',true);
+        eqmoney(ledger_invoice_balance($mysqli,$sales)['balance'],'2000000','partially paid invoice has real remainder');
     testok(ledger_invoice_balance($mysqli,$sales)['invoice']['payment_status']==='partial','status derives from settlements');
     eqmoney(ledger_party_balance($mysqli,'customer',$customer)['debt'],'2000000','customer debt reflects posted receipts');
     $same=ledger_post_in_tx($mysqli,[
