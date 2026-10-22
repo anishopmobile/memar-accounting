@@ -31,6 +31,10 @@ try {
         $r=ledger_post($mysqli,$record);
         respond_json(true,'دریافت/پرداخت ثبت شد.',$r);
     }
+    if ($action==='reverse') {
+        $id=ledger_reverse_receipt($mysqli,(int)($_POST['receipt_id']??0),(string)($_POST['reason']??''));
+        respond_json(true,'سند مالی با ثبت سابقه ابطال شد.',['reversal_id'=>$id]);
+    }
     if ($action==='allocate') {
         $value=parseMoneyInput((string)($_POST['amount']??''));
         ledger_allocate_existing($mysqli,(int)($_POST['receipt_id']??0),(int)($_POST['invoice_id']??0),$value);
