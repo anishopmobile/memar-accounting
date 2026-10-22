@@ -12,7 +12,7 @@
     var uploadRefreshTimer = null, managerSnapshot = null;
     var loadManager = function () {};
     var modal = null, restoreFocus = null;
-    var foldersReady = false, foldersLoading = null;
+    var foldersReady = false, foldersLoading = null, foldersVersion = 0;
 
     function escapeHtml(v) {
         return $('<div>').text(v == null ? '' : String(v)).html();
@@ -42,15 +42,23 @@
             updateFolderSelectors();
             return $.Deferred().resolve().promise();
         }
-        if (foldersLoading) return foldersLoading;
-        foldersLoading = $.getJSON('assets/php/media_api.php', {action:'folders'}).done(function(res) {
+        // After a new folder was saved a pending older GET must not overwrite
+        // the fresh list. A forced refresh cancels its outdated response.
+        if (foldersLoading && !force) return foldersLoading;
+        if (foldersLoading && force && foldersLoading.readyState !== 4)
+            foldersLoading.abort();
+        var version = ++foldersVersion;
+        var request = $.getJSON('assets/php/media_api.php', {action:'folders'});
+        foldersLoading = request;
+        request.done(function(res) {
+            if (version !== foldersVersion) return;
             if (res && res.success) {
                 folders = (res.data && res.data.folders) || [];
                 foldersReady = true;
                 updateFolderSelectors();
             }
-        }).always(function(){foldersLoading=null;});
-        return foldersLoading;
+        }).always(function(){if(foldersLoading === request) foldersLoading=null;});
+        return request;
     }
     function updateLocalFolderCounts(from, to) {
         folders.forEach(function (f) {
