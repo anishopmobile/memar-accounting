@@ -275,7 +275,7 @@
         openPicker(name, $(this).hasClass('media-open-upload'));
     });
     $(document).on('click', '.media-picker-close', closePicker);
-    $(document).on('keydown', function (e) { if (modal && !modal.prop('hidden') && e.key === 'Escape') { e.preventDefault(); closePicker(); } });
+    $(document).on('keydown', function (e) { if (!galleryOpen && modal && !modal.prop('hidden') && e.key === 'Escape') { e.preventDefault(); closePicker(); } });
     $(document).on('click', '.media-tile', function () {
         var id = Number($(this).data('id'));
         if (selectedInPicker.has(id)) selectedInPicker.delete(id);
