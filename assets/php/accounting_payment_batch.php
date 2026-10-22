@@ -67,8 +67,9 @@ function acct_record_payment_batch(mysqli $db, array $input): array
             $stmt->close();$db->commit();
             return ['payment_ids'=>$ids,'duplicate'=>true,'total'=>$total,'unallocated_credit'=>money_sub($total,$allocated)];
         }
-        $stmt=$db->prepare('INSERT INTO account_payment_batches(token,request_hash,party_kind,party_id) VALUES(?,?,?,?)');
-        $stmt->bind_param('sssi',$token,$hash,$kind,$partyId);$stmt->execute();$stmt->close();
+        $stmt=$db->prepare('INSERT INTO account_payment_batches(token,request_hash,party_kind,party_id,created_by) VALUES(?,?,?,?,?)');
+        $createdBy=function_exists('auth_user_id')?auth_user_id():null;
+        $stmt->bind_param('sssii',$token,$hash,$kind,$partyId,$createdBy);$stmt->execute();$stmt->close();
         $remaining=$alloc;$ids=[];
         foreach($normalized as $index=>$row) {
             $budget=$row['amount'];$partAlloc=[];
