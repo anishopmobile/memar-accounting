@@ -380,7 +380,7 @@ function acct_allocate_return_credit(mysqli $db,int $returnId,int $invoiceId,$ra
         if(money_cmp($amount,money_sub($ret['payable_amount'],$used))>0 ||
            money_cmp($amount,$v['remaining'])>0)
             throw new InvalidArgumentException('مبلغ تخصیص از اعتبار برگشت یا مانده فاکتور بیشتر است.');
-        $stmt=$db->prepare('INSERT INTO account_return_allocations(return_id,invoice_id,amount,created_by) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE amount=amount+VALUES(amount)');
+        $stmt=$db->prepare('INSERT INTO account_return_allocations(return_id,invoice_id,amount,created_by) VALUES(?,?,?,?)');
         $createdBy=function_exists('auth_user_id')?auth_user_id():null;
         $stmt->bind_param('iisi',$returnId,$invoiceId,$amount,$createdBy);$stmt->execute();$stmt->close();
         acct_update_status($db,$invoiceId);
