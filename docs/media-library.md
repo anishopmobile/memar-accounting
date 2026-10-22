@@ -93,3 +93,70 @@ restore rather than being deleted.
 
 **Do not merge to main without a completed CI run and real browser/PDF/restore
 verification on a staging deployment.**
+
+
+## Follow-up QA fixes (2026-10-22)
+
+- Read-only image streaming skips expensive schema initialization, releases the
+  PHP session lock before sending bytes, and responds with a per-login private
+  browser cache (ETag, conditional 304, and `Vary: Cookie`). Gallery grids
+  use lazy-loaded fixed-size thumbnails, debounced/cancellable AJAX queries,
+  and lightbox immediately displays the cached thumbnail while fetching the
+  **actual media original ID**. Image placeholders are not clickable originals.
+- Sales/purchase invoice and proforma product pickers now show pictures in an
+  independent **تصویر** column; chosen product IDs carry their media IDs into
+  an independent photo column for line items. Sales service photographs follow
+  the same rule. Invoice calculations and financial snapshots were not edited.
+- Uploads to the **central library** are unlimited in total (within storage
+  quotas and per-file limits). At most **10 media relationships per product**
+  remain enforced by server and UI, independently of overall library size.
+  A product save cannot proceed while its Dropzone upload queue is pending.
+- Media folders are **logical DB organization**, not duplicate physical copies.
+  Create a folder in the picker or manager, browse a folder or all files,
+  upload into the selected folder, and move an existing photo between folders
+  through the manager. The same media can still be attached to many products.
+  Existing files remain in the unfiled group until explicitly moved.
+- Defective goods can link up to 10 independent photographic records when
+  registering damage; their first thumbnail appears in both initial and AJAX
+  reports. These links are recorded within the existing defective-stock
+  transaction; they are not changes to a product's current gallery.
+- Full ZIP recovery still validates **every** archived file and SHA-256 value,
+  but does not stage/copy a file when its correct contents already exist.
+  SQL database restoration retains existing safety/error behavior; its runtime
+  depends on the number of SQL statements and server I/O. Restores must
+  always be tested on a disposable/staging installation.
+
+### Focused CI checks
+
+The feature branch's `media-ci.yml` performs PHP syntax checks, JavaScript
+parsing, transactional schema/linkage/financial-invariant smoke tests, actual
+mPDF image/no-image rendering, authenticated HTTP checks, ZIP backup/restore,
+new-product media search, folders, damaged-item photo registration, and upload
+of more than ten distinct files to the library.
+
+### Staging acceptance checks remaining
+
+1. Open a product and bundle image picker on mobile/desktop; select and upload
+   media in a folder while rapidly searching and changing result pages.
+2. Create a brand-new product with images while an upload is pending; the save
+   should block until it finishes. Find the product by code/name and click its
+   thumbnail to verify the original (not the product ID) appears in lightbox.
+3. Toggle sales/purchase UI photos and check both standard and proforma invoices;
+   verify the **تصویر** column exists only when enabled, is in the correct
+   location, and is populated for both newly selected and previously saved
+   line items. Re-check totals, discounts, tax and multi-unit/barcode selection.
+4. Register defective goods with a separately uploaded damage photo, verify
+   the report thumbnail/lightbox, and return an item to stock without losing
+   the photograph.
+5. Create more than ten library images, then link at most ten to a single
+   product; reuse/move the same photo across category folders without file
+   duplication. Try deleting a photo still linked to defective goods.
+6. Compare first-load and repeat-load speed of a 50-item product modal,
+   multiple rapid search queries, and lightbox. Verify browser Network tab
+   reports `304` when requesting unchanged images with `If-None-Match`.
+7. Compare full ZIP recovery elapsed time and integrity in staging with mostly
+   pre-existing vs missing media files. Check that all amounts and quantities
+   before/after recovery match, and logged-out image requests are denied.
+
+No files in Excel import/export, banking, or payment were changed for these
+follow-up fixes. **Do not merge until the reviewer signs off on staging.**
