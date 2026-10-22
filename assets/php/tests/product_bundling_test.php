@@ -188,7 +188,7 @@ function endpoint_run_child(string $file, array $params, string $method = 'GET')
     $root = realpath(__DIR__ . '/../../..');
     $code = "<?php\n"
         . "session_start();\n"
-        . "if (session_status() === PHP_SESSION_ACTIVE) { \$_SESSION['auth_user_id'] = " . (int)$GLOBALS['bundleAuthId'] . "; \$_SESSION['csrf_token'] = 'ci-bundle-csrf'; }\n"
+        . "if (session_status() === PHP_SESSION_ACTIVE) { \$_SESSION['auth_user_id'] = " . (int)$GLOBALS['bundleAuthId'] . "; \$_SESSION['auth_validated_at'] = time(); \$_SESSION['csrf_token'] = 'ci-bundle-csrf'; }\n"
         . "\$_SERVER['REQUEST_METHOD'] = " . var_export($method, true) . ";\n"
         . "\$_SERVER['HTTP_ACCEPT'] = 'application/json';\n"
         . "\$p = json_decode((string) file_get_contents(\$argv[1] ?? ''), true);\n"
