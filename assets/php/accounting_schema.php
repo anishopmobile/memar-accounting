@@ -29,7 +29,24 @@ function ledger_migrate(mysqli $db): void {
       CONSTRAINT fk_ar_reversal FOREIGN KEY (reversal_of) REFERENCES accounting_receipts(id) ON DELETE RESTRICT,
       CONSTRAINT fk_ar_proforma FOREIGN KEY (source_proforma_id) REFERENCES invoices(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $db->query("CREATE TABLE IF NOT EXISTS accounting_allocations (
+    // Forward-only upgrades for installations that previously ran this feature branch.
+    if (!db_column_exists($db,'accounting_receipts','source_proforma_id')) {
+        $db->query('ALTER TABLE accounting_receipts ADD COLUMN source_proforma_id INT NULL');
+    }
+    if (!db_column_exists($db,'accounting_receipts','request_fingerprint')) {
+        $db->query('ALTER TABLE accounting_receipts ADD COLUMN request_fingerprint CHAR(64) NULL');
+    }
+    if (!db_index_exists($db,'accounting_receipts','uq_ar_reversal')) {
+        $db->query('ALTER TABLE accounting_receipts ADD UNIQUE KEY uq_ar_reversal (reversal_of)');
+    }
+    if (!db_index_exists($db,'accounting_receipts','idx_ar_proforma')) {
+        $db->query('ALTER TABLE accounting_receipts ADD KEY idx_ar_proforma (source_proforma_id)');
+    }
+    $fk=$db->query("SELECT COUNT(*) c FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='accounting_receipts' AND CONSTRAINT_NAME='fk_ar_proforma'");
+    if ($fk && (int)($fk->fetch_assoc()['c']??0)===0) {
+        $db->query('ALTER TABLE accounting_receipts ADD CONSTRAINT fk_ar_proforma FOREIGN KEY (source_proforma_id) REFERENCES invoices(id) ON DELETE RESTRICT');
+    }
+        $db->query("CREATE TABLE IF NOT EXISTS accounting_allocations (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
       receipt_id BIGINT UNSIGNED NOT NULL,
       invoice_id INT NOT NULL,
