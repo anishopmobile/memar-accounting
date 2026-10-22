@@ -186,12 +186,16 @@
     var pickerTimer = null;
     function openPicker(name, focusUpload) {
         restoreFocus = document.activeElement;
+        managerSnapshot = !name && $('#mediaLibraryPage').length ?
+            {page:libraryPage,term:libraryTerm,usage:libraryUsage,folder:libraryFolder} : null;
         active = name;
         selectedInPicker.clear();
-        libraryPage = 1; libraryTerm = ''; libraryUsage = 'all';
+        libraryPage = 1; libraryTerm = ''; libraryUsage = 'all'; libraryFolder = 'all';
         ensureModal();
         $('#mediaPickerSearch').val('');
         $('#mediaPickerUsage').val('all');
+        $('#mediaPickerFolder').val('all');
+        loadFolders();
         modal.prop('hidden', false);
         $('#mediaPickerConfirm').toggle(!!name);
         $('#mediaSelectedCount').toggle(!!name);
@@ -204,27 +208,44 @@
         active = null;
         selectedInPicker.clear();
         if (restoreFocus && typeof restoreFocus.focus === 'function') restoreFocus.focus();
-        if ($('#mediaLibraryPage').length) $('#mediaManagerSearch').trigger('input');
+        if (managerSnapshot) {
+            libraryPage = managerSnapshot.page;
+            libraryTerm = managerSnapshot.term;
+            libraryUsage = managerSnapshot.usage;
+            libraryFolder = managerSnapshot.folder;
+            managerSnapshot = null;
+        }
+        if ($('#mediaLibraryPage').length) {
+            $('#mediaManagerSearch').val(libraryTerm);
+            $('#mediaManagerUsage').val(libraryUsage);
+            $('#mediaManagerFolder').val(libraryFolder);
+            loadManager();
+        }
     }
     function loadPicker() {
         ensureModal();
+        if (pickerRequest && pickerRequest.readyState !== 4) pickerRequest.abort();
+        var sequence = ++pickerSequence;
         $('#mediaPickerGrid').html('<p>در حال دریافت تصاویر...</p>');
-        $.getJSON('assets/php/media_api.php', {action:'list',search:libraryTerm,page:libraryPage,usage:libraryUsage})
+        pickerRequest = $.getJSON('assets/php/media_api.php', {action:'list',search:libraryTerm,page:libraryPage,usage:libraryUsage,folder:libraryFolder})
             .done(function (res) {
+                if (sequence !== pickerSequence) return;
                 if (!res || !res.success) { $('#mediaPickerGrid').text(res.message || 'خطا در بارگذاری کتابخانه'); return; }
                 var data = res.data || {}, rows = data.items || [], html = '';
                 rows.forEach(function (x) {
                     var checked = selectedInPicker.has(Number(x.id));
                     html += '<button type="button" class="media-tile' + (checked ? ' chosen' : '') + '" data-id="' + Number(x.id) + '"'
                         + ' data-name="' + escapeHtml(x.original_filename) + '" aria-pressed="' + (checked ? 'true' : 'false') + '">'
-                        + '<img loading="lazy" src="' + escapeHtml(x.url) + '" alt=""><span>' + escapeHtml(x.original_filename) + '</span>'
+                        + '<img loading="lazy" decoding="async" width="120" height="120" src="' + escapeHtml(x.url) + '" alt=""><span>' + escapeHtml(x.original_filename) + '</span>'
                         + '<small>' + Number(x.products_count || 0) + ' محصول</small></button>';
                 });
                 $('#mediaPickerGrid').html(html || '<p>تصویری یافت نشد.</p>');
                 $('#mediaPageText').text('صفحه ' + data.page + ' از ' + data.pages);
                 $('#mediaPrev').prop('disabled', data.page <= 1);
                 $('#mediaNext').prop('disabled', data.page >= data.pages);
-            }).fail(function () { $('#mediaPickerGrid').text('خطا در ارتباط با سرور.'); });
+            }).fail(function (xhr,status) {
+                if (status !== 'abort' && sequence === pickerSequence) $('#mediaPickerGrid').text('خطا در ارتباط با سرور.');
+            });
     }
     function countSelection() { $('#mediaSelectedCount').text(selectedInPicker.size + ' تصویر انتخاب شده'); }
     $(document).on('click', '#categoryMediaButton', function () {openPicker('category', false);});
@@ -256,9 +277,14 @@
             return;
         }
         var st = state(active);
-        selectedInPicker.forEach(function (m, id) {
-            if (st.items.length < 10 && !st.items.some(function (x) {return x.id === id;})) st.items.push(m);
+        var incoming = Array.from(selectedInPicker.values()).filter(function (m) {
+            return !st.items.some(function (x) {return x.id === m.id;});
         });
+        if (st.items.length + incoming.length > 10) {
+            alert('برای هر محصول حداکثر ۱۰ تصویر مجاز است. کتابخانه مرکزی محدودیت ۱۰ تصویر ندارد.');
+            return;
+        }
+        incoming.forEach(function (m) {st.items.push(m);});
         renderEditor(active);
         closePicker();
     });
@@ -268,6 +294,22 @@
         pickerTimer = setTimeout(function () { libraryTerm = val; libraryPage = 1; loadPicker(); }, 200);
     });
     $(document).on('change', '#mediaPickerUsage', function () { libraryUsage = $(this).val(); libraryPage = 1; loadPicker(); });
+    $(document).on('change', '#mediaPickerFolder', function () { libraryFolder = String($(this).val()); libraryPage = 1; loadPicker(); });
+    $(document).on('click', '.media-create-folder', function () {
+        var name = prompt('نام پوشه جدید تصاویر را وارد کنید:');
+        if (name === null) return;
+        name = name.trim();
+        if (!name) return;
+        $.post('assets/php/media_api.php',{action:'folder_create',name:name,csrf_token:csrf()},function(res){
+            if (!res || !res.success) {alert((res && res.message)||'ایجاد پوشه ناموفق بود.');return;}
+            libraryFolder = String(res.data.id);
+            loadFolders().done(function () {
+                $('#mediaPickerFolder,#mediaManagerFolder').val(libraryFolder);
+                if ($('#mediaPicker').length && !$('#mediaPicker').prop('hidden')) loadPicker();
+                if ($('#mediaLibraryPage').length) loadManager();
+            });
+        },'json').fail(function(){alert('خطا در ایجاد پوشه.');});
+    });
     $(document).on('click', '#mediaPrev', function () { libraryPage = Math.max(1, libraryPage-1); loadPicker(); });
     $(document).on('click', '#mediaNext', function () { libraryPage++; loadPicker(); });
 
