@@ -12,6 +12,21 @@ declare(strict_types=1);
 require_once __DIR__ . '/jdf.php';
 require_once __DIR__ . '/invoice_pdf_common.php';
 require_once __DIR__ . '/media_common.php';
+require_once __DIR__ . '/accounting_ledger.php';
+
+/** Ledger amounts on a PDF are a dated snapshot, not a change to the invoice. */
+function pdf_invoice_settlement(mysqli $db,array $invoice): array {
+    $invoice['acct_printed_at']=date('Y-m-d H:i');
+    $invoice['acct_is_final']=in_array($invoice['type'],['sales_invoice','purchase_invoice'],true);
+    if($invoice['acct_is_final']) {
+        $settlement=acct_invoice_outstanding($db,(int)$invoice['id']);
+        $invoice['acct_unreconciled']=$settlement['unreconciled'];
+        $invoice['acct_paid']=$settlement['paid'];
+        $invoice['acct_remaining']=$settlement['remaining'];
+    }
+    return $invoice;
+}
+
 
 /**
  * بارگذاری همه داده‌های موردنیاز قالب‌های فاکتور فروش.
@@ -96,6 +111,7 @@ function getSalesInvoicePrintData(mysqli $mysqli, int $invoiceId): array
     $cityName = pdf_city_name($store['city_id'] ?? null);
     $loc = pdf_direction_and_footer($settings, $type);
 
+    $invoice = pdf_invoice_settlement($mysqli,$invoice);
     $invoice['invoice_date_shamsi'] = !empty($invoice['invoice_date'])
         ? jdate('j F Y', strtotime((string) $invoice['invoice_date']))
         : '';
@@ -205,6 +221,7 @@ function getPurchaseInvoicePrintData(mysqli $mysqli, int $invoiceId): array
     $cityName = pdf_city_name($store['city_id'] ?? null);
     $loc = pdf_direction_and_footer($settings, $type);
 
+    $invoice = pdf_invoice_settlement($mysqli,$invoice);
     $invoice['invoice_date_shamsi'] = !empty($invoice['invoice_date'])
         ? jdate('j F Y', strtotime((string) $invoice['invoice_date']))
         : '';
