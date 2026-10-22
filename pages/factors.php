@@ -23,11 +23,11 @@
         <table class="action-table" id="invoicesTable">
             <thead>
                 <tr>
-                    <th>شماره</th><th>مشتری</th><th>تاریخ (شمسی)</th><th>نوع</th><th>وضعیت پرداخت</th><th>مبلغ کل</th><th>عملیات</th>
+                    <th>شماره</th><th>مشتری</th><th>تاریخ (شمسی)</th><th>نوع</th><th>وضعیت پرداخت</th><th>مبلغ کل</th><th>تسویه‌شده</th><th>مانده</th><th>عملیات</th>
                 </tr>
             </thead>
             <tbody>
-                <tr><td colspan="7" class="empty-state">در حال بارگذاری...</td></tr>
+                <tr><td colspan="9" class="empty-state">در حال بارگذاری...</td></tr>
             </tbody>
         </table>
     </div>
