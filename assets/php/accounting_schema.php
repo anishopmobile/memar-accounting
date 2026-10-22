@@ -18,12 +18,15 @@ function ledger_migrate(mysqli $db): void {
       note TEXT NULL,
       state ENUM('posted','reversed') NOT NULL DEFAULT 'posted',
       reversal_of BIGINT UNSIGNED NULL,
+      source_proforma_id INT NULL,
       request_key VARCHAR(80) NULL UNIQUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       KEY idx_ar_party (party_kind,party_id,payment_date),
-      KEY idx_ar_reversal (reversal_of),
+      UNIQUE KEY uq_ar_reversal (reversal_of),
+      KEY idx_ar_proforma (source_proforma_id),
       CONSTRAINT chk_ar_amount CHECK (amount > 0),
-      CONSTRAINT fk_ar_reversal FOREIGN KEY (reversal_of) REFERENCES accounting_receipts(id) ON DELETE RESTRICT
+      CONSTRAINT fk_ar_reversal FOREIGN KEY (reversal_of) REFERENCES accounting_receipts(id) ON DELETE RESTRICT,
+      CONSTRAINT fk_ar_proforma FOREIGN KEY (source_proforma_id) REFERENCES invoices(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $db->query("CREATE TABLE IF NOT EXISTS accounting_allocations (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
