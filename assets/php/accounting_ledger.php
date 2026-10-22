@@ -207,7 +207,7 @@ function acct_apply_credit(mysqli $db, int $paymentId, int $invoiceId, $rawAmoun
         $stmt->bind_param('i',$paymentId);$stmt->execute();$used=$stmt->get_result()->fetch_assoc()['s'];$stmt->close();
         if (money_cmp($amount,money_sub($p['amount'],$used))>0 || money_cmp($amount,$v['remaining'])>0)
             throw new InvalidArgumentException('مبلغ از اعتبار آزاد یا مانده فاکتور بیشتر است.');
-        $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount) VALUES(?,?,?) ON DUPLICATE KEY UPDATE amount=amount+VALUES(amount)');
+        $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount) VALUES(?,?,?)');
         $stmt->bind_param('iis',$paymentId,$invoiceId,$amount);$stmt->execute();$stmt->close();
         acct_update_status($db,$invoiceId);
         $db->commit();
