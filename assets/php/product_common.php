@@ -237,7 +237,7 @@ function buildProductRow(array $p, ?array $units = null): string
     $hasImageColumn = !empty($p['images_enabled']);
     $thumbId = (int)($p['primary_media_id'] ?? 0);
     $thumbUrl = $thumbId > 0 ? 'assets/php/media_file.php?id=' . $thumbId . '&size=thumb' : 'assets/img/product-placeholder.svg';
-    $imageCell = $hasImageColumn ? '<td class="product-thumb-cell"><img loading="lazy" decoding="async" width="46" height="46" data-id="' . $thumbId . '" src="' . $esc($thumbUrl) . '" alt="" class="media-thumb"></td>' : '';
+    $imageCell = $hasImageColumn ? '<td class="product-thumb-cell"><img loading="lazy" decoding="async" width="46" height="46" data-id="' . $thumbId . '" data-product-id="' . (int)$p['id'] . '" src="' . $esc($thumbUrl) . '" alt="" class="media-thumb"></td>' : '';
 
     return '<tr class="product-row" data-id="' . $esc($p['id']) . '"'
         . ' data-code="' . $esc($p['code']) . '"'
