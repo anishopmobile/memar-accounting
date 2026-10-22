@@ -151,3 +151,44 @@ curl -sSf -b "$tmp/cookies" "$base/assets/php/media_api.php?action=list&folder=$
 php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||(int)$j["data"]["total"]!==12)exit(1);' "$tmp/large-folder.json"
 echo 'PASS 12-image folder demonstrates no global ten-file upload ceiling'
 
+
+# Gallery contract: the same product can return multiple ordered photo IDs,
+# while selecting its primary thumbnail never changes financial columns.
+second_id="$(php -r '$j=json_decode(file_get_contents($argv[1]),true);echo (int)($j["data"]["id"]??0);' "$tmp/more-1.json")"
+php -r '
+require "assets/php/db.php"; require "assets/php/media_common.php";
+$pid=(int)$argv[1]; $a=(int)$argv[2]; $b=(int)$argv[3];
+$mysqli->begin_transaction(); media_sync_product($mysqli,$pid,json_encode([$a,$b])); $mysqli->commit();
+' "$new_id" "$id" "$second_id"
+curl -sSf -b "$tmp/cookies" "$base/assets/php/media_api.php?action=product&product_id=$new_id" > "$tmp/gallery.json"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);$x=$j["data"]["items"]??[];if(!($j["success"]??false)||count($x)!==2||(int)$x[0]["id"]!==(int)$argv[2]||(int)$x[1]["id"]!==(int)$argv[3])exit(1);' "$tmp/gallery.json" "$id" "$second_id"
+echo 'PASS ordered multi-image product gallery response'
+
+# Protect legacy logo / signature / stamp route from CSRF and forged MIME types.
+code="$(curl -sS -b "$tmp/cookies" -o "$tmp/no-csrf-settings.json" -w '%{http_code}' \
+  -F 'store_name=Test Store' -F "logo_image=@$tmp/sample.png" "$base/assets/php/store_settings.php")"
+[[ "$code" == '403' ]] || { echo "Expected store settings CSRF 403, got $code" >&2; exit 1; }
+curl -sS -b "$tmp/cookies" -o "$tmp/malicious-logo.json" \
+  -F "csrf_token=$token" -F 'store_name=Test Store' -F "logo_image=@$tmp/fake.jpg;type=image/jpeg" \
+  "$base/assets/php/store_settings.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true); if(($j["success"]??true)!==false)exit(1);' "$tmp/malicious-logo.json"
+curl -sS -b "$tmp/cookies" -o "$tmp/settings-image.json" \
+  -F "csrf_token=$token" -F 'store_name=Test Store' \
+  -F "logo_image=@$tmp/sample.png" -F "stamp_image=@$tmp/sample.png" \
+  -F "signature_image=@$tmp/sample.png" "$base/assets/php/store_settings.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])) {fwrite(STDERR,json_encode($j).PHP_EOL);exit(1);}foreach(["logo_path","stamp_path","signature_path"] as $k){$p=$j["data"][$k]??"";if(!preg_match("#^assets/uploads/(logo_image|stamp_image|signature_image)_[a-f0-9]{32}\\.(png|jpg|webp)$#",$p)||!getimagesize($p))exit(2);}' "$tmp/settings-image.json"
+curl -sS -b "$tmp/cookies" -o "$tmp/brand-image.json" \
+  -F "csrf_token=$token" -F 'display_mode=logo' \
+  -F "brand_logo=@$tmp/sample.png" "$base/assets/php/app_brand_settings.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||!preg_match("#^assets/uploads/brand_[a-f0-9]{32}\\.(png|jpg|webp)$#",$j["data"]["logo_path"]??""))exit(1);' "$tmp/brand-image.json"
+echo 'PASS authenticated/CSRF-protected store and app-brand image uploads with real file validation'
+
+# Repeated backup restoration on an unchanged installation should avoid
+# redundant re-extraction and destructive SQL replay.
+curl -sS -b "$tmp/cookies" -o "$tmp/second-full-backup.json" \
+  --data-urlencode action=backup_full --data-urlencode "csrf_token=$token" "$base/assets/php/db_backup.php"
+second_archive="$(php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"]))exit(1);echo $j["data"]["path"];' "$tmp/second-full-backup.json")"
+curl -sS -b "$tmp/cookies" -o "$tmp/second-full-restore.json" \
+  -F action=restore_full -F "csrf_token=$token" -F "backup_file=@$second_archive" "$base/assets/php/db_backup.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||(int)($j["data"]["new_media_files"]??-1)!==0) {fwrite(STDERR,json_encode($j).PHP_EOL);exit(1);}' "$tmp/second-full-restore.json"
+echo 'PASS repeat restoration without re-extracting identical media'
