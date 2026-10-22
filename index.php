@@ -156,7 +156,7 @@ if (!array_key_exists($page, $pages)) {
                 $factorsChildren = ['factors', 'purchase-invoice', 'sales-return', 'defective-goods'];
                 $reportsChildren = ['report-inventory', 'report-customer-debt', 'report-supplier-debt', 'report-sold-items-detail'];
                 foreach ($pages as $key => $label):
-                    if (in_array($key, ['purchase-invoice', 'sales-return', 'report-customer-debt', 'report-supplier-debt', 'report-sold-items-detail', 'defective-goods', 'notes', 'payment-forms', 'payment-transactions', 'payment-sms-settings', 'payment-zarinpal-settings', 'account'], true)) {
+                    if (in_array($key, ['purchase-invoice', 'sales-return', 'report-customer-debt', 'report-supplier-debt', 'report-sold-items-detail', 'defective-goods', 'notes', 'payment-forms', 'payment-transactions', 'payment-sms-settings', 'payment-zarinpal-settings', 'account', 'about-us'], true)) {
 							continue;
 						}
                     $iconClass = $navIcons[$key] ?? 'fa-circle';
@@ -224,16 +224,27 @@ if (!array_key_exists($page, $pages)) {
                     <?php endif; ?>
                 <?php endforeach; ?>
             </nav>
-			<a href="?page=account" class="user-chip<?php echo $page === 'account' ? ' active' : ''; ?>" title="حساب کاربری">
-			    <span class="user-chip-avatar" aria-hidden="true">
-			        <?php if ($authAvatarPath !== ''): ?>
-			            <img src="<?php echo htmlspecialchars($authAvatarPath, ENT_QUOTES, 'UTF-8'); ?>" alt="">
-			        <?php else: ?>
-			            <i class="fas fa-user"></i>
-			        <?php endif; ?>
-			    </span>
-			    <span class="user-chip-name"><?php echo htmlspecialchars($authDisplayName, ENT_QUOTES, 'UTF-8'); ?></span>
-			</a>
+            <?php $accountMenuActive = in_array($page, ['account', 'about-us'], true); ?>
+            <div class="nav-dropdown account-nav-dropdown<?php echo $accountMenuActive ? ' open' : ''; ?>">
+                <button type="button" class="user-chip nav-dropdown-toggle<?php echo $accountMenuActive ? ' active' : ''; ?>"
+                    title="حساب کاربری" aria-label="منوی حساب کاربری"
+                    aria-expanded="<?php echo $accountMenuActive ? 'true' : 'false'; ?>"
+                    aria-haspopup="true" aria-controls="accountNavMenu">
+                    <span class="user-chip-avatar" aria-hidden="true">
+                        <?php if ($authAvatarPath !== ''): ?>
+                            <img src="<?php echo htmlspecialchars($authAvatarPath, ENT_QUOTES, 'UTF-8'); ?>" alt="">
+                        <?php else: ?>
+                            <i class="fas fa-user"></i>
+                        <?php endif; ?>
+                    </span>
+                    <span class="user-chip-name"><?php echo htmlspecialchars($authDisplayName, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <span class="nav-caret" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                </button>
+                <div class="nav-dropdown-menu account-nav-menu" id="accountNavMenu">
+                    <a href="?page=account" class="nav-sub-link<?php echo $page === 'account' ? ' active' : ''; ?>"><i class="fas fa-user-gear" aria-hidden="true"></i> حساب کاربری</a>
+                    <a href="?page=about-us" class="nav-sub-link<?php echo $page === 'about-us' ? ' active' : ''; ?>"><i class="fas fa-info-circle" aria-hidden="true"></i> درباره ما</a>
+                </div>
+            </div>
 			<form method="post" action="logout.php" class="logout-form">
 			    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
 			    <button type="submit" class="logout-button">خروج</button>
