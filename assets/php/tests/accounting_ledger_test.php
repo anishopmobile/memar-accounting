@@ -58,6 +58,11 @@ try {
     test_eq(acct_invoice_balance($mysqli,$old)['remaining'],'50000000.00','old supplier debt reduced 20m');
     test_eq(acct_invoice_balance($mysqli,$part)['remaining'],'15000000.00','other invoice left untouched');
     test_eq(acct_party_summary($mysqli,'supplier',$supplier)['debt'],'65000000.00','supplier debt net 100m-35m');
+    $customerBatch=acct_party_summaries($mysqli,'customer',[$customer]);
+    $supplierBatch=acct_party_summaries($mysqli,'supplier',[$supplier]);
+    test_eq($customerBatch[$customer]['debt'],acct_party_summary($mysqli,'customer',$customer)['debt'],'batched customer report matches exact ledger');
+    test_eq($supplierBatch[$supplier]['debt'],acct_party_summary($mysqli,'supplier',$supplier)['debt'],'batched supplier report matches exact ledger');
+
     acct_post($mysqli,'supplier',$supplier,'out','10000000','cash',date('Y-m-d'),
        'CASH-PART','','custom allocation',null,null,'test-supplier-2',false,false,
        [['invoice_id'=>$part,'amount'=>'10000000']]);
@@ -71,6 +76,20 @@ try {
     test_eq($allocated,'5000000.00','prior supplier credit allocated to future invoice');
     test_eq(acct_invoice_balance($mysqli,$future)['remaining'],'2000000.00','future invoice 2m remains');
     test_eq(acct_party_summary($mysqli,'supplier',$supplier)['debt'],'2000000.00','credit consumption does not double count cash');
+
+    $openingCreditor=fixture_party($mysqli,'suppliers','Opening creditor');
+    acct_opening($mysqli,'supplier',$openingCreditor,'-1000000',date('Y-m-d'),'Documented opening credit');
+    $openingInv=fixture_invoice($mysqli,'supplier',$openingCreditor,'2000000');
+    test_eq(acct_apply_credit($mysqli,'supplier',$openingCreditor,$openingInv),'1000000.00','opening credit settles invoice without new money');
+    test_eq(acct_invoice_balance($mysqli,$openingInv)['remaining'],'1000000.00','opening credit applied only once');
+    test_eq(acct_apply_credit($mysqli,'supplier',$openingCreditor,$openingInv),'0.00','no duplicate opening credit allocation');
+    $oc2=fixture_party($mysqli,'suppliers','Opening refund');
+    acct_opening($mysqli,'supplier',$oc2,'-600000',date('Y-m-d'),'Historic opening prepayment');
+    acct_post($mysqli,'supplier',$oc2,'in','400000','bank_transfer',date('Y-m-d'),'','',
+      'Historic advance refund',null,null,'opening-refund-test');
+    test_eq(acct_party_summary($mysqli,'supplier',$oc2)['credit'],'200000.00','opening credit cash refund reduces credit');
+    $ocInv=fixture_invoice($mysqli,'supplier',$oc2,'500000');
+    test_eq(acct_apply_credit($mysqli,'supplier',$oc2,$ocInv),'200000.00','opening credit cannot be used after cash refund');
 
     acct_opening($mysqli,'supplier',$supplier,'1000000',date('Y-m-d'),'Legacy documented debit');
     test_eq(acct_party_summary($mysqli,'supplier',$supplier)['debt'],'3000000.00','opening debt recorded once');
