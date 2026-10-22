@@ -26,7 +26,7 @@ function acct_party_lock(mysqli $db, string $kind, int $id): void {
 }
 function acct_resolve_cash_account(mysqli $db, string $method, $provided = null): int {
     $id=0;
-    if($provided!==null && $provided!=='') {
+    if($provided!==null && $provided!=='' && $provided!==0 && $provided!=='0') {
         $id=filter_var($provided,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         if(!$id)throw new InvalidArgumentException('شناسه حساب بانکی / صندوق نامعتبر است.');
     }
