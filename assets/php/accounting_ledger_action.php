@@ -36,6 +36,23 @@ try {
         }
         respond_json(true,'پرداخت ثبت شد.',acct_record_payment($mysqli,$input));
     }
+    if ($action==='refund') {
+        $input=[
+          'party_kind'=>$_POST['party_kind']??'',
+          'party_id'=>$_POST['party_id']??0,
+          'amount'=>parseMoneyInput((string)($_POST['amount']??'')),
+          'method'=>$_POST['method']??'',
+          'payment_date'=>$_POST['payment_date']??date('Y-m-d'),
+          'client_token'=>$_POST['client_token']??'',
+          'note'=>$_POST['note']??''
+        ];
+        respond_json(true,'استرداد اعتبار ثبت شد.',acct_record_refund($mysqli,$input));
+    }
+    if ($action==='reverse') {
+        $id=filter_var($_POST['payment_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if (!$id) throw new InvalidArgumentException('شناسه سند مالی نامعتبر است.');
+        respond_json(true,'سند برگشتی ثبت شد.',acct_reverse_payment($mysqli,(int)$id,(string)($_POST['reason']??''),(string)($_POST['client_token']??'')));
+    }
     if ($action==='apply_credit') {
         $paymentId=filter_var($_POST['payment_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         $invoiceId=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
