@@ -158,4 +158,35 @@ check_acct(acct_record_payment_batch($mysqli,$advanceBatch)['duplicate']===true,
 acct_apply_credit($mysqli,$paymentId,$proformaId,'200000');
 check_acct(acct_invoice_outstanding($mysqli,$proformaId)['remaining']==='700000.00','advance credit can be allocated to converted invoice');
 
+
+$partSupplier=a_supplier($mysqli);
+$partInvoice=a_invoice($mysqli,'supplier',$partSupplier,'15000000');
+pay_acct($mysqli,'supplier',$partSupplier,'10000000',[['invoice_id'=>$partInvoice,'amount'=>'10000000']]);
+check_acct(acct_invoice_outstanding($mysqli,$partInvoice)['remaining']==='5000000.00',
+    'partial supplier payment 10m of 15m leaves 5m on the exact invoice');
+
+$creditToken=bin2hex(random_bytes(20));
+$creditFirst=acct_apply_credit($mysqli,$payment['payment_id'],$sInvoice2,'3000000',$creditToken);
+$creditAgain=acct_apply_credit($mysqli,$payment['payment_id'],$sInvoice2,'3000000',$creditToken);
+check_acct($creditAgain['duplicate']===true,'repeated manual supplier credit allocation is idempotent');
+$creditConflict=false;
+try{acct_apply_credit($mysqli,$payment['payment_id'],$sInvoice2,'2500000',$creditToken);}
+catch(InvalidArgumentException $e){$creditConflict=true;}
+check_acct($creditConflict,'credit transfer request token cannot change amount');
+acct_apply_credit($mysqli,$payment['payment_id'],$sInvoice2,'2000000',bin2hex(random_bytes(20)));
+check_acct(acct_invoice_outstanding($mysqli,$sInvoice2)['remaining']==='0.00',
+    'multiple append-only credits from same payment settle remaining supplier invoice');
+
+$customerReturn=a_customer($mysqli);
+$returnInvoice=a_invoice($mysqli,'customer',$customerReturn,'200000');
+$returnNo='CI-RETURN-A-'.bin2hex(random_bytes(5));
+$stmt=$mysqli->prepare("INSERT INTO sales_returns(return_number,invoice_id,customer_id,return_date,payable_amount) VALUES(?,?,?,CURDATE(),'120000')");
+$stmt->bind_param('sii',$returnNo,$returnInvoice,$customerReturn);$stmt->execute();$returnId2=(int)$stmt->insert_id;$stmt->close();
+$returnToken=bin2hex(random_bytes(20));
+acct_allocate_return_credit($mysqli,$returnId2,$returnInvoice,'50000',$returnToken);
+$secondReturn=acct_allocate_return_credit($mysqli,$returnId2,$returnInvoice,'50000',$returnToken);
+check_acct($secondReturn['duplicate']===true,'sales return-credit replays do not double-allocate');
+acct_allocate_return_credit($mysqli,$returnId2,$returnInvoice,'70000',bin2hex(random_bytes(20)));
+check_acct(acct_invoice_outstanding($mysqli,$returnInvoice)['remaining']==='80000.00',
+  'separate return-credit allocations preserve original rows and settle 120k');
 echo "PASS accounting integration suite\n";
