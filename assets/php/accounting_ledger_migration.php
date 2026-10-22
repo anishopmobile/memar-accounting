@@ -22,6 +22,13 @@ function migrate_accounting_ledger(mysqli $db): void
         ('صندوق فروشگاه','cash'),
         ('کارت‌خوان فروشگاه','pos'),
         ('حساب بانکی فروشگاه','bank_transfer')");
+    $db->query("CREATE TABLE IF NOT EXISTS account_payment_batches (
+        token VARCHAR(64) PRIMARY KEY,
+        request_hash CHAR(64) NOT NULL,
+        party_kind ENUM('customer','supplier') NOT NULL,
+        party_id INT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $db->query("CREATE TABLE IF NOT EXISTS account_payments (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         party_kind ENUM('customer','supplier') NOT NULL,
@@ -35,12 +42,15 @@ function migrate_accounting_ledger(mysqli $db): void
         client_token VARCHAR(64) NOT NULL,
         request_hash CHAR(64) NULL,
         source_proforma_id INT NULL,
+        batch_token VARCHAR(64) NULL,
         cash_account_id INT NULL,
         reversed_payment_id BIGINT UNSIGNED NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uq_ap_token(client_token),
         KEY idx_ap_account(cash_account_id),
         KEY idx_ap_proforma(source_proforma_id),
+        KEY idx_ap_batch(batch_token),
+        CONSTRAINT fk_ap_batch FOREIGN KEY(batch_token) REFERENCES account_payment_batches(token) ON DELETE RESTRICT,
         CONSTRAINT fk_ap_proforma FOREIGN KEY(source_proforma_id) REFERENCES invoices(id) ON DELETE RESTRICT,
         CONSTRAINT fk_ap_account FOREIGN KEY(cash_account_id) REFERENCES accounting_cash_accounts(id) ON DELETE RESTRICT,
         UNIQUE KEY uq_ap_reversal(reversed_payment_id),
@@ -51,6 +61,12 @@ function migrate_accounting_ledger(mysqli $db): void
     $requestHashCol=$db->query("SHOW COLUMNS FROM account_payments LIKE 'request_hash'");
     if ($requestHashCol && $requestHashCol->num_rows===0)
         $db->query("ALTER TABLE account_payments ADD COLUMN request_hash CHAR(64) NULL");
+    $batchColumn=$db->query("SHOW COLUMNS FROM account_payments LIKE 'batch_token'");
+    if ($batchColumn && $batchColumn->num_rows===0) {
+        $db->query("ALTER TABLE account_payments ADD COLUMN batch_token VARCHAR(64) NULL,
+          ADD KEY idx_ap_batch(batch_token),
+          ADD CONSTRAINT fk_ap_batch FOREIGN KEY(batch_token) REFERENCES account_payment_batches(token) ON DELETE RESTRICT");
+    }
     $sourceColumn=$db->query("SHOW COLUMNS FROM account_payments LIKE 'source_proforma_id'");
     if ($sourceColumn && $sourceColumn->num_rows===0) {
         $db->query("ALTER TABLE account_payments ADD COLUMN source_proforma_id INT NULL,
