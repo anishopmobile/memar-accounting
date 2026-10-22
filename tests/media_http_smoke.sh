@@ -95,3 +95,59 @@ test "$(find "$tmp/private-media/original" -type f | wc -l)" -eq 1
 curl -sSf -b "$tmp/cookies" "$base/assets/php/media_file.php?id=$id&size=original" -o "$tmp/restored.png"
 php -r '$x=getimagesize($argv[1]);if(!$x||$x["mime"]!=="image/png")exit(1);' "$tmp/restored.png"
 echo 'PASS full ZIP restoration of missing original and SQL records'
+# Regression: a NEW product, not just an edited product, must retain its picture.
+curl -sS -b "$tmp/cookies" -o "$tmp/new-product.json" \
+  --data-urlencode "csrf_token=$token" \
+  --data-urlencode "name=CI_MEDIA_IMAGE_NEW" \
+  --data-urlencode "type=product" --data-urlencode "unit=عدد" \
+  --data-urlencode "purchase_price=1250" --data-urlencode "sale_price=1700" \
+  --data-urlencode "stock=7" --data-urlencode "min_stock=1" \
+  --data-urlencode "media_ids=[$id]" "$base/assets/php/product_action.php"
+new_id="$(php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||empty($j["product"]["id"])) {fwrite(STDERR,json_encode($j));exit(1);}echo $j["product"]["id"];' "$tmp/new-product.json")"
+curl -sSf -b "$tmp/cookies" "$base/assets/php/product_list.php?search=CI_MEDIA_IMAGE_NEW" > "$tmp/new-search.json"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||strpos($j["tableBody"] ?? "", "media_file.php?id=".$argv[2]."&amp;size=thumb")===false && strpos($j["tableBody"] ?? "", "media_file.php?id=".$argv[2]."&size=thumb")===false)exit(1);' "$tmp/new-search.json" "$id"
+curl -sSf -b "$tmp/cookies" "$base/assets/php/invoice_products.php?media_section=purchase&search=CI_MEDIA_IMAGE_NEW" > "$tmp/new-invoice-search.json"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||count($j["data"])!==1||(int)$j["data"][0]["media_id"]!==(int)$argv[2])exit(1);' "$tmp/new-invoice-search.json" "$id"
+echo 'PASS new product image survives save and appears in list and purchase picker'
+
+# Folder navigation must work without copying any image.
+curl -sS -b "$tmp/cookies" -o "$tmp/new-folder.json" \
+  --data-urlencode "action=folder_create" --data-urlencode "csrf_token=$token" \
+  --data-urlencode "name=CI mobile accessories" "$base/assets/php/media_api.php"
+folder_id="$(php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||empty($j["data"]["id"]))exit(1);echo $j["data"]["id"];' "$tmp/new-folder.json")"
+curl -sS -b "$tmp/cookies" -o "$tmp/moved.json" \
+  --data-urlencode "action=media_move" --data-urlencode "csrf_token=$token" \
+  --data-urlencode "id=$id" --data-urlencode "folder_id=$folder_id" "$base/assets/php/media_api.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"]))exit(1);' "$tmp/moved.json"
+curl -sSf -b "$tmp/cookies" "$base/assets/php/media_api.php?action=list&folder=$folder_id" > "$tmp/folder-list.json"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||count($j["data"]["items"])!==1||(int)$j["data"]["items"][0]["folder_id"]!==(int)$argv[2])exit(1);' "$tmp/folder-list.json" "$folder_id"
+echo 'PASS create and browse folder / move shared image without copying'
+
+# Images of damaged items belong to their own document, not the current product gallery.
+curl -sS -b "$tmp/cookies" -o "$tmp/defective.json" \
+  --data-urlencode "csrf_token=$token" --data-urlencode "product_id=$new_id" \
+  --data-urlencode "quantity=1" --data-urlencode "defective_date=2026-10-22" \
+  --data-urlencode "reason=Test damage" --data-urlencode "media_ids=[$id]" \
+  "$base/assets/php/defective_goods_action.php"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||empty($j["data"]["defective_id"])) {fwrite(STDERR,json_encode($j));exit(1);}' "$tmp/defective.json"
+php -r '
+require "assets/php/db.php"; require "assets/php/media_common.php";
+$pid=(int)$argv[1];$mid=(int)$argv[2];
+$stmt=$mysqli->prepare("SELECT dg.id,p.stock FROM defective_goods dg JOIN products p ON p.id=dg.product_id WHERE dg.product_id=? ORDER BY dg.id DESC LIMIT 1");
+$stmt->bind_param("i",$pid);$stmt->execute();$row=$stmt->get_result()->fetch_assoc();
+if(!$row || (float)$row["stock"]!==6.0 || (int)media_defective_list($mysqli,(int)$row["id"])[0]["id"]!==$mid)exit(1);
+' "$new_id" "$id"
+echo 'PASS defective-photo snapshot and unchanged stock accounting path'
+
+# 10 is a PER-PRODUCT attachment limit; media storage itself is unbounded.
+for i in $(seq 1 11); do
+  php -r '$n=(int)$argv[2];$im=imagecreatetruecolor(70,70);$bg=imagecolorallocate($im,$n*17,25,99);imagefill($im,0,0,$bg);imagestring($im,1,4,4,(string)$n,imagecolorallocate($im,255,255,255));imagepng($im,$argv[1]);imagedestroy($im);' "$tmp/pic-$i.png" "$i"
+  curl -sS -b "$tmp/cookies" -o "$tmp/more-$i.json" -F action=upload \
+    -F "csrf_token=$token" -F "folder_id=$folder_id" -F "file=@$tmp/pic-$i.png" \
+    "$base/assets/php/media_api.php"
+  php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||empty($j["data"]["id"]))exit(1);' "$tmp/more-$i.json"
+done
+curl -sSf -b "$tmp/cookies" "$base/assets/php/media_api.php?action=list&folder=$folder_id" > "$tmp/large-folder.json"
+php -r '$j=json_decode(file_get_contents($argv[1]),true);if(empty($j["success"])||(int)$j["data"]["total"]!==12)exit(1);' "$tmp/large-folder.json"
+echo 'PASS 12-image folder demonstrates no global ten-file upload ceiling'
+
