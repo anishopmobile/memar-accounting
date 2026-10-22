@@ -896,6 +896,7 @@ function createInvoice(mysqli $mysqli, array $in): array
         $customerId = isSales($type) ? $partyId : null;
         $supplierId = isPurchase($type) ? $partyId : null;
 
+        $initialStatus = 'unpaid';
         $stmt = $mysqli->prepare(
             "INSERT INTO invoices
                 (invoice_number, type, customer_id, supplier_id, payment_type, payment_status,
@@ -909,7 +910,7 @@ function createInvoice(mysqli $mysqli, array $in): array
             $customerId,
             $supplierId,
             $in['payment_type'],
-            $old['payment_status'],
+            $initialStatus,
             $in['invoice_date'],
             $totals['subtotal'],
             $invoiceDiscount,
