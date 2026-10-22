@@ -481,7 +481,7 @@ $(function () {
             var rows = res.data || [];
             $('#invoiceProductTable .invoice-image-col').toggle(mediaImagesEnabled);
             var html = '';
-            if (!rows.length) html = '<tr><td colspan="7" class="empty-state">کالایی یافت نشد.</td></tr>';
+            if (!rows.length) html = '<tr><td colspan="8" class="empty-state">کالایی یافت نشد.</td></tr>';
             rows.forEach(function (p) {
                 var units = p.units || [];
                 var price = (units.length)
@@ -489,9 +489,9 @@ $(function () {
                     : (p[priceKey] || 0);
                 var unitsJson = JSON.stringify(units);
                 html += '<tr>'
+                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id) + '</td>'
                     + '<td>' + esc(p.code) + '</td>'
                     + '<td>' + esc(p.barcode) + '</td>'
-                    + '<td class="invoice-image-col" style="display:' + (mediaImagesEnabled ? 'table-cell' : 'none') + '">' + invoiceImageHtml(p.media_id) + '</td>'
                     + '<td>' + esc(p.name) + '</td>'
                     + '<td>' + esc(p.unit) + '</td>'
                     + '<td>' + window.Currency.formatNumber(price) + '</td>'
