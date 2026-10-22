@@ -699,6 +699,76 @@ $(function () {
     });
     $(document).on('click', '#invPickParty', function () { openPartyModal(); });
 
+    // ---------- دفتر مالی و تخصیص پرداخت ----------
+    var statementRows = [];
+    function loadInvoiceSettlement() {
+        var kind = isSales ? 'customer' : 'supplier';
+        var party = String($('#invPartyId').text() || '').trim();
+        if (!party || !currentInvoiceId) return;
+        $.getJSON('assets/php/accounting_statement.php', {party_kind:kind, party_id:party})
+            .done(function (res) {
+                if (!res.success || !res.data) { $('#invSettlementHistory').text(res.message || 'خطا'); return; }
+                var d = res.data;
+                statementRows = d.invoices || [];
+                var paid = d.payments || [];
+                var history = '<div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>نوع</th><th>روش</th><th>مبلغ</th><th>تخصیص داده‌شده</th><th>شماره پیگیری</th></tr></thead><tbody>';
+                paid.forEach(function (p) {
+                    history += '<tr><td>' + esc(p.payment_date) + '</td><td>' + (p.direction === 'in' ? 'دریافت' : 'پرداخت')
+                        + '</td><td>' + esc(p.method) + '</td><td>' + fmtRial(p.amount) + '</td><td>'
+                        + fmtRial(p.allocated) + '</td><td>' + esc(p.reference_number || '—') + '</td></tr>';
+                });
+                history += paid.length ? '' : '<tr><td colspan="6">تراکنشی ثبت نشده است.</td></tr>';
+                history += '</tbody></table></div><p>مانده حساب طرف معامله: ' + fmtRial(d.balance.net) + ' ' + window.Currency.label + '</p>';
+                $('#invSettlementHistory').html(history);
+                var alloc = '<p>تخصیص این پرداخت به فاکتورها (مجموع نباید از مبلغ تراکنش بیشتر باشد):</p><div class="table-wrapper"><table class="action-table"><thead><tr><th>فاکتور</th><th>مانده</th><th>مبلغ تخصیص (' + window.Currency.label + ')</th></tr></thead><tbody>';
+                statementRows.forEach(function (inv) {
+                    if (Number(inv.remaining) <= 0 || inv.needs_review) return;
+                    alloc += '<tr><td>' + esc(inv.invoice_number) + '</td><td>' + fmtRial(inv.remaining) + '</td><td><input type="number" class="inv-payment-allocation" min="0" max="' + escAttr(showBase(inv.remaining)) + '" step="1" value="0" data-id="' + inv.id + '"></td></tr>';
+                });
+                alloc += '</tbody></table></div>';
+                $('#invAllocationOptions').html(alloc);
+            })
+            .fail(function () { $('#invSettlementHistory').text('خطا در دریافت صورت‌حساب'); });
+    }
+    $(document).on('click', '#invRegisterReceipt', function () {
+        var amount = String($('#invReceiptAmount').val() || '').trim();
+        if (!amount || Number(amount) <= 0) { alert('مبلغ معتبر وارد کنید.'); return; }
+        var allocations = [];
+        var total = 0;
+        $('#invAllocationOptions .inv-payment-allocation').each(function () {
+            var v = Number($(this).val() || 0);
+            if (v > 0) { allocations.push({invoice_id:$(this).data('id'), amount:String($(this).val())}); total += v; }
+        });
+        if (total > Number(amount)) { alert('جمع تخصیص‌ها بیش از مبلغ پرداخت است.'); return; }
+        var btn = $(this);
+        btn.prop('disabled',true);
+        $.post('assets/php/accounting_action.php', {
+            csrf_token: csrf, action:'receipt',
+            party_kind:isSales?'customer':'supplier',
+            party_id:String($('#invPartyId').text() || '').trim(),
+            direction:isSales?'in':'out',
+            amount:amount,
+            method:$('#invReceiptMethod').val(),
+            reference_number:$('#invReceiptReference').val(),
+            request_key:uuid(),
+            allocations:JSON.stringify(allocations)
+        }).done(function (res) {
+            if (!res.success) { alert(res.message || 'خطا در ثبت'); return; }
+            $('#invReceiptAmount').val('');
+            $('#invReceiptReference').val('');
+            loadInvoiceSettlement();
+            $.getJSON('assets/php/invoice_get.php', {id:currentInvoiceId}).done(function (r) {
+                if (r.success && r.data) {
+                    var inv = r.data.invoice || r.data;
+                    $('#invoiceFormView').data('settled',parseFloat(showBase(inv.settled_amount || '0')) || 0);
+                    $('#invPaymentStatus').text(({paid:'پرداخت شده',unpaid:'پرداخت نشده',partial:'پرداخت جزئی'})[inv.payment_status] || '—');
+                    recalcs();
+                }
+            });
+        }).fail(function (xhr) { alert((xhr.responseJSON && xhr.responseJSON.message) || 'خطا در ثبت تراکنش'); })
+          .always(function () { btn.prop('disabled',false); });
+    });
+
     // ---------- ذخیره (Create / Edit) ----------
     function submitForm() {
         var items = [];
