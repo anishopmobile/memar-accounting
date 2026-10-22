@@ -171,3 +171,57 @@ function acct_apply_credit(mysqli $db, int $paymentId, int $invoiceId, $rawAmoun
         return ['invoice_id'=>$invoiceId,'payment_id'=>$paymentId];
     } catch (Throwable $e) {$db->rollback();throw $e;}
 }
+
+/**
+ * Efficient one-query balances for listings and exports, avoiding N+1 invoice
+ * reads and row multiplication between payments and invoices.
+ * An unknown legacy partial settlement is explicitly flagged, not guessed.
+ */
+function acct_party_balances(mysqli $db,string $kind): array {
+    acct_party_kind($kind);
+    $party=$kind==='customer'?'customers':'suppliers';
+    $col=$kind==='customer'?'customer_id':'supplier_id';
+    $typ=$kind==='customer'?'sales_invoice':'purchase_invoice';
+    $ret=$kind==='customer'
+      ? "LEFT JOIN (SELECT customer_id AS party_id,SUM(payable_amount) total FROM sales_returns GROUP BY customer_id) rr ON rr.party_id=p.id"
+      : '';
+    $returnExpr=$kind==='customer'?"COALESCE(rr.total,0)":'0';
+    $sql="SELECT p.id AS party_id,
+        COALESCE(iv.gross,0) AS gross,
+        COALESCE(iv.unknown_count,0) AS unknown_count,
+        (COALESCE(iv.gross,0)-COALESCE(iv.legacy,0)-COALESCE(al.settled,0)
+          +COALESCE(ob.amount,0)-COALESCE(py.free,0)-{$returnExpr}) AS balance
+        FROM {$party} p
+        LEFT JOIN (
+          SELECT {$col} party_id,SUM(payable_amount) gross,
+                 SUM(COALESCE(legacy_paid_amount,0)) legacy,
+                 SUM(legacy_paid_amount IS NULL) unknown_count
+          FROM invoices WHERE type='{$typ}' GROUP BY {$col}
+        ) iv ON iv.party_id=p.id
+        LEFT JOIN (
+          SELECT i.{$col} party_id,SUM(a.amount) settled
+          FROM account_payment_allocations a
+          JOIN invoices i ON i.id=a.invoice_id
+          WHERE i.type='{$typ}' GROUP BY i.{$col}
+        ) al ON al.party_id=p.id
+        LEFT JOIN (
+          SELECT x.party_id,SUM(x.amount-COALESCE(y.used,0)) free
+          FROM account_payments x
+          LEFT JOIN (SELECT payment_id,SUM(amount) used FROM account_payment_allocations GROUP BY payment_id) y ON y.payment_id=x.id
+          WHERE x.party_kind='{$kind}'
+          GROUP BY x.party_id
+        ) py ON py.party_id=p.id
+        LEFT JOIN account_opening_balances ob ON ob.party_kind='{$kind}' AND ob.party_id=p.id
+        {$ret}";
+    $res=$db->query($sql);
+    $map=[];
+    while ($res && ($row=$res->fetch_assoc())) {
+        $map[(int)$row['party_id']]=[
+            'balance'=>$row['balance'],
+            'gross'=>$row['gross'],
+            'unreconciled'=>(int)$row['unknown_count']>0
+        ];
+    }
+    if($res) $res->free();
+    return $map;
+}
