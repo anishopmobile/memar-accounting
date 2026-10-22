@@ -24,8 +24,15 @@ if ($mysqli->connect_errno) {
     exit('ارتباط با پایگاه داده برقرار نشد. لطفاً با مدیر سامانه تماس بگیرید.');
 }
 
-$mysqli->query("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-$mysqli->select_db($dbName);
+// Do not demand global CREATE DATABASE privileges on every request.
+// Installations with an existing schema may use a database-scoped account.
+try {
+    $mysqli->select_db($dbName);
+} catch (mysqli_sql_exception $e) {
+    if ((int)$e->getCode() !== 1049) throw $e;
+    $mysqli->query("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $mysqli->select_db($dbName);
+}
 $mysqli->set_charset('utf8mb4');
 
 // Authenticated image streaming uses an existing schema and MUST NOT execute
