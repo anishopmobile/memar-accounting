@@ -96,8 +96,16 @@ function acct_record_payment(mysqli $db,array $input): array {
     try {
         $cashAccountId=acct_resolve_cash_account($db,$method,$input['cash_account_id']??null);
         acct_party_lock($db,$kind,$id); // consistent lock order: party then invoice.
+        $sourceId=(int)($input['source_proforma_id']??0);
+        if ($sourceId>0) {
+            $stmt=$db->prepare('SELECT type,customer_id,supplier_id FROM invoices WHERE id=? FOR UPDATE');
+            $stmt->bind_param('i',$sourceId);$stmt->execute();$res=$stmt->get_result();$source=$res?$res->fetch_assoc():null;$stmt->close();
+            if (!$source || ($kind==='customer' && ($source['type']!=='sales_proforma'||(int)$source['customer_id']!==$id))
+                || ($kind==='supplier' && ($source['type']!=='purchase_proforma'||(int)$source['supplier_id']!==$id)))
+                throw new InvalidArgumentException('پیش‌فاکتور مبنای پیش‌پرداخت نامعتبر است.');
+        }
         ksort($alloc,SORT_NUMERIC);
-        $requestHash=hash('sha256',json_encode([$kind,$id,$direction,$amount,$method,$date,$ref,$note,$cashAccountId,$alloc],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
+        $requestHash=hash('sha256',json_encode([$kind,$id,$direction,$amount,$method,$date,$ref,$note,$cashAccountId,$sourceId,$alloc],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
         $stmt=$db->prepare('SELECT id,request_hash FROM account_payments WHERE client_token=?');
         $stmt->bind_param('s',$token);$stmt->execute();$res=$stmt->get_result();$existing=$res?$res->fetch_assoc():null;$stmt->close();
         if ($existing) {
@@ -114,8 +122,9 @@ function acct_record_payment(mysqli $db,array $input): array {
                 throw new InvalidArgumentException('فاکتور متعلق به این طرف حساب نیست.');
             if (money_cmp($value,$v['remaining'])>0) throw new InvalidArgumentException('تخصیص از مانده فاکتور بیشتر است.');
         }
-        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token,cash_account_id,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
-        $stmt->bind_param('sisssssssis',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId,$requestHash);
+        $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,reference_no,note,client_token,cash_account_id,source_proforma_id,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)');
+        $stmt->bind_param('sissssssiis',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId,$sourceDbId = $sourceId ?: null;
+        $stmt->bind_param('sissssssiis',$kind,$id,$direction,$amount,$method,$date,$ref,$note,$token,$cashAccountId,$sourceDbId,$requestHash);
         $stmt->execute();$paymentId=(int)$stmt->insert_id;$stmt->close();
         foreach ($alloc as $invoiceId=>$value) {
             $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount) VALUES(?,?,?)');
@@ -153,7 +162,7 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
         $left=money_sub($p['amount'],$q['s']);
         $preferredDirection=$kind==='customer'?'in':'out';
         $unallocated=$p['direction']===$preferredDirection ? money_add($unallocated,$left) : money_sub($unallocated,$left);
-        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'cash_account_name'=>$p['cash_account_name'],'allocated'=>$q['s'],'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note'],'is_reversed'=>(bool)$p['is_reversed'],'is_reversal'=>$p['reversed_payment_id']!==null];
+        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'cash_account_name'=>$p['cash_account_name'],'allocated'=>$q['s'],'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note'],'source_proforma_id'=>$p['source_proforma_id'],'is_reversed'=>(bool)$p['is_reversed'],'is_reversal'=>$p['reversed_payment_id']!==null];
     }
     $stmt->close();
     $stmt=$db->prepare('SELECT amount FROM account_opening_balances WHERE party_kind=? AND party_id=?');
