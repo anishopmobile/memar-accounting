@@ -14,6 +14,7 @@
 
 require_once __DIR__ . '/jdf.php';
 require_once __DIR__ . '/product_common.php';
+require_once __DIR__ . '/accounting/ledger.php';
 
 /* ============================================================
  * ۱) ابزار صحیح محاسبات پولی (BCMath)
@@ -733,6 +734,7 @@ function getInvoice(mysqli $mysqli, int $invoiceId): ?array
     }
 
     $inv['items'] = $items;
+    $inv['accounting'] = acct_invoice_balance($mysqli, $invoiceId);
     return $inv;
 }
 
@@ -963,6 +965,18 @@ function createInvoice(mysqli $mysqli, array $in): array
             }
         }
 
+        // Book money independently of the invoice, in the SAME DB transaction.
+        // Advance for a proforma stays unallocated until conversion.
+        $initial = (string)($in['initial_payment'] ?? '0');
+        if (money_cmp($initial, '0') > 0) {
+            acct_post($mysqli, isSales($type) ? 'customer' : 'supplier', $partyId,
+                isSales($type) ? 'in' : 'out', $initial, $in['payment_type'],
+                $in['invoice_date'], '', '', 'پرداخت هنگام ثبت فاکتور',
+                isFinal($type) ? $invoiceId : null,
+                isFinal($type) ? null : $invoiceId,
+                $clientToken ? 'invoice-initial-'.$invoiceId : '', true, true);
+        }
+        acct_sync_invoice($mysqli, $invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'فاکتور با موفقیت ثبت شد.', 'invoice_id' => $invoiceId];
     } catch (Exception $e) {
@@ -1023,6 +1037,18 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         return ['ok' => false, 'message' => 'فاکتور موردنظر یافت نشد.'];
     }
     $oldType = $old['type'];
+    $oldPartyId = (int)(isSales($oldType) ? $old['customer_id'] : $old['supplier_id']);
+    if ((int)($in['party_id'] ?? 0) !== $oldPartyId) {
+        $movementCount = acct_one($mysqli,
+            'SELECT COUNT(*) FROM accounting_allocations WHERE invoice_id=?', 'i', [$invoiceId]);
+        $advanceCount = acct_one($mysqli,
+            'SELECT COUNT(*) FROM accounting_receipts WHERE proforma_id=?', 'i', [$invoiceId]);
+        $legacyCount = acct_one($mysqli,
+            'SELECT COUNT(*) FROM accounting_legacy_invoices WHERE invoice_id=? AND recognized_amount>0', 'i', [$invoiceId]);
+        if ((int)$movementCount + (int)$advanceCount + (int)$legacyCount > 0) {
+            return ['ok'=>false,'message'=>'تغییر طرف حساب فاکتور دارای سابقه مالی مجاز نیست.'];
+        }
+    }
 
     /* فاکتوری که برای آن برگشت فروش ثبت شده است باید تاریخی و غیرقابل‌ویرایش بماند */
     $stmt = $mysqli->prepare('SELECT 1 FROM sales_returns WHERE invoice_id = ? LIMIT 1');
@@ -1259,6 +1285,11 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         $stmt->execute();
         $stmt->close();
 
+        $balance = acct_invoice_balance($mysqli, $invoiceId);
+        if (money_cmp($balance['overpaid_credit'], '0') > 0) {
+            throw new InvalidArgumentException('ویرایش مبلغ، پرداخت قبلی را بیشتر از مبلغ فاکتور می‌کند؛ ابتدا سند مالی را تعیین تکلیف کنید.');
+        }
+        acct_sync_invoice($mysqli, $invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'فاکتور با موفقیت ویرایش شد.', 'invoice_id' => $invoiceId];
     } catch (Exception $e) {
@@ -1289,6 +1320,12 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
         return ['ok' => false, 'message' => 'فاکتور موردنظر یافت نشد.'];
     }
     $type = $inv['type'];
+    $payments = acct_one($mysqli,'SELECT COUNT(*) FROM accounting_allocations WHERE invoice_id=?','i',[$invoiceId]);
+    $advances = acct_one($mysqli,'SELECT COUNT(*) FROM accounting_receipts WHERE proforma_id=?','i',[$invoiceId]);
+    $legacy = acct_one($mysqli,'SELECT COUNT(*) FROM accounting_legacy_invoices WHERE invoice_id=?','i',[$invoiceId]);
+    if ((int)$payments + (int)$advances + (int)$legacy > 0) {
+        return ['ok'=>false,'message'=>'برای حفظ سوابق مالی، حذف فاکتور دارای گردش یا سابقه تاریخی مجاز نیست.'];
+    }
 
     /* فاکتوری که برای آن برگشت فروش ثبت شده است قابل حذف نیست (حفظ سوابق) */
     $stmt = $mysqli->prepare('SELECT 1 FROM sales_returns WHERE invoice_id = ? LIMIT 1');
@@ -1453,11 +1490,27 @@ function convertInvoice(mysqli $mysqli, int $invoiceId): array
             $stocks[$cpid] = applyStockChange($mysqli, (int) $cpid, $stocks[$cpid], money_mul('-1', $need), $invoiceId, $finalType, 'create');
         }
 
-        $stmt = $mysqli->prepare('UPDATE invoices SET type = ?, invoice_number = ? WHERE id = ?');
+        $stmt = $mysqli->prepare('UPDATE invoices SET type = ?, invoice_number = ?, payment_status = "unpaid" WHERE id = ?');
         $stmt->bind_param('ssi', $finalType, $newNumber, $invoiceId);
         $stmt->execute();
         $stmt->close();
 
+        // Transfer the advance associated with this proforma to the issued invoice.
+        // Excess advance stays an unallocated credit for future purchases.
+        $partyKind = $isSales ? 'customer' : 'supplier';
+        $partyId = (int)($isSales ? $inv['customer_id'] : $inv['supplier_id']);
+        acct_lock_party($mysqli, $partyKind, $partyId);
+        $stmt = $mysqli->prepare("SELECT id,amount FROM accounting_receipts
+           WHERE proforma_id=? AND status='posted' ORDER BY id");
+        $stmt->bind_param('i',$invoiceId);
+        $stmt->execute();$advances=$stmt->get_result()->fetch_all(MYSQLI_ASSOC);$stmt->close();
+        foreach ($advances as $advance) {
+            $remaining=acct_invoice_balance($mysqli,$invoiceId)['remaining'];
+            if (money_cmp($remaining,'0')<=0) break;
+            $chunk=money_cmp($remaining,$advance['amount'])<0?$remaining:$advance['amount'];
+            acct_allocate($mysqli,(int)$advance['id'],$invoiceId,$chunk,$partyKind,$partyId);
+        }
+        acct_sync_invoice($mysqli,$invoiceId);
         $mysqli->commit();
         return ['ok' => true, 'message' => 'پیش‌فاکتور با موفقیت به فاکتور قطعی تبدیل شد.', 'invoice_id' => $invoiceId];
     } catch (Exception $e) {
@@ -1646,6 +1699,7 @@ function listInvoices(mysqli $mysqli, array $filter): array
             $r['party_name'] = $partyCache['s'][$sid];
         }
         $r['invoice_date_shamsi'] = $r['invoice_date'] ? jdate('j F Y', strtotime($r['invoice_date'])) : '';
+        $r['accounting'] = acct_invoice_balance($mysqli, (int)$r['id']);
         unset($r);
     }
 
