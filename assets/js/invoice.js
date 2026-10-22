@@ -150,14 +150,17 @@ $(function () {
         rows.forEach(function (r) {
             var isPro = /proforma/.test(r.type);
             var typeLbl = isPro ? 'پیش فاکتور' : 'فاکتور';
-            var stLbl = ({ paid: 'پرداخت شده', unpaid: 'پرداخت نشده', partial: 'جزئی' })[r.payment_status] || r.payment_status;
+            var bal = r.accounting || {};
+            var stLbl = /proforma/.test(r.type) ? 'پیش‌فاکتور' :
+                (({ paid: 'پرداخت شده', unpaid: 'پرداخت نشده', partial: 'جزئی' })[bal.status || r.payment_status] || r.payment_status);
             html += '<tr>'
                 + '<td>' + esc(r.invoice_number) + '</td>'
                 + '<td>' + esc(r.party_name) + '</td>'
                 + '<td>' + esc(r.invoice_date_shamsi) + '</td>'
                 + '<td>' + typeLbl + '</td>'
                 + '<td>' + stLbl + '</td>'
-                + '<td>' + fmtRial(r.payable_amount) + ' ' + window.Currency.label + '</td>'
+                + '<td>' + fmtRial(r.payable_amount) + ' ' + window.Currency.label +
+                  (!isPro && bal.remaining != null ? '<div class="setting-note">مانده: ' + fmtRial(bal.remaining) + ' ' + window.Currency.label + '</div>' : '') + '</td>'
                 + '<td class="invoice-actions">'
                 + '<button class="button-secondary small invoice-edit" data-id="' + r.id + '" type="button">مشاهده/ویرایش</button> '
                 + (isPro ? '<button class="button-secondary small invoice-convert" data-id="' + r.id + '" type="button">تبدیل به قطعی</button> ' : '')
@@ -286,9 +289,7 @@ $(function () {
         var paymentTypes = '<option value="cash">نقدی</option>'
             + '<option value="pos" selected>کارت خوان</option>'
             + '<option value="bank_transfer">واریز وجه</option>';
-        var statuses = '<option value="unpaid">پرداخت نشده</option>'
-            + '<option value="paid" selected>پرداخت شده</option>'
-            + '<option value="partial">پرداخت جزئی</option>';
+
         var typeOpts = isSales
             ? '<option value="sales_invoice">فاکتور فروش</option><option value="sales_proforma">پیش فاکتور فروش</option>'
             : '<option value="purchase_invoice">فاکتور خرید</option><option value="purchase_proforma">پیش فاکتور خرید</option>';
@@ -303,7 +304,7 @@ $(function () {
             + '<div class="form-row"><label>شماره فاکتور</label><input id="invNumber" type="text" readonly value="' + escAttr(data ? data.invoice_number : (isEdit ? '' : 'به صورت خودکار')) + '"></div>'
             + '<div class="form-row"><label>نوع</label><select id="invType">' + typeOpts.replace('value="' + typeVal + '"', 'value="' + typeVal + '" selected') + '</select></div>'
             + '<div class="form-row"><label>نوع پرداخت</label><select id="invPaymentType">' + paymentTypes + '</select></div>'
-            + '<div class="form-row"><label>وضعیت پرداخت</label><select id="invPaymentStatus">' + statuses + '</select></div>'
+            + '<div class="form-row"><label>وضعیت پرداخت (محاسبه‌شده)</label><div id="invPaymentStatusText" class="money-cell">' + (isEdit && data.accounting ? esc(({paid:'پرداخت شده',unpaid:'پرداخت نشده',partial:'پرداخت جزئی',proforma:'پیش‌فاکتور'})[data.accounting.status] || '—') : 'در انتظار ثبت') + '</div></div>'
             + '<div class="form-row"><label>تاریخ (شمسی)</label>'
             + '<input type="text" id="invDateDisplay" class="inv-date-display" readonly="readonly" autocomplete="off" placeholder="۱۴۰۵/۰۵/۲۳" style="direction:ltr;text-align:center;">'
             + '<input type="hidden" id="invDate" name="invoice_date" value="' + escAttr(data ? data.invoice_date : todayISO()) + '">'
@@ -324,6 +325,21 @@ $(function () {
             + '<div class="form-row"><label>مالیات</label><div id="invTax" class="money-cell">0</div></div>'
             + '<div class="form-row"><label>مبلغ قابل پرداخت</label><div id="invPayable" class="money-cell strong">0</div></div>'
             + '</div>'
+            + '<div class="card" style="margin:1rem 0;background:var(--tblr-bg-surface-secondary,#f7f9fc)">'
+            + '<h3>دریافت و پرداخت فاکتور</h3>'
+            + (isEdit
+                ? '<div class="form-grid"><div class="form-row"><label>مبلغ تسویه‌شده</label><div class="money-cell strong" id="invPaidValue">—</div></div>'
+                + '<div class="form-row"><label>مانده فاکتور</label><div class="money-cell strong" id="invRemainingValue">—</div></div>'
+                + '<div class="form-row"><label>پیش‌پرداخت</label><div class="money-cell" id="invAdvanceValue">—</div></div></div>'
+                + '<div class="page-actions"><button type="button" class="button-secondary" id="invNewReceipt">' + (isSales ? 'ثبت دریافت جدید' : 'ثبت پرداخت جدید') + '</button>'
+                + '<button type="button" class="button-secondary" id="invApplyCredit">اعمال اعتبار قبلی</button>'
+                + '<a class="button-secondary" href="?page=party-statement&kind=' + (isSales ? 'customer' : 'supplier') + '&id=' + Number(isSales ? data.customer_id : data.supplier_id) + '">صورت‌حساب طرف حساب</a></div>'
+                + '<div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>مبلغ</th><th>تخصیص به فاکتور</th><th>وضعیت</th></tr></thead><tbody id="invAccountingHistory"></tbody></table></div>'
+                : '<div class="form-grid"><div class="form-row"><label>مبلغ دریافتی/پرداختی هنگام ثبت (' + esc(window.Currency.label) + ')</label>'
+                + '<input type="number" id="invInitialPaid" value="0" step="0.01" min="0"></div>'
+                + '<div class="form-row"><label>مانده تخمینی فاکتور</label><div id="invInitialRemaining" class="money-cell">—</div></div></div>'
+                + '<p class="setting-note">مبلغ اضافی، پس از تسویه فاکتور فعلی، برای بدهی‌های قبلی تخصیص می‌یابد و مازاد آن اعتبار خواهد شد. برای پرداخت ترکیبی، پس از ثبت فاکتور تراکنش جداگانه ثبت کنید.</p>')
+            + '</div>'
             + '<div class="form-row"><label>مبلغ به حروف</label><div id="invWords" class="words-cell"></div></div>'
             + '<div class="form-row"><label>یادداشت</label><textarea id="invNote" rows="2">' + esc(data ? data.note : '') + '</textarea></div>'
             + '<div class="form-actions">'
@@ -337,7 +353,7 @@ $(function () {
         $('#invoiceFormView').show();
 
         if (data && data.payment_type) $('#invPaymentType').val(data.payment_type);
-        if (data && data.payment_status) $('#invPaymentStatus').val(data.payment_status);
+        // Payment status is derived on the server, never selected manually.
         if (data && data.items) {
             data.items.forEach(function (it) {
                 addItemRow(it.product_id, it.product_name, it.unit_price, it.quantity, it.discount, it.product_code, it.units || [], it.unit_id, it.media_id);
@@ -346,6 +362,7 @@ $(function () {
         recalcs();
         bindFormEvents();
         initDatePicker();
+        if (isEdit && window.AccountingUI) window.AccountingUI.refreshInvoice(Number(currentInvoiceId));
     }
     function showList(page) {
         var clean = cleanUrlForList();
@@ -420,6 +437,12 @@ $(function () {
         $('#invTax').text(splitNum(Math.round(tax)) + ' ' + window.Currency.label);
         $('#invPayable').text(splitNum(Math.round(payable)) + ' ' + window.Currency.label);
         $('#invWords').text(amountToWords(payable));
+        if ($('#invInitialRemaining').length) {
+            var initial = Math.max(0, parseFloat($('#invInitialPaid').val()) || 0);
+            $('#invInitialRemaining').text(splitNum(Math.round(Math.max(0,payable-initial))) + ' ' + window.Currency.label);
+            $('#invPaymentStatusText').text((/proforma/.test($('#invType').val())) ? 'پیش‌فاکتور' :
+                (initial<=0?'پرداخت نشده':initial>=payable?'پرداخت شده':'پرداخت جزئی'));
+        }
     }
 
     function bindFormEvents() { /* رویدادها به‌صورت delegate روی document بسته شده‌اند */ }
@@ -453,10 +476,33 @@ $(function () {
     }
 
     $(document).on('click', '#invoiceBackToList, #invoiceFormCancel', function () { showList(); });
-    $(document).on('input', '#invItemsTable .ii-price, #invItemsTable .ii-qty, #invItemsTable .ii-disc, #invDiscount', function () { recalcs(); });
+    $(document).on('input', '#invItemsTable .ii-price, #invItemsTable .ii-qty, #invItemsTable .ii-disc, #invDiscount, #invInitialPaid', function () { recalcs(); });
     $(document).on('click', '.ii-remove', function () { $(this).closest('tr').remove(); recalcs(); });
     $(document).on('click', '#invAddProduct', function () { openProductModal(); });
     $(document).on('click', '#invAddService', function () { openServiceModal(); });
+    $(document).on('click', '#invNewReceipt', function () {
+        if (!currentInvoiceId || !window.AccountingUI) return;
+        var kind = isSales ? 'customer' : 'supplier';
+        var pid = parseInt($('#invPartyId').text(),10);
+        if (!pid) return;
+        var proforma = /proforma/.test($('#invType').val());
+        window.AccountingUI.openPayment(kind,pid,proforma?null:Number(currentInvoiceId),proforma?Number(currentInvoiceId):null,{
+            onSuccess:function(){ window.AccountingUI.refreshInvoice(Number(currentInvoiceId)); }
+        });
+    });
+    $(document).on('click', '#invApplyCredit', function () {
+        if (!currentInvoiceId || /proforma/.test($('#invType').val())) {
+            alert('اعمال اعتبار فقط برای فاکتور قطعی امکان‌پذیر است.'); return;
+        }
+        if (!confirm('اعتبار تخصیص‌نیافته طرف حساب به این فاکتور اختصاص داده شود؟')) return;
+        $.post('assets/php/accounting_action.php',{action:'apply_credit',csrf_token:csrf,
+            party_kind:isSales?'customer':'supplier',party_id:parseInt($('#invPartyId').text(),10),
+            invoice_id:Number(currentInvoiceId)}).done(function(r) {
+            if (!r.success) { alert(r.message||'خطا'); return; }
+            alert('مبلغ تخصیص‌یافته: '+fmtRial(r.data.allocated)+' '+window.Currency.label);
+            window.AccountingUI.refreshInvoice(Number(currentInvoiceId));
+        }).fail(function(xhr){alert((xhr.responseJSON && xhr.responseJSON.message)||'خطا در اعمال اعتبار');});
+    });
 
     // ---------- مودال انتخاب کالا ----------
     var pickedScheduled = true;
@@ -715,7 +761,7 @@ $(function () {
             invoice_id: currentInvoiceId,
             type: $('#invType').val(),
             payment_type: $('#invPaymentType').val(),
-            payment_status: $('#invPaymentStatus').val(),
+            initial_payment: currentInvoiceId ? '0' : ($('#invInitialPaid').val() || '0'),
             invoice_date: gDate,
             discount: $('#invDiscount').val() || '0',
             note: $('#invNote').val(),
