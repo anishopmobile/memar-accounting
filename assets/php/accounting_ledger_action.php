@@ -101,14 +101,14 @@ try {
         $invoiceId=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         if (!$returnId || !$invoiceId) throw new InvalidArgumentException('سند برگشت یا فاکتور نامعتبر است.');
         $amount=parseMoneyInput((string)($_POST['amount']??''));
-        respond_json(true,'اعتبار برگشت از فروش تخصیص داده شد.',acct_allocate_return_credit($mysqli,(int)$returnId,(int)$invoiceId,$amount));
+        respond_json(true,'اعتبار برگشت از فروش تخصیص داده شد.',acct_allocate_return_credit($mysqli,(int)$returnId,(int)$invoiceId,$amount,(string)($_POST['client_token']??'')));
     }
     if ($action==='apply_credit') {
         $paymentId=filter_var($_POST['payment_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         $invoiceId=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         if (!$paymentId || !$invoiceId) throw new InvalidArgumentException('پرداخت یا فاکتور نامعتبر است.');
         $amount=parseMoneyInput((string)($_POST['amount']??''));
-        respond_json(true,'اعتبار به فاکتور تخصیص داده شد.',acct_apply_credit($mysqli,(int)$paymentId,(int)$invoiceId,$amount));
+        respond_json(true,'اعتبار به فاکتور تخصیص داده شد.',acct_apply_credit($mysqli,(int)$paymentId,(int)$invoiceId,$amount,(string)($_POST['client_token']??'')));
     }
     if ($action==='opening_balance') {
         $kind=acct_party_kind((string)($_POST['party_kind']??''));
