@@ -59,7 +59,7 @@ function ledger_party_summary(mysqli $db,string $kind,int $id): array {
  * No automatic allocation; explicit allocations are persisted and independently auditable.
  */
 function ledger_record_payment(mysqli $db,array $in): array {
-    ledger_migrate($db);
+    ledger_initialize_legacy($db);
     $kind=(string)($in['party_kind']??'');
     $pid=filter_var($in['party_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
     $method=(string)($in['method']??'');
