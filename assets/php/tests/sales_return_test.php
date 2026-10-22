@@ -219,10 +219,10 @@ function t_last_return_movement(mysqli $mysqli, int $returnId): ?array
 echo "== Test A: Full return ==\n";
 $p = t_make_product($mysqli, 'T-SR-A-1', 'برگشت کامل');
 $r = t_purchase($mysqli, $p['id'], $p['unit_id'], 100, '1000');
-t_check('purchase created', $r['ok']);
+t_check('purchase created', $r['ok'], (string)($r['message'] ?? ''));
 $purchaseInv = (int) $r['invoice_id'];
 $r = t_sell($mysqli, $p['id'], $p['unit_id'], 10, '2000');
-t_check('sales created', $r['ok']);
+t_check('sales created', $r['ok'], (string)($r['message'] ?? ''));
 $saleInv = (int) $r['invoice_id'];
 $stockAfterSale = t_stock_of($mysqli, $p['id']);
 t_check('stock after sale = 90', money_cmp($stockAfterSale, '90') === 0, $stockAfterSale);
