@@ -1,30 +1,8 @@
 <?php
 require_once __DIR__ . '/../assets/php/db.php';
 require_once __DIR__ . '/../assets/php/currency.php';
-
-$rows = [];
-$query = "
-    SELECT
-        s.id,
-        s.company_name,
-        s.first_name,
-        s.last_name,
-        s.phone,
-        s.address,
-        COALESCE(SUM(CASE WHEN i.type = 'purchase_invoice' THEN i.payable_amount ELSE 0 END), 0) AS total_purchases,
-        COALESCE(SUM(CASE WHEN i.type = 'purchase_invoice' AND i.payment_status IN ('unpaid', 'partial') THEN i.payable_amount ELSE 0 END), 0) AS unpaid
-    FROM suppliers s
-    LEFT JOIN invoices i ON s.id = i.supplier_id
-    GROUP BY s.id, s.company_name, s.first_name, s.last_name, s.phone, s.address
-    ORDER BY s.created_at DESC
-";
-$result = $mysqli->query($query);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $rows[] = $row;
-    }
-    $result->free();
-}
+require_once __DIR__ . '/../assets/php/ledger/ledger_reports.php';
+$rows = ledger_parties_report($mysqli, 'supplier');
 ?>
 <div class="card">
     <div class="page-actions">
@@ -43,12 +21,12 @@ if ($result) {
                     <th>تلفن</th>
                     <th>آدرس</th>
                     <th>مجموع خرید</th>
-                    <th>مبلغ پرداخت نشده</th>
+                    <th>مبلغ پرداخت نشده</th><th>اعتبار نزد تأمین‌کننده</th><th>صورت‌حساب</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (count($rows) === 0): ?>
-                    <tr class="empty-state-row"><td colspan="5" class="empty-state">تامین‌کننده‌ای یافت نشد</td></tr>
+                    <tr class="empty-state-row"><td colspan="7" class="empty-state">تامین‌کننده‌ای یافت نشد</td></tr>
                 <?php else: ?>
                     <?php foreach ($rows as $r): ?>
                         <?php
@@ -62,7 +40,9 @@ if ($result) {
                             <td><?php echo htmlspecialchars($r['phone'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($r['address'], ENT_QUOTES, 'UTF-8')); ?></td>
                             <td><?php echo formatMoneyNumber((string) $r['total_purchases']); ?></td>
-                            <td><?php echo formatMoneyNumber((string) $r['unpaid']); ?></td>
+                            <td><?php echo formatMoneyNumber((string) $r['unpaid']); ?><?php if ((int)$r['requires_reconciliation']>0): ?> <small>(نیاز به تطبیق)</small><?php endif; ?></td>
+                            <td><?php echo formatMoneyNumber((string)$r['credit']); ?></td>
+                            <td><a class="button-secondary small" href="?page=accounting-ledger&amp;kind=supplier&amp;party_id=<?php echo (int)$r['id']; ?>">صورت‌حساب</a></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
