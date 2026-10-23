@@ -11,9 +11,12 @@
   var root = document.documentElement;
 
   function ensure(select) {
+    // kamaDatepicker owns native month/year selectors inside .bd-main.
+    // Global HCG enhancement changes their event/focus behavior and prevents
+    // the selected Jalali month/year from being used for subsequent day picks.
     if (!select || select.tagName !== 'SELECT' || select.multiple ||
         select.size > 1 || select.hasAttribute('data-hcg-exclude') ||
-        select.closest('[data-hcg-exclude]')) return;
+        select.closest('[data-hcg-exclude], .bd-main')) return;
     if (select._hcgApi) {
       enhanced.add(select);
       return;

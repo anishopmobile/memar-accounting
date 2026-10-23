@@ -58,7 +58,7 @@ After deployment, locate every invoice flagged «تطبیق پرداخت تار�
 | Mixed payment 2m POS + 1m cash + 2m bank | Three independently recorded receipts with correct selected accounts; same invoice fully paid |
 | Proforma advance 2m | No final debt and no stock change; unallocated credit recorded; credit can later settle converted final invoice |
 | Sales return credited 1m | Reduces customer net debt by 1m without fake receipt; available to allocate or refund |
-| Jalali receipt/payment date | Existing Persian calendar picks a day; hidden Gregorian ISO is persisted without date shift; invoices, receipt history, movement ledger and Excel statement show the same Jalali day. |
+| Jalali receipt/payment date | Existing Persian calendar picks a day; hidden Gregorian ISO is persisted without date shift; invoices, receipt history, movement ledger and Excel statement show the same Jalali day. Month and year selects inside kamaDatepicker remain native and select the requested Jalali month/year, without HCG enhancement. |
 | Change display currency TOMAN ↔ IRR | Every amount renders at correct scale while DB value and outstanding remain unchanged |
 | Correct duplicate submission using same token | One payment only; different payload with same token rejected |
 | Concurrent attempts to overpay the same invoice | Only allowed total may be allocated; no negative invoice remainder |

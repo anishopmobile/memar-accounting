@@ -63,12 +63,36 @@ async function submitBatch(page,amounts) {
    await openInvoice(page,'factors',fixture.sales_invoice_id);
    const invoiceDateText=await page.locator('#acctContent .action-table').first().locator('tbody tr td').nth(1).innerText();
    assert.match(invoiceDateText,/^[۰-۹]{4}\/[۰-۹]{2}\/[۰-۹]{2}$/,'invoice dates are displayed in Jalali');
+   // Prevent regression: internal kamaDatepicker month/year dropdowns stay
+   // native despite the global searchable-select MutationObserver.
+   const initialJalali=await page.locator('#acctDateDisplay').inputValue();
+   const initialYear=Number(initialJalali.split('/')[0]);
+   const month=page.locator('#bd-month-acctDateDisplay');
+   const year=page.locator('#bd-year-acctDateDisplay');
+   assert.equal(await month.getAttribute('class'),'bd-month','month stays native');
+   assert.equal(await year.getAttribute('class'),'bd-year','year stays native');
+   assert.equal(await page.locator('#bd-main-acctDateDisplay .hcg-select').count(),0,'calendar has no HCG wrapper');
    await page.locator('#acctDateDisplay').click();
-   await page.locator('#bd-main-acctDateDisplay .day-12').click();
+   await month.selectOption('6'); // شهریور
+   assert.equal(await month.inputValue(),'6','calendar month changes');
+   await page.locator('#bd-main-acctDateDisplay .day-10').click();
+   assert.equal(await page.locator('#acctDateDisplay').inputValue(),initialYear+'/06/10',
+      'choosing شهریور 10 must not revert to the previous month');
    const selectedGregorianDate=await page.locator('#acctDate').inputValue();
-   const selectedJalaliDate=await page.locator('#acctDateDisplay').inputValue();
    assert.match(selectedGregorianDate,/^\d{4}-\d{2}-\d{2}$/);
-   assert.match(selectedJalaliDate,/^\d{4}\/\d{2}\/12$/,'calendar-selected day is shown in Jalali');
+   await page.locator('#acctDateDisplay').click();
+   await year.selectOption(String(initialYear-1));
+   await month.selectOption('6');
+   await page.locator('#bd-main-acctDateDisplay .day-10').click();
+   assert.equal(await page.locator('#acctDateDisplay').inputValue(),(initialYear-1)+'/06/10',
+      'selecting a different year persists through day selection');
+   await page.locator('#acctDateDisplay').click();
+   await year.selectOption(String(initialYear));
+   await month.selectOption('6');
+   await page.locator('#bd-main-acctDateDisplay .day-10').click();
+   assert.equal(await page.locator('#acctDateDisplay').inputValue(),initialYear+'/06/10');
+   assert.equal(await page.locator('#acctDate').inputValue(),selectedGregorianDate,
+      'same Jalali date must roundtrip to identical database date');
    await submitBatch(page,[3000000]);
    let statement=await getStatement(page,'customer',fixture.customer_id);
    assert.equal(statement.payments[0].date,selectedGregorianDate,'Jalali picker posts Gregorian date to database');

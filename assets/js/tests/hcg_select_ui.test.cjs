@@ -100,6 +100,17 @@ function ready(page,selector) {
       await method.locator('xpath=..').locator('.hcg-select-control').click();
       await method.locator('xpath=..').locator('.hcg-select-option').filter({hasText:'نقدی'}).click();
       assert.equal(await method.inputValue(),'cash','dynamic payment method select remains interactive');
+      // Native invoice calendar must also ignore HCG enhancement.
+      await page.waitForFunction(()=>!!document.getElementById('bd-month-invDateDisplay') &&
+        !!document.getElementById('bd-year-invDateDisplay'));
+      const invoicePicker=page.locator('#bd-main-invDateDisplay');
+      assert.equal(await invoicePicker.locator('.hcg-select').count(),0,'kamaDatepicker must remain native');
+      const invYear=(await page.locator('#invDateDisplay').inputValue()).split('/')[0];
+      await page.locator('#invDateDisplay').click();
+      await invoicePicker.locator('.bd-month').selectOption('6');
+      await invoicePicker.locator('.day-10').click();
+      assert.equal(await page.locator('#invDateDisplay').inputValue(),invYear+'/06/10',
+        'invoice month dropdown selection is applied to chosen day');
       await page.locator('#invoiceBackToList').click();
 
       await page.goto(base+'/index.php?page=goods-and-services');
