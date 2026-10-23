@@ -166,7 +166,7 @@ function acct_refund_reserved(mysqli $db,string $kind,int $partyId,string $sourc
  * their original money for reuse. Reversal of the legacy refund is safe;
  * otherwise operator-assisted reconciliation is required before allocation.
  */
-function acct_assert_refunds_allocatable(mysqli $db,string $kind,int $partyId): void {
+function acct_has_unmapped_refunds(mysqli $db,string $kind,int $partyId): bool {
     $opposite=$kind==='customer'?'out':'in';
     $stmt=$db->prepare("SELECT p.id FROM account_payments p
         WHERE p.party_kind=? AND p.party_id=? AND p.direction=?
@@ -176,7 +176,10 @@ function acct_assert_refunds_allocatable(mysqli $db,string $kind,int $partyId): 
         LIMIT 1");
     $stmt->bind_param('sis',$kind,$partyId,$opposite);
     $stmt->execute();$unmapped=$stmt->get_result()->fetch_assoc();$stmt->close();
-    if($unmapped)
+    return (bool)$unmapped;
+}
+function acct_assert_refunds_allocatable(mysqli $db,string $kind,int $partyId): void {
+    if(acct_has_unmapped_refunds($db,$kind,$partyId))
         throw new InvalidArgumentException('استرداد تاریخی بدون تعیین منبع اعتبار وجود دارد؛ پیش از تخصیص مجدد یا استرداد تازه، این سند باید بررسی یا اصلاح شود.');
 }
 
@@ -275,7 +278,8 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
     $statement=['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'has_opening_balance'=>$hasOpening,
       'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'available_payment_credit'=>$availablePaymentCredit,
       'return_credit'=>$returnCredits,'available_return_credit'=>$availableReturnCredit,'available_opening_credit'=>$openingAvailable,
-      'returns'=>$returns,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
+      'returns'=>$returns,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0,
+      'has_unmapped_refunds'=>acct_has_unmapped_refunds($db,$kind,$partyId)];
     $statement['movements']=acct_party_timeline($statement);
     return $statement;
 }
@@ -476,6 +480,7 @@ function acct_reverse_payment(mysqli $db,int $paymentId,string $reason,string $t
         if ($already) {$db->commit();return ['payment_id'=>(int)$already['id'],'duplicate'=>true];}
         $requiredDirection=$p['party_kind']==='customer'?'in':'out';
         if($p['direction']===$requiredDirection) {
+            acct_assert_refunds_allocatable($db,$p['party_kind'],(int)$p['party_id']);
             $reserved=acct_refund_reserved($db,$p['party_kind'],(int)$p['party_id'],'payment',$paymentId);
             if(money_cmp($reserved,'0')>0)
                 throw new InvalidArgumentException('این سند منبع استرداد اعتبار است؛ ابتدا سند استرداد وابسته را اصلاح کنید.');
