@@ -407,4 +407,21 @@ check_acct($blocked,'over-refund rejected after competing serialized posting');
 check_acct(acct_party_statement($mysqli,'customer',$concurrentParty)['balance']==='-20000.00',
     'concurrent settlement scenario preserves exact remaining credit');
 
+// Final audit: a refunded credit must never be reused even for one Toman.
+$auditP=a_customer($mysqli);
+$auditInv=a_invoice($mysqli,'customer',$auditP,'100000');
+$auditCash=pay_acct($mysqli,'customer',$auditP,'150000',[['invoice_id'=>$auditInv,'amount'=>'100000']]);
+$auditRefund=acct_record_refund($mysqli,[
+ 'party_kind'=>'customer','party_id'=>$auditP,'amount'=>'30000','method'=>'cash',
+ 'client_token'=>bin2hex(random_bytes(20)),'note'=>'Verified audit refund']);
+$auditTarget=a_invoice($mysqli,'customer',$auditP,'50000');
+acct_apply_credit($mysqli,$auditCash['payment_id'],$auditTarget,'20000',bin2hex(random_bytes(20)));
+$auditRejected=false;
+try {acct_apply_credit($mysqli,$auditCash['payment_id'],$auditTarget,'1',bin2hex(random_bytes(20)));}
+catch(InvalidArgumentException $e) {$auditRejected=true;}
+check_acct($auditRejected,'final audit: refunded and allocated credit cannot be double spent');
+check_acct(acct_party_statement($mysqli,'customer',$auditP)['balance']==='30000.00',
+ 'final audit: credit source reservations leave correct debtor balance');
+check_acct(money_cmp(acct_party_balances($mysqli,'customer')[$auditP]['balance'],'30000')===0,
+ 'final audit: report and statement balance agree after refund');
 echo "PASS accounting integration suite\n";
