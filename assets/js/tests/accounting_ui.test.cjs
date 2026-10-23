@@ -128,6 +128,37 @@ async function submitBatch(page,amounts) {
    assert.equal(statement.unallocated_credit,'20000000.00');
    console.log('PASS 35m supplier remittance with 15m invoice settlement plus 20m old debt');
 
+   // Real refund UI: keeps Jalali date, selected cash account and the
+   // same idempotency token when a request must be retried.
+   await openInvoice(page,'factors',fixture.sales_invoice_id);
+   await submitBatch(page,[50000]); // cash without invoice allocation
+   await openInvoice(page,'factors',fixture.sales_invoice_id);
+   await page.locator('#acctRefund').waitFor({state:'visible'});
+   const refundDate=await page.locator('#acctDate').inputValue();
+   const refundDialogs=async dialog=>{
+     const msg=dialog.message();
+     if(msg.includes('مبلغ استرداد'))await dialog.accept('20000');
+     else if(msg.includes('دلیل استرداد'))await dialog.accept('Refund approved for audit');
+     else if(msg.includes('روش استرداد'))await dialog.accept('cash');
+     else if(msg.includes('شناسه حساب'))await dialog.accept(dialog.defaultValue());
+     else await dialog.dismiss();
+   };
+   page.on('dialog',refundDialogs);
+   const refundWait=page.waitForResponse(response=>response.url().includes('accounting_ledger_action.php') &&
+       response.request().postData()?.includes('action=refund'),{timeout:20000});
+   await page.locator('#acctRefund').click();
+   const refundResp=await refundWait;
+   const refundBody=await refundResp.json();
+   page.off('dialog',refundDialogs);
+   assert.equal(refundResp.status(),200,JSON.stringify(refundBody));
+   assert.equal(refundBody.success,true,JSON.stringify(refundBody));
+   statement=await getStatement(page,'customer',fixture.customer_id);
+   const refundedPayment=statement.payments.find(p=>p.id===refundBody.data.payment_id);
+   assert.equal(refundedPayment.direction,'out','customer refund is physical cash outflow');
+   assert.equal(refundedPayment.date,refundDate,'refund persisted the selected Gregorian-backed Jalali date');
+   assert.equal(statement.balance,'-30000.00','50k unallocated credit minus 20k refund');
+   console.log('PASS refund UI: date, selected account, audited method and exact balance');
+
    // Mobile: open the actual statement and ensure payment rows remain operable.
    await page.setViewportSize({width:390,height:844});
    await openInvoice(page,'factors',fixture.sales_invoice_id);
