@@ -48,6 +48,8 @@ jobs:
           extensions: mysqli, mysqlnd, bcmath, mbstring, gd
       - name: Settlement and balance tests
         run: php assets/php/tests/accounting_ledger_mysql_test.php
+      - name: Automatic public customer settlement integrity tests
+        run: php assets/php/tests/accounting_auto_settlement_mysql_test.php
       - name: Existing invoice and financial regressions
         run: |
           php assets/php/tests/currency_mysql_test.php
