@@ -87,7 +87,12 @@ if ($result['ok']) {
             $data['auto_settled']=acct_auto_invoice_has_receipt($mysqli,(int)$result['invoice_id']);
         }
     }
-    if (isset($result['invoice_id']) && $result['invoice_id']) {
+    // Backward compatibility: older cached invoice.js versions open the
+    // payment modal whenever the response includes data.invoice, without
+    // checking auto_settled. Omit that popup-only payload when the server has
+    // already settled this sale. The invoice remains accessible through
+    // invoice_get.php and the list's accounting-details action.
+    if (empty($data['auto_settled']) && isset($result['invoice_id']) && $result['invoice_id']) {
         $full = getInvoice($mysqli, (int) $result['invoice_id']);
         if ($full) {
             $data['invoice'] = $full;
