@@ -371,4 +371,40 @@ acct_reverse_payment($mysqli,$returnRefund['payment_id'],'Reverse mistaken retur
 check_acct(acct_party_statement($mysqli,'customer',$returnParty)['returns'][0]['available']==='20000.00',
     'reversed refund releases the remaining return credit');
 
+
+// A second independent MySQL connection must not post to the same account
+// while the first writer owns its party lock. Final amounts remain bounded.
+$concurrentParty=a_customer($mysqli);
+pay_acct($mysqli,'customer',$concurrentParty,'50000',[]);
+$waiter=new mysqli('127.0.0.1','root','','memar_accounting');
+$waiter->set_charset('utf8mb4');
+$waiter->query('SET SESSION innodb_lock_wait_timeout=1');
+$mysqli->begin_transaction();
+try {
+    acct_party_lock($mysqli,'customer',$concurrentParty);
+    $lockWaitBlocked=false;
+    try {
+        acct_record_refund($waiter,['party_kind'=>'customer','party_id'=>$concurrentParty,
+            'amount'=>'30000','method'=>'cash','note'=>'Concurrent refund attempt',
+            'client_token'=>bin2hex(random_bytes(20))]);
+    } catch(mysqli_sql_exception $e) {
+        $lockWaitBlocked=$e->getCode()===1205;
+    }
+    check_acct($lockWaitBlocked,'parallel account refund waits on party-level row lock');
+    $mysqli->commit();
+} catch(Throwable $e) {$mysqli->rollback();throw $e;}
+$waiter->close();
+acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$concurrentParty,
+    'amount'=>'30000','method'=>'cash','note'=>'Authorized credit refund',
+    'client_token'=>bin2hex(random_bytes(20))]);
+$blocked=false;
+try {
+    acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$concurrentParty,
+        'amount'=>'30000','method'=>'cash','note'=>'Excess concurrent refund',
+        'client_token'=>bin2hex(random_bytes(20))]);
+} catch(InvalidArgumentException $e) {$blocked=true;}
+check_acct($blocked,'over-refund rejected after competing serialized posting');
+check_acct(acct_party_statement($mysqli,'customer',$concurrentParty)['balance']==='-20000.00',
+    'concurrent settlement scenario preserves exact remaining credit');
+
 echo "PASS accounting integration suite\n";
