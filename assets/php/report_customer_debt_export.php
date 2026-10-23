@@ -9,6 +9,7 @@ $search = reportParam('search');
 
 $sql = "
     SELECT
+        c.id,
         CONCAT(c.first_name, ' ', c.last_name) AS full_name,
         c.phone,
         c.address,

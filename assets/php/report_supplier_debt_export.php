@@ -9,6 +9,7 @@ $search = reportParam('search');
 
 $sql = "
     SELECT
+        s.id,
         s.company_name,
         s.first_name,
         s.last_name,
