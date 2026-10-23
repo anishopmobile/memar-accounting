@@ -26,6 +26,9 @@ jobs:
         run: |
           node --check assets/js/invoice.js
           node --check assets/js/accounting-ledger-ui.js
+          node --check assets/js/accounting-auto-settlement-settings.js
+          node --check assets/js/main.js
+          node --check assets/js/tests/accounting_auto_settlement_ui.test.cjs
           node --check assets/js/currency.js
   accounting-mysql:
     runs-on: ubuntu-latest
