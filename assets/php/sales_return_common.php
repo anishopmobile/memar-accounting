@@ -606,8 +606,38 @@ function createSalesReturn(mysqli $mysqli, array $in): array
  * ۹) ویرایش سند برگشت (فقط اعمال دلتم موجودی)
  * ========================================================== */
 
+/**
+ * Prevent return edits/deletes racing with refunded return credit.
+ * Every accounting operation locks the party before touching return credit.
+ */
+function sr_lock_refund_party(mysqli $db,int $returnId): void {
+    $st=$db->prepare('SELECT customer_id FROM sales_returns WHERE id=?');
+    $st->bind_param('i',$returnId);$st->execute();
+    $r=$st->get_result()->fetch_assoc();$st->close();
+    if(!$r)throw new Exception('return_not_found');
+    $partyId=(int)$r['customer_id'];
+    $st=$db->prepare('SELECT id FROM customers WHERE id=? FOR UPDATE');
+    $st->bind_param('i',$partyId);$st->execute();
+    $r=$st->get_result()->fetch_assoc();$st->close();
+    if(!$r)throw new Exception('return_not_found');
+}
+function sr_assert_refund_source_unused(mysqli $db,int $returnId): void {
+    $st=$db->prepare("SELECT
+        EXISTS(SELECT 1 FROM account_return_allocations WHERE return_id=?) allocated,
+        EXISTS(SELECT 1 FROM account_refund_sources WHERE source_kind='return' AND source_id=?) refunded");
+    $st->bind_param('ii',$returnId,$returnId);$st->execute();
+    $r=$st->get_result()->fetch_assoc();$st->close();
+    if((int)$r['allocated']>0 || (int)$r['refunded']>0)
+        throw new Exception('refund_source_used');
+}
 function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
 {
+    // A return already used as customer credit is immutable; preserve ledger history.
+    $ledgerCheck = $mysqli->prepare('SELECT 1 FROM account_return_allocations WHERE return_id=? LIMIT 1');
+    $ledgerCheck->bind_param('i',$returnId);$ledgerCheck->execute();$ledgerCheck->store_result();
+    $ledgerUsed=$ledgerCheck->num_rows>0;$ledgerCheck->close();
+    if($ledgerUsed) return ['ok'=>false,'message'=>'سند برگشت دارای اعتبار تخصیص‌یافته قابل ویرایش یا حذف نیست.'];
+
     $valid = sr_validate_basic_input($in);
     if (!$valid['ok']) {
         return ['ok' => false, 'message' => $valid['message']];
@@ -622,6 +652,7 @@ function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
 
     $mysqli->begin_transaction();
     try {
+        sr_lock_refund_party($mysqli,$returnId);
         $stmt = $mysqli->prepare('SELECT * FROM sales_returns WHERE id = ? FOR UPDATE');
         $stmt->bind_param('i', $returnId);
         $stmt->execute();
@@ -634,6 +665,7 @@ function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
         if ((int) $ret['invoice_id'] !== $invoiceId) {
             throw new Exception('invoice_mismatch');
         }
+        sr_assert_refund_source_unused($mysqli,$returnId);
 
         $stmt = $mysqli->prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE');
         $stmt->bind_param('i', $invoiceId);
@@ -779,6 +811,8 @@ function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
             $msg = 'سند برگشت فروش یافت نشد.';
         } elseif ($msg === 'invoice_mismatch') {
             $msg = 'فاکتور درخواستی با سند برگشت مطابقت ندارد.';
+        } elseif ($msg === 'refund_source_used') {
+            $msg = 'سند برگشت دارای اعتبار تخصیص‌یافته یا استردادشده قابل ویرایش یا حذف نیست.';
         } elseif ($msg === 'invoice_not_found') {
             $msg = 'فاکتور موردنظر یافت نشد.';
         } elseif ($msg === 'invoice_context') {
@@ -797,8 +831,15 @@ function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
 
 function deleteSalesReturn(mysqli $mysqli, int $returnId): array
 {
+    // A return already used as customer credit is immutable; preserve ledger history.
+    $ledgerCheck = $mysqli->prepare('SELECT 1 FROM account_return_allocations WHERE return_id=? LIMIT 1');
+    $ledgerCheck->bind_param('i',$returnId);$ledgerCheck->execute();$ledgerCheck->store_result();
+    $ledgerUsed=$ledgerCheck->num_rows>0;$ledgerCheck->close();
+    if($ledgerUsed) return ['ok'=>false,'message'=>'سند برگشت دارای اعتبار تخصیص‌یافته قابل ویرایش یا حذف نیست.'];
+
     $mysqli->begin_transaction();
     try {
+        sr_lock_refund_party($mysqli,$returnId);
         $stmt = $mysqli->prepare('SELECT * FROM sales_returns WHERE id = ? FOR UPDATE');
         $stmt->bind_param('i', $returnId);
         $stmt->execute();
@@ -811,6 +852,7 @@ function deleteSalesReturn(mysqli $mysqli, int $returnId): array
             return ['ok' => false, 'message' => 'سند برگشت فروش یافت نشد.'];
         }
 
+        sr_assert_refund_source_unused($mysqli,$returnId);
         $invoiceId = (int) $ret['invoice_id'];
 
         $stmt = $mysqli->prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE');
@@ -852,6 +894,8 @@ function deleteSalesReturn(mysqli $mysqli, int $returnId): array
         $msg = $e->getMessage();
         if ($msg === 'invoice_not_found') {
             $msg = 'فاکتور مرتبط با این برگشت یافت نشد.';
+        } elseif ($msg === 'refund_source_used') {
+            $msg = 'سند برگشت دارای اعتبار تخصیص‌یافته یا استردادشده قابل ویرایش یا حذف نیست.';
         } elseif ($msg === 'negative_stock') {
             $msg = 'موجودی فعلی برای حذف این برگشت کافی نیست؛ عملیات لغو شد.';
         } elseif ($msg === 'product_not_found') {

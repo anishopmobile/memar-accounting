@@ -1,0 +1,94 @@
+name: Accounting Ledger CI
+on:
+  push:
+    branches:
+      - feature/accounting-receivables-payables
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  accounting-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, bcmath, mbstring, mysqlnd
+      - name: PHP lint
+        run: |
+          find assets/php pages -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l index.php
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: JS syntax
+        run: |
+          node --check assets/js/invoice.js
+          node --check assets/js/accounting-ledger-ui.js
+          node --check assets/js/currency.js
+  accounting-mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mysqlnd, bcmath, mbstring, gd
+      - name: Settlement and balance tests
+        run: php assets/php/tests/accounting_ledger_mysql_test.php
+      - name: Existing invoice and financial regressions
+        run: |
+          php assets/php/tests/currency_mysql_test.php
+          php assets/php/tests/sales_invoice_product_service_test.php
+          php assets/php/tests/sales_return_test.php
+          php assets/php/tests/product_bundling_test.php
+          php assets/php/tests/defective_return_test.php
+      - name: Security and authentication HTTP regressions
+        run: |
+          php assets/php/tests/auth_http_test.php
+          bash assets/php/tests/currency_security_smoke.sh
+
+  accounting-browser:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mysqlnd, bcmath, mbstring, gd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install CI-only browser runner
+        run: |
+          npm install --no-save --no-audit --ignore-scripts --package-lock=false playwright@1.56.0
+          npx playwright install --with-deps chromium
+      - name: Install PDF inspection tools for browser regression
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils
+      - name: Existing UI and RTL browser regressions
+        run: bash assets/php/tests/tabler_browser_smoke.sh

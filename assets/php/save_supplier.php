@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/currency.php';
+require_once __DIR__ . '/accounting_ledger.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -46,6 +48,7 @@ if ($supplier_id !== '') {
         $totalStmt->bind_result($totalPurchases, $unpaid);
         $totalStmt->fetch();
         $totalStmt->close();
+        $ledger=acct_party_balances($mysqli,'supplier')[(int)$supplier_id] ?? ['balance'=>'0','gross'=>'0','unreconciled'=>false];
 
         $supplier = [
             'id' => (int) $supplier_id,
@@ -60,8 +63,8 @@ if ($supplier_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_purchases' => number_format($totalPurchases ?? 0),
-            'unpaid' => number_format($unpaid ?? 0),
+            'total_purchases' => formatMoneyNumber((string)$ledger['gross']),
+            'unpaid' => $ledger['unreconciled'] ? 'نیازمند تطبیق' : formatMoneyNumber((string)$ledger['balance']),
         ];
         echo json_encode(['success' => true, 'supplier' => $supplier]);
     } else {
@@ -82,6 +85,7 @@ if ($supplier_id !== '') {
         $totalStmt->bind_result($totalPurchases, $unpaid);
         $totalStmt->fetch();
         $totalStmt->close();
+        $ledger=acct_party_balances($mysqli,'supplier')[(int)$id] ?? ['balance'=>'0','gross'=>'0','unreconciled'=>false];
 
         $supplier = [
             'id' => $id,
@@ -96,8 +100,8 @@ if ($supplier_id !== '') {
             'address' => $address,
             'postal_code' => htmlspecialchars($postal_code, ENT_QUOTES, 'UTF-8'),
             'note' => $note,
-            'total_purchases' => number_format($totalPurchases ?? 0),
-            'unpaid' => number_format($unpaid ?? 0),
+            'total_purchases' => formatMoneyNumber((string)$ledger['gross']),
+            'unpaid' => $ledger['unreconciled'] ? 'نیازمند تطبیق' : formatMoneyNumber((string)$ledger['balance']),
         ];
         echo json_encode(['success' => true, 'supplier' => $supplier]);
     } else {

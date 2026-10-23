@@ -65,8 +65,25 @@ UI_TEST_CAPTCHA=0 node assets/js/tests/login_ui.test.cjs
 php -r 'require "assets/php/db.php"; $mysqli->query("UPDATE auth_settings SET login_captcha_enabled=1 WHERE id=1");'
 UI_TEST_CAPTCHA=1 node assets/js/tests/login_ui.test.cjs
 php -r 'require "assets/php/db.php"; $mysqli->query("UPDATE auth_settings SET login_captcha_enabled=0 WHERE id=1");'
-if grep -qiE 'PHP Fatal error|PHP Warning|PHP Parse error' "$log"; then
+# Verify actual customer/supplier settlements in the running PHP application.
+acct_fixture="$(mktemp)"
+php assets/php/tests/accounting_ui_fixture.php > "$acct_fixture"
+UI_ACCOUNTING_FIXTURE="$acct_fixture" node assets/js/tests/accounting_ui.test.cjs || {
+  echo "--- Accounting browser test PHP diagnostics ---"
+  tail -100 "$log"
+  rm -f "$acct_fixture"
+  exit 1
+}
+rm -f "$acct_fixture"
+# PHP 8.4 CI runner may disable opcache JIT when a third-party extension
+# overrides zend_execute_ex(). This startup diagnostic is not an application error.
+# Still fail on every other PHP warning, parse error or fatal error.
+if grep -iE 'PHP Fatal error|PHP Warning|PHP Parse error' "$log" \
+  | grep -viF 'JIT is incompatible with third party extensions that override zend_execute_ex(). JIT disabled.' \
+  | grep -q '.'; then
   echo "--- Captured PHP errors ---"
-  grep -iE 'PHP Fatal error|PHP Warning|PHP Parse error' "$log" | head -30
+  grep -iE 'PHP Fatal error|PHP Warning|PHP Parse error' "$log" \
+    | grep -viF 'JIT is incompatible with third party extensions that override zend_execute_ex(). JIT disabled.' \
+    | head -30
   exit 1
 fi

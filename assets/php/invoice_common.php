@@ -895,6 +895,7 @@ function createInvoice(mysqli $mysqli, array $in): array
                  invoice_date, subtotal, discount, tax_rate, tax_amount, payable_amount, note, client_token)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
+        $statusOnCreate = 'unpaid';
         $stmt->bind_param(
             'ssiisssdddddss',
             $invoiceNumber,
@@ -902,7 +903,7 @@ function createInvoice(mysqli $mysqli, array $in): array
             $customerId,
             $supplierId,
             $in['payment_type'],
-            $in['payment_status'],
+            $statusOnCreate,
             $in['invoice_date'],
             $totals['subtotal'],
             $invoiceDiscount,
@@ -915,6 +916,13 @@ function createInvoice(mysqli $mysqli, array $in): array
         $stmt->execute();
         $invoiceId = (int) $stmt->insert_id;
         $stmt->close();
+        // New documents start unsettled; payment flags are never accounting evidence.
+        $stmt = $mysqli->prepare('UPDATE invoices SET legacy_paid_amount=0, payment_status=? WHERE id=?');
+        $initialStatus = 'unpaid';
+        $stmt->bind_param('si',$initialStatus,$invoiceId);
+        $stmt->execute();
+        $stmt->close();
+
 
         $insertedItems = insertInvoiceItems($mysqli, $invoiceId, $items);
 
@@ -1013,6 +1021,7 @@ function invoiceErrorMessage(Exception $e, mysqli $mysqli, ?string $clientToken)
 
 function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
 {
+    $mysqli->begin_transaction(); // hold invoice row lock for entire operation
     $stmt = $mysqli->prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE');
     $stmt->bind_param('i', $invoiceId);
     $stmt->execute();
@@ -1020,7 +1029,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
     $stmt->close();
     $old = $res ? $res->fetch_assoc() : null;
     if (!$old) {
-        return ['ok' => false, 'message' => 'فاکتور موردنظر یافت نشد.'];
+        $mysqli->rollback(); return ['ok' => false, 'message' => 'فاکتور موردنظر یافت نشد.'];
     }
     $oldType = $old['type'];
 
@@ -1033,33 +1042,33 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         $hasReturn = $stmt->num_rows > 0;
         $stmt->close();
         if ($hasReturn) {
-            return ['ok' => false, 'message' => 'فاکتوری که برای آن برگشت فروش ثبت شده است قابل ویرایش نیست.'];
+            $mysqli->rollback(); return ['ok' => false, 'message' => 'فاکتوری که برای آن برگشت فروش ثبت شده است قابل ویرایش نیست.'];
         }
     }
 
     $valid = validateInvoice($mysqli, $in);
     if (!$valid['ok']) {
-        return ['ok' => false, 'message' => $valid['message']];
+        $mysqli->rollback(); return ['ok' => false, 'message' => $valid['message']];
     }
     $newType = $in['type'];
 
     if (isFinal($oldType) !== isFinal($newType)) {
-        return ['ok' => false, 'message' => 'تبدیل بین فاکتور قطعی و پیش‌فاکتور باید از عملیات «تبدیل» انجام شود.'];
+        $mysqli->rollback(); return ['ok' => false, 'message' => 'تبدیل بین فاکتور قطعی و پیش‌فاکتور باید از عملیات «تبدیل» انجام شود.'];
     }
     if (isSales($oldType) !== isSales($newType)) {
-        return ['ok' => false, 'message' => 'تغییر جهت فروش/خرید فاکتور مجاز نیست.'];
+        $mysqli->rollback(); return ['ok' => false, 'message' => 'تغییر جهت فروش/خرید فاکتور مجاز نیست.'];
     }
 
     $norm = normalizeItems($mysqli, $in['items'] ?? []);
     if (!$norm['ok']) {
-        return ['ok' => false, 'message' => $norm['message']];
+        $mysqli->rollback(); return ['ok' => false, 'message' => $norm['message']];
     }
     $newItems = $norm['items'];
 
     /* Backend: در فاکتور فروش، کالای بدون موجودی (product با stock <= 0) پذیرفته نمی‌شود */
     $availability = validateSalesProductAvailability($mysqli, $newType, $newItems);
     if (!$availability['ok']) {
-        return ['ok' => false, 'message' => $availability['message']];
+        $mysqli->rollback(); return ['ok' => false, 'message' => $availability['message']];
     }
 
     $oldItems = [];
@@ -1083,7 +1092,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         foreach ($newItems as $it) {
             $pid = (int) $it['product_id'];
             if (($editKindMap[$pid] ?? PRODUCT_KIND_STANDARD) === PRODUCT_KIND_BUNDLE) {
-                return ['ok' => false, 'message' => 'کالای بسته در فاکتور خرید قابل استفاده نیست.'];
+                $mysqli->rollback(); return ['ok' => false, 'message' => 'کالای بسته در فاکتور خرید قابل استفاده نیست.'];
             }
         }
     }
@@ -1122,7 +1131,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
     if (isSales($newType)) {
         $bundleAvail = validateBundleStockForItems($mysqli, $newItemsComposed);
         if (!$bundleAvail['ok']) {
-            return ['ok' => false, 'message' => $bundleAvail['message']];
+            $mysqli->rollback(); return ['ok' => false, 'message' => $bundleAvail['message']];
         }
     }
 
@@ -1134,7 +1143,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         if ($providedTax !== null && $providedTax !== '') {
             $taxRate = money_round($providedTax);
             if (money_cmp($taxRate, '0') < 0 || money_cmp($taxRate, '100') > 0) {
-                return ['ok' => false, 'message' => 'نرخ مالیات باید بین ۰ تا ۱۰۰ درصد باشد.'];
+                $mysqli->rollback(); return ['ok' => false, 'message' => 'نرخ مالیات باید بین ۰ تا ۱۰۰ درصد باشد.'];
             }
         } else {
             $taxRate = money_round($tax['tax_rate']);
@@ -1143,7 +1152,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
     $invoiceDiscount = money_round($in['discount']);
     $totals = calculateInvoiceTotals($newItems, $invoiceDiscount, $taxRate, $tax['tax_enabled']);
     if (money_cmp($invoiceDiscount, $totals['subtotal']) > 0) {
-        return ['ok' => false, 'message' => 'تخفیف فاکتور نمی‌تواند از جمع ردیف‌ها بیشتر باشد.'];
+        $mysqli->rollback(); return ['ok' => false, 'message' => 'تخفیف فاکتور نمی‌تواند از جمع ردیف‌ها بیشتر باشد.'];
     }
 
     $allPids = [];
@@ -1154,7 +1163,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         $allPids[] = (int) $it['product_id'];
     }
 
-    $mysqli->begin_transaction();
+
     try {
         if (isFinal($newType)) {
             /* کالاهای عادی (به‌جز بسته‌ها) — همان منطق دلتم قبلی */
@@ -1234,6 +1243,36 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         $note = ($in['note'] ?? null);
         $note = ($note === '' || $note === null) ? null : (string) $note;
 
+        // Historical partials remain unresolved until explicitly reconciled.
+        // Allocated payments lock invoice identity and require sufficient payable total.
+        $stmtAcct = $mysqli->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE invoice_id=?');
+        $stmtAcct->bind_param('i',$invoiceId);
+        $stmtAcct->execute();
+        $acctRow = $stmtAcct->get_result()->fetch_assoc();
+        $stmtAcct->close();
+        $sourceRef=$mysqli->prepare('SELECT 1 FROM account_payments WHERE source_proforma_id=? LIMIT 1');
+        $sourceRef->bind_param('i',$invoiceId);$sourceRef->execute();$sourceRef->store_result();
+        $hasPrepaymentSource=$sourceRef->num_rows>0;$sourceRef->close();
+        if ($hasPrepaymentSource && (($old['customer_id'] ?? null) != $customerId || ($old['supplier_id'] ?? null) != $supplierId))
+            throw new Exception('طرف حساب پیش‌فاکتور دارای پیش‌پرداخت قابل تغییر نیست.');
+        $allocated = (string) ($acctRow['s'] ?? '0');
+        $stmtAcct=$mysqli->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_return_allocations WHERE invoice_id=?');
+        $stmtAcct->bind_param('i',$invoiceId);$stmtAcct->execute();
+        $retAllocated=(string)($stmtAcct->get_result()->fetch_assoc()['s']??'0');$stmtAcct->close();
+        $allocated=money_add($allocated,$retAllocated);
+        $settledTotal=money_add($allocated,$old['legacy_paid_amount'] ?? '0');
+        $hasSettlements=money_cmp($settledTotal,'0')>0;
+        if ($hasSettlements && (($old['customer_id'] ?? null) != $customerId || ($old['supplier_id'] ?? null) != $supplierId)) {
+            throw new Exception('تغییر طرف حساب فاکتور دارای تسویه مجاز نیست.');
+        }
+        if (money_cmp($totals['payable_amount'],$settledTotal)<0) {
+            throw new Exception('مبلغ جدید فاکتور از تسویه‌های ثبت‌شده کمتر است.');
+        }
+        $savedStatus = $old['payment_status'];
+        if ($old['legacy_paid_amount'] !== null) {
+            $paidTotal = money_add($allocated,$old['legacy_paid_amount']);
+            $savedStatus = money_cmp($totals['payable_amount'],$paidTotal)<=0 ? 'paid' : (money_cmp($paidTotal,'0')>0 ? 'partial' : 'unpaid');
+        }
         $stmt = $mysqli->prepare(
             'UPDATE invoices SET
                 customer_id = ?, supplier_id = ?, payment_type = ?, payment_status = ?,
@@ -1246,7 +1285,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
             $customerId,
             $supplierId,
             $in['payment_type'],
-            $in['payment_status'],
+            $savedStatus,
             $in['invoice_date'],
             $totals['subtotal'],
             $invoiceDiscount,
@@ -1258,6 +1297,17 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
         );
         $stmt->execute();
         $stmt->close();
+        // Once an invoice amount changes, preserve both financial versions.
+        if (money_cmp($old['payable_amount'],$totals['payable_amount'])!==0
+            || $old['payment_status']!==$savedStatus) {
+            $actor=function_exists('auth_user_id')?auth_user_id():null;
+            $previousAmount=(string)$old['payable_amount'];
+            $updatedAmount=(string)$totals['payable_amount'];
+            $prevStatus=(string)$old['payment_status'];
+            $revision=$mysqli->prepare('INSERT INTO account_invoice_revisions(invoice_id,invoice_number,previous_total,new_total,previous_status,new_status,performed_by) VALUES(?,?,?,?,?,?,?)');
+            $revision->bind_param('isssssi',$invoiceId,$old['invoice_number'],$previousAmount,$updatedAmount,$prevStatus,$savedStatus,$actor);
+            $revision->execute();$revision->close();
+        }
 
         $mysqli->commit();
         return ['ok' => true, 'message' => 'فاکتور با موفقیت ویرایش شد.', 'invoice_id' => $invoiceId];
@@ -1279,6 +1329,7 @@ function editInvoice(mysqli $mysqli, int $invoiceId, array $in): array
 
 function deleteInvoice(mysqli $mysqli, int $invoiceId): array
 {
+    $mysqli->begin_transaction(); // hold invoice row lock for entire operation
     $stmt = $mysqli->prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE');
     $stmt->bind_param('i', $invoiceId);
     $stmt->execute();
@@ -1286,7 +1337,7 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
     $stmt->close();
     $inv = $res ? $res->fetch_assoc() : null;
     if (!$inv) {
-        return ['ok' => false, 'message' => 'فاکتور موردنظر یافت نشد.'];
+        $mysqli->rollback(); return ['ok' => false, 'message' => 'فاکتور موردنظر یافت نشد.'];
     }
     $type = $inv['type'];
 
@@ -1299,7 +1350,7 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
         $hasReturn = $stmt->num_rows > 0;
         $stmt->close();
         if ($hasReturn) {
-            return ['ok' => false, 'message' => 'فاکتوری که برای آن برگشت فروش ثبت شده است قابل حذف نیست.'];
+            $mysqli->rollback(); return ['ok' => false, 'message' => 'فاکتوری که برای آن برگشت فروش ثبت شده است قابل حذف نیست.'];
         }
     }
 
@@ -1315,11 +1366,19 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
     $allPids = array_map('intval', array_column($oldItems, 'product_id'));
     $deleteKindMap = bundleKindMap($mysqli, $allPids);
 
+    $hasSourceStmt=$mysqli->prepare('SELECT 1 FROM account_payments WHERE source_proforma_id=? LIMIT 1');
+    $hasSourceStmt->bind_param('i',$invoiceId);$hasSourceStmt->execute();$hasSourceStmt->store_result();
+    $hasSourcePayments=$hasSourceStmt->num_rows>0;$hasSourceStmt->close();
+    if($hasSourcePayments) {
+        $mysqli->rollback();
+        return ['ok'=>false,'message'=>'پیش‌فاکتور دارای پیش‌دریافت یا پیش‌پرداخت مستند قابل حذف نیست؛ ابتدا اسناد مالی را تعیین تکلیف کنید.'];
+    }
+
     /* ترکیب تاریخی بسته‌ها (هرگز از ترکیب فعلی برای معکوس‌سازی استفاده نمی‌کنیم) */
     $oldItemsAttached = bundleAttachSnapshots($mysqli, $oldItems, $deleteKindMap);
     $deleteCompReq = isSales($type) ? bundleComponentRequirementsFromItems($mysqli, $oldItemsAttached) : [];
 
-    $mysqli->begin_transaction();
+
     try {
         $lockIds = $allPids;
         foreach (array_keys($deleteCompReq) as $cpid) {
@@ -1363,7 +1422,15 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
             // پیش‌فاکتور: بدون تغییر موجودی
         }
 
-        // اقلام با CASCADE حذف می‌شوند؛ stock_movements با ON DELETE SET NULL باقی می‌ماند
+        $paidCheck=$mysqli->prepare('SELECT (SELECT COUNT(*) FROM account_payment_allocations WHERE invoice_id=? AND reversed_at IS NULL) AS c');
+        $paidCheck->bind_param('i',$invoiceId);$paidCheck->execute();
+        $paidCount=(int)$paidCheck->get_result()->fetch_assoc()['c'];$paidCheck->close();
+        $returnCheck=$mysqli->prepare('SELECT COUNT(*) AS c FROM account_return_allocations WHERE invoice_id=?');
+        $returnCheck->bind_param('i',$invoiceId);$returnCheck->execute();
+        $returnCount=(int)$returnCheck->get_result()->fetch_assoc()['c'];$returnCheck->close();
+        if ($paidCount>0 || $returnCount>0 || money_cmp($inv['legacy_paid_amount'] ?? '0','0')>0)
+            throw new Exception('فاکتور دارای تسویه یا اعتبار برگشت قابل حذف نیست.');
+                // اقلام با CASCADE حذف می‌شوند؛ stock_movements با ON DELETE SET NULL باقی می‌ماند
         $stmt = $mysqli->prepare('DELETE FROM invoices WHERE id = ?');
         $stmt->bind_param('i', $invoiceId);
         $stmt->execute();
@@ -1389,6 +1456,7 @@ function deleteInvoice(mysqli $mysqli, int $invoiceId): array
 
 function convertInvoice(mysqli $mysqli, int $invoiceId): array
 {
+    $mysqli->begin_transaction(); // hold invoice row lock for entire operation
     $stmt = $mysqli->prepare('SELECT * FROM invoices WHERE id = ? FOR UPDATE');
     $stmt->bind_param('i', $invoiceId);
     $stmt->execute();
@@ -1396,10 +1464,10 @@ function convertInvoice(mysqli $mysqli, int $invoiceId): array
     $stmt->close();
     $inv = $res ? $res->fetch_assoc() : null;
     if (!$inv) {
-        return ['ok' => false, 'message' => 'فاکتور موردنظر یافت نشد.'];
+        $mysqli->rollback(); return ['ok' => false, 'message' => 'فاکتور موردنظر یافت نشد.'];
     }
     if (isFinal($inv['type'])) {
-        return ['ok' => false, 'message' => 'این فاکتور قبلاً به فاکتور قطعی تبدیل شده است.'];
+        $mysqli->rollback(); return ['ok' => false, 'message' => 'این فاکتور قبلاً به فاکتور قطعی تبدیل شده است.'];
     }
 
     $type = $inv['type'];
@@ -1422,7 +1490,7 @@ function convertInvoice(mysqli $mysqli, int $invoiceId): array
     $itemsAttached = bundleAttachSnapshots($mysqli, $items, $convKindMap);
     $convCompReq = $isSales ? bundleComponentRequirementsFromItems($mysqli, $itemsAttached) : [];
 
-    $mysqli->begin_transaction();
+
     try {
         $lockIds = $allPids;
         foreach (array_keys($convCompReq) as $cpid) {

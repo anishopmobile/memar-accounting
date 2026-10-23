@@ -41,11 +41,12 @@ function ready(page,selector) {
         await page.goto(base+'/index.php?page='+name,{waitUntil:'domcontentloaded'});
         assert.equal(await page.locator('script[src="assets/vendor/hcg-searchable-select/hcg-select.js"]').count(),1);
         assert.equal(await page.locator('link[href="assets/vendor/hcg-searchable-select/hcg-select.css"]').count(),1);
-        const all = page.locator('select:not([multiple]):not([size]):not([data-hcg-exclude])');
+        const all = page.locator('select:not([multiple]):not([size]):not([data-hcg-exclude]):not(.bd-month):not(.bd-year)');
         const count=await all.count();
         if(count) {
           await page.waitForFunction(()=>Array.from(document.querySelectorAll('select'))
-            .filter(el=>!el.multiple && el.size<=1)
+            .filter(el=>!el.multiple && el.size<=1 && !el.hasAttribute('data-hcg-exclude') &&
+              !el.closest('[data-hcg-exclude], .bd-main'))
             .every(el=>!!el._hcgApi),null,{timeout:10000});
           const samples=await all.evaluateAll(nodes=>nodes.map(el=>({
             id:el.id,tag:el.parentElement.className,
@@ -57,6 +58,10 @@ function ready(page,selector) {
             assert.equal(item.match,1,name+' '+item.id+' single control');
           }
         }
+        // Calendars may be present on dynamic pages at load time.
+        // Their month/year selects are intentionally excluded, not regressions.
+        assert.equal(await page.locator('.bd-main select.hcg-select-native').count(),0,
+          name+' calendar internal select must remain native');
         const dims=await page.evaluate(()=>({
           width:document.documentElement.scrollWidth,
           client:document.documentElement.clientWidth
@@ -89,13 +94,28 @@ function ready(page,selector) {
       assert.ok(fonts.control.includes('estedadv')&&fonts.panel.includes('estedadv'));
       assert.equal(fonts.direction,'rtl');
 
-      // Dynamic invoice edit uses 3 selects created after initial DOM ready.
+      // Payment state is now ledger-derived and intentionally read-only.
+      // Searchable select remains interactive for the payment-method selector.
       await page.locator('.invoice-new[data-type="sales_invoice"]').click();
       await ready(page,'#invPaymentStatus');
       const pay=page.locator('#invPaymentStatus');
-      await pay.locator('xpath=..').locator('.hcg-select-control').click();
-      await pay.locator('xpath=..').locator('.hcg-select-option').filter({hasText:'پرداخت نشده'}).click();
-      assert.equal(await pay.inputValue(),'unpaid','dynamic invoice payment value is preserved');
+      assert.equal(await pay.isDisabled(),true,'manual payment-status changes are disabled');
+      assert.equal(await pay.inputValue(),'unpaid','new invoice starts unpaid');
+      const method=page.locator('#invPaymentType');
+      await method.locator('xpath=..').locator('.hcg-select-control').click();
+      await method.locator('xpath=..').locator('.hcg-select-option').filter({hasText:'نقدی'}).click();
+      assert.equal(await method.inputValue(),'cash','dynamic payment method select remains interactive');
+      // Native invoice calendar must also ignore HCG enhancement.
+      await page.waitForFunction(()=>!!document.getElementById('bd-month-invDateDisplay') &&
+        !!document.getElementById('bd-year-invDateDisplay'));
+      const invoicePicker=page.locator('#bd-main-invDateDisplay');
+      assert.equal(await invoicePicker.locator('.hcg-select').count(),0,'kamaDatepicker must remain native');
+      const invYear=(await page.locator('#invDateDisplay').inputValue()).split('/')[0];
+      await page.locator('#invDateDisplay').click();
+      await invoicePicker.locator('.bd-month').selectOption('6');
+      await invoicePicker.locator('.day-10').click();
+      assert.equal(await page.locator('#invDateDisplay').inputValue(),invYear+'/06/10',
+        'invoice month dropdown selection is applied to chosen day');
       await page.locator('#invoiceBackToList').click();
 
       await page.goto(base+'/index.php?page=goods-and-services');

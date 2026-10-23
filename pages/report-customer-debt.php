@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../assets/php/db.php';
+require_once __DIR__ . '/../assets/php/accounting_ledger.php';
 require_once __DIR__ . '/../assets/php/currency.php';
 
 $rows = [];
@@ -23,6 +24,13 @@ if ($result) {
     }
     $result->free();
 }
+$balances = acct_party_balances($mysqli, 'customer');
+foreach ($rows as &$acctRow) {
+    $ledger = $balances[(int)$acctRow['id']] ?? ['balance'=>'0','unreconciled'=>false];
+    $acctRow['debt'] = $ledger['balance'];
+    $acctRow['unreconciled_history'] = $ledger['unreconciled'];
+}
+unset($acctRow);
 ?>
 <div class="card">
     <div class="page-actions">
@@ -41,7 +49,7 @@ if ($result) {
                     <th>تلفن</th>
                     <th>آدرس</th>
                     <th>مجموع خرید</th>
-                    <th>مجموع بدهی</th>
+                    <th>مانده حساب (+ بدهکار / − بستانکار)</th>
                 </tr>
             </thead>
             <tbody>
@@ -55,7 +63,7 @@ if ($result) {
                             <td><?php echo htmlspecialchars($r['phone'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo nl2br(htmlspecialchars($r['address'], ENT_QUOTES, 'UTF-8')); ?></td>
                             <td><?php echo formatMoneyNumber((string) $r['total_purchases']); ?></td>
-                            <td><?php echo formatMoneyNumber((string) $r['debt']); ?></td>
+                            <td><?php echo ($r['unreconciled_history'] ? 'نیازمند تطبیق' : formatMoneyNumber((string) $r['debt'])); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>

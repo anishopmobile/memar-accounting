@@ -126,13 +126,14 @@ $(function () {
 
     // ---------- لیست فاکتورها (صفحه‌بندی سمت سرور؛ حداکثر ۱۵ فاکتور در هر صفحه) ----------
     var currentPage = 1;
+    window.refreshInvoiceAccountingList = function(){loadInvoices(currentPage);};
     function loadInvoices(page) {
         currentPage = (page && page >= 1) ? page : 1;
         var search = encodeURIComponent($('#invoiceSearch').val() || '');
         var status = encodeURIComponent($('#invoiceStatusFilter').val() || '');
         $.getJSON('assets/php/invoice_list.php?type_group=' + typeGroup + '&search=' + search + '&payment_status=' + status + '&page=' + currentPage)
             .done(function (res) { renderInvoiceList(res.data); })
-            .fail(function () { $('#invoicesTable tbody').html('<tr><td colspan="7" class="empty-state">خطا در بارگذاری فاکتورها.</td></tr>'); });
+            .fail(function () { $('#invoicesTable tbody').html('<tr><td colspan="9" class="empty-state">خطا در بارگذاری فاکتورها.</td></tr>'); });
     }
     function renderInvoiceList(data) {
         var rows = (data && data.rows) || [];
@@ -142,7 +143,7 @@ $(function () {
         var perPage = (data && data.per_page) || 15;
         var tbody = $('#invoicesTable tbody');
         if (!rows.length) {
-            tbody.html('<tr><td colspan="7" class="empty-state">فاکتوری یافت نشد.</td></tr>');
+            tbody.html('<tr><td colspan="9" class="empty-state">فاکتوری یافت نشد.</td></tr>');
             renderInvoicePagination({ total: 0, page: 1, perPage: perPage });
             return;
         }
@@ -158,11 +159,14 @@ $(function () {
                 + '<td>' + typeLbl + '</td>'
                 + '<td>' + stLbl + '</td>'
                 + '<td>' + fmtRial(r.payable_amount) + ' ' + window.Currency.label + '</td>'
+                + '<td>' + (isPro ? '—' : r.unreconciled_payment ? 'نیازمند تطبیق' : fmtRial(r.paid_amount||'0')+' '+window.Currency.label) + '</td>'
+                + '<td>' + (isPro ? '—' : r.unreconciled_payment ? 'نیازمند تطبیق' : fmtRial(r.remaining_amount||'0')+' '+window.Currency.label) + '</td>'
                 + '<td class="invoice-actions">'
                 + '<button class="button-secondary small invoice-edit" data-id="' + r.id + '" type="button">مشاهده/ویرایش</button> '
                 + (isPro ? '<button class="button-secondary small invoice-convert" data-id="' + r.id + '" type="button">تبدیل به قطعی</button> ' : '')
                 + (isSales ? '<button class="button-secondary small invoice-pdf" data-id="' + r.id + '" data-number="' + escAttr(r.invoice_number) + '" type="button">تولید و چاپ فاکتور</button> ' : '')
                 + (!isSales ? '<button class="button-secondary small invoice-pdf-purchase" data-id="' + r.id + '" data-number="' + escAttr(r.invoice_number) + '" type="button">تولید و چاپ فاکتور</button> ' : '')
+                + '<button class="button-secondary small invoice-accounting" data-id="' + r.id + '" type="button">دریافت/پرداخت و صورت‌حساب</button> '
                 + '<button class="button-secondary small invoice-delete" data-id="' + r.id + '" type="button">حذف</button>'
                 + '</td></tr>';
         });
@@ -286,8 +290,8 @@ $(function () {
         var paymentTypes = '<option value="cash">نقدی</option>'
             + '<option value="pos" selected>کارت خوان</option>'
             + '<option value="bank_transfer">واریز وجه</option>';
-        var statuses = '<option value="unpaid">پرداخت نشده</option>'
-            + '<option value="paid" selected>پرداخت شده</option>'
+        var statuses = '<option value="unpaid" selected>پرداخت نشده</option>'
+            + '<option value="paid">پرداخت شده</option>'
             + '<option value="partial">پرداخت جزئی</option>';
         var typeOpts = isSales
             ? '<option value="sales_invoice">فاکتور فروش</option><option value="sales_proforma">پیش فاکتور فروش</option>'
@@ -296,14 +300,15 @@ $(function () {
         var html = '<div class="invoice-form" id="invoiceForm">'
             + '<div class="page-actions">'
             + '<button type="button" class="button-secondary" id="invoiceBackToList">بازگشت به فاکتورها</button>'
+            + (isEdit ? '<button type="button" class="button-secondary" id="invAccountPayments">دریافت/پرداخت و صورت‌حساب</button>' : '')
             + '<h2 style="margin:0;">' + (isEdit ? 'ویرایش فاکتور' : 'ایجاد فاکتور') + '</h2>'
             + '</div>'
             + '<input type="hidden" id="invId" value="' + escAttr(currentInvoiceId) + '">'
             + '<div class="form-grid header-section">'
             + '<div class="form-row"><label>شماره فاکتور</label><input id="invNumber" type="text" readonly value="' + escAttr(data ? data.invoice_number : (isEdit ? '' : 'به صورت خودکار')) + '"></div>'
             + '<div class="form-row"><label>نوع</label><select id="invType">' + typeOpts.replace('value="' + typeVal + '"', 'value="' + typeVal + '" selected') + '</select></div>'
-            + '<div class="form-row"><label>نوع پرداخت</label><select id="invPaymentType">' + paymentTypes + '</select></div>'
-            + '<div class="form-row"><label>وضعیت پرداخت</label><select id="invPaymentStatus">' + statuses + '</select></div>'
+            + '<div class="form-row"><label>روش پرداخت پیش‌فرض</label><select id="invPaymentType">' + paymentTypes + '</select><small>ثبت وجه واقعی پس از ذخیره فاکتور، از پنجره دریافت و پرداخت انجام می‌شود.</small></div>'
+            + '<div class="form-row"><label>وضعیت پرداخت</label><select id="invPaymentStatus" disabled>' + statuses + '</select><small>وضعیت پرداخت به‌صورت خودکار از مبالغ ثبت‌شده محاسبه می‌شود.</small></div>'
             + '<div class="form-row"><label>تاریخ (شمسی)</label>'
             + '<input type="text" id="invDateDisplay" class="inv-date-display" readonly="readonly" autocomplete="off" placeholder="۱۴۰۵/۰۵/۲۳" style="direction:ltr;text-align:center;">'
             + '<input type="hidden" id="invDate" name="invoice_date" value="' + escAttr(data ? data.invoice_date : todayISO()) + '">'
@@ -453,6 +458,14 @@ $(function () {
     }
 
     $(document).on('click', '#invoiceBackToList, #invoiceFormCancel', function () { showList(); });
+    $(document).on('click', '#invAccountPayments', function () {
+        var id=Number($('#invId').val());
+        if(!id || !window.AccountingLedger)return;
+        $.getJSON('assets/php/invoice_get.php',{id:id}).done(function(res){
+            if(res.success&&res.data)window.AccountingLedger.openInvoice(res.data);
+            else alert('دریافت اطلاعات فاکتور ناموفق بود.');
+        }).fail(function(){alert('خطا در دریافت اطلاعات مالی فاکتور.');});
+    });
     $(document).on('input', '#invItemsTable .ii-price, #invItemsTable .ii-qty, #invItemsTable .ii-disc, #invDiscount', function () { recalcs(); });
     $(document).on('click', '.ii-remove', function () { $(this).closest('tr').remove(); recalcs(); });
     $(document).on('click', '#invAddProduct', function () { openProductModal(); });
@@ -462,7 +475,7 @@ $(function () {
     var pickedScheduled = true;
     var productSearchTimer = null, productRequest = null, productRequestSeq = 0;
     function openProductModal() {
-        $('#invoiceProductTable tbody').html('<tr><td colspan="7" class="empty-state">در حال بارگذاری...</td></tr>');
+        $('#invoiceProductTable tbody').html('<tr><td colspan="9" class="empty-state">در حال بارگذاری...</td></tr>');
         loadProducts('');
         openModal('invoiceProductModal');
         $('#invoiceProductSearch').val('').focus();
@@ -727,7 +740,14 @@ $(function () {
         var $btn = $('#invoiceFormSave');
         $btn.prop('disabled', true).text('در حال ذخیره...');
         $.post('assets/php/invoice_save.php', payload).done(function (res) {
-            if (res.success) { showList(currentInvoiceId === '' ? 1 : currentPage); alert(res.message); }
+            if (res.success) {
+                var created = currentInvoiceId === '';
+                showList(created ? 1 : currentPage);
+                alert(res.message);
+                if (created && res.data && res.data.invoice && window.AccountingLedger) {
+                    window.AccountingLedger.openInvoice(res.data.invoice);
+                }
+            }
             else { alert(res.message || 'خطا در ذخیره.'); }
             $btn.prop('disabled', false).text('ذخیره فاکتور');
         }).fail(function () {

@@ -203,6 +203,15 @@ $mediaSource = !empty($it['media_print_path']) ? $it['media_print_path'] : (__DI
                         <td>مبلغ قابل پرداخت</td>
                         <td class="money strong"><?php echo pdf_currency_money($inv['payable_amount'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td>
                     </tr>
+                    <?php if (!empty($inv['acct_is_final'])): ?>
+                    <?php if (!empty($inv['acct_unreconciled'])): ?>
+                    <tr><td colspan="2">وضعیت تسویه تاریخی این فاکتور نیازمند تطبیق است؛ مانده معتبر هنوز مشخص نشده است.</td></tr>
+                    <?php else: ?>
+                    <tr><td>مبلغ تسویه‌شده تا زمان چاپ</td><td class="money"><?php echo pdf_currency_money($inv['acct_paid'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td></tr>
+                    <tr><td>مانده فاکتور تا زمان چاپ</td><td class="money"><?php echo pdf_currency_money($inv['acct_remaining'] ?? '0'); ?> <?php echo pdf_esc(getCurrencyLabel()); ?></td></tr>
+                    <?php endif; ?>
+                    <tr><td>زمان تهیه گزارش تسویه</td><td><?php echo pdf_esc($inv['acct_printed_at'] ?? ''); ?></td></tr>
+                    <?php endif; ?>
                 </table>
             </td>
             <td class="payment-side">
