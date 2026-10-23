@@ -622,10 +622,13 @@ function sr_lock_refund_party(mysqli $db,int $returnId): void {
     if(!$r)throw new Exception('return_not_found');
 }
 function sr_assert_refund_source_unused(mysqli $db,int $returnId): void {
-    $st=$db->prepare("SELECT 1 FROM account_refund_sources WHERE source_kind='return' AND source_id=? LIMIT 1");
-    $st->bind_param('i',$returnId);$st->execute();
+    $st=$db->prepare("SELECT
+        EXISTS(SELECT 1 FROM account_return_allocations WHERE return_id=?) allocated,
+        EXISTS(SELECT 1 FROM account_refund_sources WHERE source_kind='return' AND source_id=?) refunded");
+    $st->bind_param('ii',$returnId,$returnId);$st->execute();
     $r=$st->get_result()->fetch_assoc();$st->close();
-    if($r)throw new Exception('refund_source_used');
+    if((int)$r['allocated']>0 || (int)$r['refunded']>0)
+        throw new Exception('refund_source_used');
 }
 function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
 {
@@ -808,8 +811,9 @@ function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
             $msg = 'سند برگشت فروش یافت نشد.';
         } elseif ($msg === 'invoice_mismatch') {
             $msg = 'فاکتور درخواستی با سند برگشت مطابقت ندارد.';
-        }
-        if ($msg === 'refund_source_used') $msg = 'سند برگشت دارای اعتبار استردادشده قابل ویرایش یا حذف نیست.'; elseif ($msg === 'invoice_not_found') {
+        } elseif ($msg === 'refund_source_used') {
+            $msg = 'سند برگشت دارای اعتبار تخصیص‌یافته یا استردادشده قابل ویرایش یا حذف نیست.';
+        } elseif ($msg === 'invoice_not_found') {
             $msg = 'فاکتور موردنظر یافت نشد.';
         } elseif ($msg === 'invoice_context') {
             $msg = 'فاکتور انتخابی برای برگشت معتبر نیست.';
@@ -891,7 +895,9 @@ function deleteSalesReturn(mysqli $mysqli, int $returnId): array
         if ($msg === 'invoice_not_found') {
             $msg = 'فاکتور مرتبط با این برگشت یافت نشد.';
         }
-        if ($msg === 'refund_source_used') $msg = 'سند برگشت دارای اعتبار استردادشده قابل ویرایش یا حذف نیست.'; elseif ($msg === 'negative_stock') {
+        } elseif ($msg === 'refund_source_used') {
+            $msg = 'سند برگشت دارای اعتبار تخصیص‌یافته یا استردادشده قابل ویرایش یا حذف نیست.';
+        } elseif ($msg === 'negative_stock') {
             $msg = 'موجودی فعلی برای حذف این برگشت کافی نیست؛ عملیات لغو شد.';
         } elseif ($msg === 'product_not_found') {
             $msg = 'یکی از کالاهای برگشتی دیگر معتبر نیست.';
