@@ -126,6 +126,7 @@ $(function() {
     out+='<p><strong>مانده حساب: '+(s.balance_final?fmt(Math.abs(b))+(b>=0?' بدهکار':' بستانکار'):'نیازمند تعیین وضعیت فاکتورهای قدیمی')+'</strong></p>';
     if(!s.has_opening_balance)out+='<button type="button" class="button-secondary small" id="acctOpening">ثبت مانده افتتاحیه</button>';
     if(s.balance_final&&b<0&&!s.has_unmapped_refunds)out+='<button type="button" class="button-secondary small" id="acctRefund">استرداد اعتبار طرف حساب</button>';
+    if(s.has_unmapped_refunds)out+='<p class="setting-note">استرداد تاریخی فاقد منبع اعتبار مشخص وجود دارد؛ تخصیص و استرداد تازه تا بررسی و اصلاح سند قبلی مسدود است.</p>';
     out+='<p>خالص پرداخت‌های تخصیص‌نیافته (با احتساب استرداد): '+fmt(s.unallocated_credit||0)
       +' | اعتبار نقدی قابل تخصیص: '+fmt(s.available_payment_credit||0)
       +' | اعتبار برگشت قابل تخصیص: '+fmt(s.available_return_credit||0)+'</p>';
@@ -156,14 +157,14 @@ $(function() {
     (s.payments||[]).forEach(function(p){
       out+='<tr><td>'+safe(formatLedgerDate(p.date))+'</td><td>'+safe(p.method)+'</td><td>'+fmt(p.amount)+'</td><td>'+fmt(p.allocated)+'</td><td>'+fmt(p.unallocated)+'</td>'
         +'<td>'+safe(p.reference_no||'—')+'</td><td>'+safe(p.note||'—')+'</td><td>'+safe(p.operator_name||'—')+'</td>'
-        +'<td>'+(!p.is_reversal&&!p.is_reversed&&!zero(p.unallocated)&&p.direction===(kind==='customer'?'in':'out')?'<button type="button" class="button-secondary small acctUseCredit" data-id="'+p.id+'" data-available="'+safe(p.unallocated)+'">تخصیص اعتبار</button>':'')+' '+(!p.is_reversal&&!p.is_reversed?'<button type="button" class="button-secondary small acctReverse" data-id="'+p.id+'">ثبت سند اصلاحی</button>':'ابطال‌شده')+'</td></tr>';
+        +'<td>'+(!s.has_unmapped_refunds&&!p.is_reversal&&!p.is_reversed&&!zero(p.unallocated)&&p.direction===(kind==='customer'?'in':'out')?'<button type="button" class="button-secondary small acctUseCredit" data-id="'+p.id+'" data-available="'+safe(p.unallocated)+'">تخصیص اعتبار</button>':'')+' '+(!p.is_reversal&&!p.is_reversed?'<button type="button" class="button-secondary small acctReverse" data-id="'+p.id+'">ثبت سند اصلاحی</button>':'ابطال‌شده')+'</td></tr>';
     });
     out+='</tbody></table></div>';
     if(kind==='customer' && (s.returns||[]).length) {
-      out+='<h3>اعتبارهای برگشت از فروش</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>سند برگشت</th><th>مبلغ</th><th>مصرف‌شده</th><th>اعتبار باقی‌مانده</th><th></th></tr></thead><tbody>';
+      out+='<h3>اعتبارهای برگشت از فروش</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>سند برگشت</th><th>مبلغ</th><th>تخصیص‌یافته</th><th>استردادشده</th><th>اعتبار باقی‌مانده</th><th></th></tr></thead><tbody>';
       (s.returns||[]).forEach(function(q) {
-        out+='<tr><td>'+safe(q.number)+'</td><td>'+fmt(q.amount)+'</td><td>'+fmt(q.allocated)+'</td><td>'+fmt(q.available)+'</td><td>'+
-        (!zero(q.available)?'<button type="button" class="button-secondary small acctApplyReturn" data-id="'+q.id+'" data-available="'+safe(q.available)+'">تخصیص اعتبار به فاکتور</button>':'—')+'</td></tr>';
+        out+='<tr><td>'+safe(q.number)+'</td><td>'+fmt(q.amount)+'</td><td>'+fmt(q.allocated)+'</td><td>'+fmt(q.refunded||0)+'</td><td>'+fmt(q.available)+'</td><td>'+
+        (!s.has_unmapped_refunds&&!zero(q.available)?'<button type="button" class="button-secondary small acctApplyReturn" data-id="'+q.id+'" data-available="'+safe(q.available)+'">تخصیص اعتبار به فاکتور</button>':'—')+'</td></tr>';
       });
       out+='</tbody></table></div>';
     }
