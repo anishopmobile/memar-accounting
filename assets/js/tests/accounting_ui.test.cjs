@@ -158,6 +158,22 @@ async function submitBatch(page,amounts) {
    assert.equal(refundedPayment.date,refundDate,'refund persisted the selected Gregorian-backed Jalali date');
    assert.equal(statement.balance,'-30000.00','50k unallocated credit minus 20k refund');
    console.log('PASS refund UI: date, selected account, audited method and exact balance');
+   // Exported customer/supplier reports must use each party's actual id
+   // to resolve the ledger balance; exporting zero for every party is unsafe.
+   const customerExcel=await page.request.get(base+'/assets/php/report_customer_debt_export.php');
+   assert.equal(customerExcel.status(),200,'authenticated customer debt Excel');
+   const customerRows=((await customerExcel.text()).match(/<Row>[\s\S]*?<\/Row>/g)||[]);
+   const customerReportRow=customerRows.find(row=>row.includes('010101'));
+   assert.ok(customerReportRow && customerReportRow.includes('-30,000'),
+     'customer debt Excel must include actual negative credit (not zero)');
+   const supplierExcel=await page.request.get(base+'/assets/php/report_supplier_debt_export.php');
+   assert.equal(supplierExcel.status(),200,'authenticated supplier debt Excel');
+   const supplierRows=((await supplierExcel.text()).match(/<Row>[\s\S]*?<\/Row>/g)||[]);
+   const supplierReportRow=supplierRows.find(row=>row.includes('020202'));
+   assert.ok(supplierReportRow && supplierReportRow.includes('50,000,000'),
+     'supplier debt Excel must include actual 50m debt (not zero)');
+   console.log('PASS customer/supplier debt Excel matches individual ledger balances');
+
 
    // Mobile: open the actual statement and ensure payment rows remain operable.
    await page.setViewportSize({width:390,height:844});
