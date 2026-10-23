@@ -342,16 +342,39 @@ $(function() {
     });
     $(document).on('click','.acctPartyOpen',function(){partyId=Number($(this).data('id'));selectedInvoice=0;sourceProformaId=0;autoAllocation=false;show();load();});
   }
+  // Refund uses the existing Gregorian-hidden/Jalali-visible financial date
+  // and the specific cash/POS/bank account (not an arbitrary default).
+  var refundPosting=false;
   $(document).on('click','#acctRefund',function(){
+    if(refundPosting)return;
+    var $button=$(this);
     var amount=prompt('مبلغ استرداد از اعتبار ('+window.Currency.label+')',input(String(Math.abs(Number(statement.balance)))));
     if(amount===null)return;
     var reason=prompt('دلیل استرداد را ثبت کنید (حداقل ۵ نویسه)','استرداد اعتبار به طرف حساب');
     if(reason===null)return;
+    reason=$.trim(reason);
+    if(reason.length<5||reason.length>2000){alert('برای استرداد، علت مستند ۵ تا ۲۰۰۰ نویسه الزامی است.');return;}
     var method=prompt('روش استرداد: cash / pos / bank_transfer','bank_transfer');
     if(method===null)return;
-    $.post('assets/php/accounting_ledger_action.php',{action:'refund',csrf_token:csrf,party_kind:kind,party_id:partyId,
-       amount:amount,method:method,note:reason,client_token:'refund_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)})
-       .done(load).fail(fail);
+    method=$.trim(method);
+    if(!['cash','pos','bank_transfer'].includes(method)){alert('روش استرداد معتبر نیست.');return;}
+    var choices=cashAccounts.filter(function(a){return a.account_type===method;});
+    if(!choices.length){alert('حساب فعال مطابق روش استرداد تعریف نشده است.');return;}
+    var selected=prompt('شناسه حساب موردنظر برای استرداد:\\n'+choices.map(function(a){return a.id+' - '+a.name;}).join('\\n'),String(choices[0].id));
+    if(selected===null)return;
+    var account=choices.find(function(a){return String(a.id)===String(selected).trim();});
+    if(!account){alert('حساب استرداد انتخاب‌شده معتبر نیست.');return;}
+    if(!syncAcctDate()){alert('تاریخ شمسی نامعتبر است؛ تاریخ استرداد را از تقویم انتخاب کنید.');return;}
+    var token=$button.data('requestToken');
+    if(!token){token='refund_'+Date.now()+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);$button.data('requestToken',token);}
+    refundPosting=true;$button.prop('disabled',true);
+    $.post('assets/php/accounting_ledger_action.php',{
+      action:'refund',csrf_token:csrf,party_kind:kind,party_id:partyId,
+      amount:amount,method:method,cash_account_id:account.id,payment_date:$('#acctDate').val(),
+      note:reason,client_token:token
+    }).done(function(){refundPosting=false;load();}).fail(function(err){
+      refundPosting=false;$button.prop('disabled',false);fail(err);
+    });
   });
   $(document).on('click','.acctReverse',function(){
     var id=$(this).data('id');
