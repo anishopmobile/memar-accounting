@@ -231,3 +231,38 @@ function migrate_accounting_ledger(mysqli $db): void
         $db->query("SELECT RELEASE_LOCK('memar_ledger_schema')");
     }
 }
+
+/**
+ * Independently versioned, opt-in customer auto settlement.
+ * Never changes pre-existing ledger or invoice columns.
+ */
+function migrate_accounting_auto_settlement(mysqli $db): void
+{
+    $key='auto_settlement_v1_20261023';
+    $stmt=$db->prepare('SELECT 1 FROM accounting_migrations WHERE migration_key=? LIMIT 1');
+    $stmt->bind_param('s',$key);$stmt->execute();$done=$stmt->get_result()->fetch_assoc();$stmt->close();
+    if($done)return;
+    $lock=$db->query("SELECT GET_LOCK('memar_auto_settlement_schema',30) AS acquired");
+    if(!$lock || (int)($lock->fetch_assoc()['acquired']??0)!==1)
+        throw new RuntimeException('Auto settlement schema lock unavailable');
+    try {
+        $stmt=$db->prepare('SELECT 1 FROM accounting_migrations WHERE migration_key=? LIMIT 1');
+        $stmt->bind_param('s',$key);$stmt->execute();$done=$stmt->get_result()->fetch_assoc();$stmt->close();
+        if(!$done) {
+            $db->query("CREATE TABLE IF NOT EXISTS accounting_auto_settlement_settings (
+                id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+                enabled TINYINT(1) NOT NULL DEFAULT 0,
+                customer_id INT NULL,
+                updated_by INT NULL,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                CONSTRAINT fk_auto_settle_customer FOREIGN KEY(customer_id)
+                    REFERENCES customers(id) ON DELETE RESTRICT
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            $db->query('INSERT IGNORE INTO accounting_auto_settlement_settings(id,enabled,customer_id) VALUES(1,0,NULL)');
+            $stmt=$db->prepare('INSERT INTO accounting_migrations(migration_key) VALUES(?)');
+            $stmt->bind_param('s',$key);$stmt->execute();$stmt->close();
+        }
+    } finally {
+        $db->query("SELECT RELEASE_LOCK('memar_auto_settlement_schema')");
+    }
+}

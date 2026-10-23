@@ -26,6 +26,9 @@ jobs:
         run: |
           node --check assets/js/invoice.js
           node --check assets/js/accounting-ledger-ui.js
+          node --check assets/js/accounting-auto-settlement-settings.js
+          node --check assets/js/main.js
+          node --check assets/js/tests/accounting_auto_settlement_ui.test.cjs
           node --check assets/js/currency.js
   accounting-mysql:
     runs-on: ubuntu-latest
@@ -48,6 +51,8 @@ jobs:
           extensions: mysqli, mysqlnd, bcmath, mbstring, gd
       - name: Settlement and balance tests
         run: php assets/php/tests/accounting_ledger_mysql_test.php
+      - name: Automatic public customer settlement integrity tests
+        run: php assets/php/tests/accounting_auto_settlement_mysql_test.php
       - name: Existing invoice and financial regressions
         run: |
           php assets/php/tests/currency_mysql_test.php

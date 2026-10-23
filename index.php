@@ -83,8 +83,9 @@ if (!array_key_exists($page, $pages)) {
     <?php endif; ?>
     <script src="assets/js/brand-settings.js" defer></script>
     <script src="assets/js/layout.js" defer></script>
-    <script src="assets/js/invoice.js" defer></script>
+    <script src="assets/js/invoice.js?v=<?php echo (int) filemtime(__DIR__ . '/assets/js/invoice.js'); ?>" defer></script>
     <script src="assets/js/accounting-ledger-ui.js" defer></script>
+    <?php if ($page === 'settings'): ?><script src="assets/js/accounting-auto-settlement-settings.js" defer></script><?php endif; ?>
     <script src="assets/js/bundle.js" defer></script>
     <script src="assets/js/payment-forms.js" defer></script>
     <script src="assets/js/current-affairs.js" defer></script>

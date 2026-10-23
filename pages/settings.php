@@ -4,6 +4,7 @@
         <button type="button" data-target="invoice-settings">تنظیمات فاکتور</button>
         <button type="button" data-target="taxes">مالیات و تخفیف</button>
         <button type="button" data-target="currency-settings">تنظیمات واحد پولی</button>
+        <button type="button" data-target="auto-settlement">تسویه خودکار مشتری عمومی</button>
         <button type="button" data-target="security">امنیت ورود</button>
         <button type="button" data-target="database">پایگاه داده</button>
     </div>
@@ -164,6 +165,54 @@
                 <span class="invoice-settings-save-message" aria-live="polite"></span>
             </div>
         </form>
+    </div>
+
+    <!-- Auto-settlement is OFF by default, limited to one explicitly selected customer. -->
+    <div id="auto-settlement" class="settings-section" style="display:none;">
+        <div class="form-grid">
+            <div class="form-row" style="grid-column:span 2">
+                <h3>تسویه خودکار فاکتورهای مشتری عمومی یا متفرقه</h3>
+                <p class="setting-note">این قابلیت فقط هنگام ثبت <strong>فاکتور فروش جدید</strong> برای مشتری انتخاب‌شده اجرا می‌شود. پیش‌فاکتورها، فاکتورهای خرید، ویرایش‌ها و سوابق قبلی تغییری نمی‌کنند. در حالت غیرفعال، پنجره دریافت‌ها و پرداخت‌ها مطابق قبل باز می‌شود.</p>
+                <label for="autoSettlementEnabled">
+                    <input id="autoSettlementEnabled" type="checkbox">
+                    فعال‌سازی ثبت خودکار سند دریافت و تسویه کامل
+                </label>
+            </div>
+            <div class="form-row" style="grid-column:span 2">
+                <strong>مشتری انتخاب‌شده برای تسویه خودکار</strong>
+                <div id="autoSettlementSelected" aria-live="polite">هیچ مشتری انتخاب نشده است.</div>
+                <div class="modal-actions" style="margin-top:10px">
+                    <button id="autoSettlementChoose" type="button" class="button-secondary">انتخاب مشتری از لیست</button>
+                    <button id="autoSettlementRemove" type="button" class="button-secondary" style="display:none">حذف مشتری انتخاب‌شده</button>
+                </div>
+            </div>
+            <div class="form-row" style="grid-column:span 2">
+                <p class="setting-note">روش دریافت از «روش پرداخت پیش‌فرض» فاکتور (نقدی، کارت‌خوان یا انتقال بانکی) گرفته می‌شود. سند در حساب فعال متناسب با روش پرداخت ثبت می‌گردد. اگر حساب فعال وجود نداشته باشد، فاکتور و سند دریافت هیچ‌کدام ثبت نخواهند شد. بعد از ثبت می‌توانید از دکمه «دریافت/پرداخت و صورت‌حساب» جزئیات را مشاهده کنید.</p>
+                <button type="button" id="autoSettlementSave" class="button">ذخیره تنظیمات تسویه خودکار</button>
+                <span id="autoSettlementMessage" class="settings-save-message" role="status" aria-live="polite"></span>
+            </div>
+        </div>
+    </div>
+    <div class="modal" id="autoSettlementCustomerModal" aria-label="انتخاب مشتری عمومی">
+        <div class="modal-backdrop" data-auto-settlement-close="1"></div>
+        <div class="modal-content" style="max-width:720px">
+            <div class="modal-header">
+                <h2>انتخاب مشتری عمومی / متفرقه</h2>
+                <button class="modal-close" type="button" data-auto-settlement-close="1" aria-label="بستن">×</button>
+            </div>
+            <div class="form-row">
+                <label for="autoSettlementSearch">جستجوی مشتری</label>
+                <input id="autoSettlementSearch" type="search" placeholder="نام، شماره تلفن یا کد ملی..." autocomplete="off">
+            </div>
+            <div class="table-wrapper">
+                <table class="action-table">
+                    <thead><tr><th>نام مشتری</th><th>تلفن</th><th>کد ملی</th><th>انتخاب</th></tr></thead>
+                    <tbody id="autoSettlementCustomerRows">
+                        <tr><td colspan="4">در حال دریافت فهرست مشتریان...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
     <div id="taxes" class="settings-section" style="display:none;">
         <form id="taxSettingsForm">

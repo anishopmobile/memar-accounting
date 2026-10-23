@@ -74,6 +74,13 @@ UI_ACCOUNTING_FIXTURE="$acct_fixture" node assets/js/tests/accounting_ui.test.cj
   rm -f "$acct_fixture"
   exit 1
 }
+# The new feature uses the real settings page, customer picker and invoice flow.
+UI_ACCOUNTING_FIXTURE="$acct_fixture" node assets/js/tests/accounting_auto_settlement_ui.test.cjs || {
+  echo "--- Auto settlement browser diagnostics ---"
+  tail -100 "$log"
+  rm -f "$acct_fixture"
+  exit 1
+}
 rm -f "$acct_fixture"
 # PHP 8.4 CI runner may disable opcache JIT when a third-party extension
 # overrides zend_execute_ex(). This startup diagnostic is not an application error.
