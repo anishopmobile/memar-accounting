@@ -401,7 +401,8 @@ function acct_record_refund(mysqli $db,array $input): array {
     $dt=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
     if (!$dt || $dt->format('Y-m-d')!==$date) throw new InvalidArgumentException('تاریخ نامعتبر است.');
     $note=trim((string)($input['note']??''));
-    if (mb_strlen($note)>2000) throw new InvalidArgumentException('توضیح بیش از حد مجاز است.');
+    if (mb_strlen($note)<5 || mb_strlen($note)>2000)
+        throw new InvalidArgumentException('ثبت علت استرداد اعتبار (۵ تا ۲۰۰۰ نویسه) الزامی است.');
     $direction=$kind==='customer'?'out':'in';
     $db->begin_transaction();
     try {
