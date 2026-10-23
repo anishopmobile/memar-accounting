@@ -68,6 +68,8 @@ try{
  await autoButton.waitFor({state:'visible',timeout:15000});
  await autoButton.click();
  await page.locator('#accountingModal.open').waitFor({state:'visible'});
+ await page.waitForFunction(()=>document.querySelector('#acctContent')?.textContent?.includes('دریافت خودکار هنگام ثبت فاکتور'),
+   null,{timeout:15000});
  assert.ok((await page.locator('#acctContent').innerText()).includes('دریافت خودکار هنگام ثبت فاکتور'),
   'original automatic receipt visible in normal account statement');
  console.log('PASS created invoice auto-payment and optional accounting detail modal');
