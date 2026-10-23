@@ -880,6 +880,14 @@ function createInvoice(mysqli $mysqli, array $in): array
             }
         }
 
+        // Only new final SALES invoices for the explicitly selected public
+        // customer qualify. Read and lock the config within the same transaction
+        // so settings changes cannot split an invoice from its receipt.
+        $autoSettle=false;
+        if($type==='sales_invoice') {
+            require_once __DIR__ . '/accounting_auto_settlement.php';
+            $autoSettle=acct_auto_lock_selected_customer($mysqli,$partyId);
+        }
         $invoiceNumber = generateInvoiceNumber($mysqli, $type);
         $totals = calculateInvoiceTotals($items, $invoiceDiscount, $taxRate, $tax['tax_enabled']);
         if (money_cmp($invoiceDiscount, $totals['subtotal']) > 0) {
@@ -971,8 +979,18 @@ function createInvoice(mysqli $mysqli, array $in): array
             }
         }
 
+        // Commit cash receipt, invoice settlement and inventory changes as ONE
+        // unit. If no compatible active cash/POS/bank account exists, abort the
+        // entire invoice instead of saving an incorrectly unpaid public sale.
+        if($autoSettle) {
+            acct_auto_post_new_sale($mysqli,$invoiceId,$partyId,
+                (string)$totals['payable_amount'],(string)$in['payment_type'],(string)$in['invoice_date']);
+        }
         $mysqli->commit();
-        return ['ok' => true, 'message' => 'فاکتور با موفقیت ثبت شد.', 'invoice_id' => $invoiceId];
+        return ['ok' => true, 'message' => $autoSettle
+            ? 'فاکتور و سند دریافت خودکار با موفقیت ثبت شدند.'
+            : 'فاکتور با موفقیت ثبت شد.',
+            'invoice_id' => $invoiceId, 'auto_settled'=>$autoSettle];
     } catch (Exception $e) {
         $mysqli->rollback();
         $msg = invoiceErrorMessage($e, $mysqli, $clientToken);
