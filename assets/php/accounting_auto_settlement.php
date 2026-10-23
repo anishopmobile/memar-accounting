@@ -10,8 +10,9 @@ require_once __DIR__ . '/accounting_ledger.php';
 function acct_auto_lock_selected_customer(mysqli $db, int $customerId): bool
 {
     if ($customerId <= 0) return false;
-    // Serialize invoice creation with settings updates. Defaults to OFF.
-    $stmt=$db->prepare('SELECT enabled,customer_id FROM accounting_auto_settlement_settings WHERE id=1 FOR UPDATE');
+    // A shared row lock prevents mid-save settings changes without forcing
+    // unrelated sales invoices to wait on an exclusive/global settings lock.
+    $stmt=$db->prepare('SELECT enabled,customer_id FROM accounting_auto_settlement_settings WHERE id=1 LOCK IN SHARE MODE');
     $stmt->execute();$res=$stmt->get_result();$cfg=$res?$res->fetch_assoc():null;$stmt->close();
     if (!$cfg || (int)$cfg['enabled']!==1 || (int)$cfg['customer_id']!==$customerId) return false;
     // Existing ledger uses party -> invoice lock order.
