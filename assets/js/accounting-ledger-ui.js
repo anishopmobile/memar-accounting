@@ -16,10 +16,97 @@ $(function() {
   var $modal=$('#accountingModal');
   function safe(v){return $('<div>').text(v==null?'':String(v)).html();}
   function fmt(v){return window.Currency.format(v);}
+  // Reuse the exact Jalali/Gregorian conversion used by invoice.js and jdf.php.
+  // Only the visible value is Jalali; account_payments.payment_date stays ISO Gregorian.
+  function pad2(n){return n<10?'0'+n:String(n);}
+    var ACCT_GDM = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    // میلادی → شمسی (همان الگوریتم jdf.php که تست شد)
+    function gregorianToJalali(gy, gm, gd) {
+        var jyBase = (gy > 1600) ? 979 : 0;
+        var gy2 = gy - (gy > 1600 ? 1600 : 621);
+        var gy3 = (gm > 2) ? gy2 + 1 : gy2;
+        var days = 365 * gy2 + Math.floor((gy3 + 3) / 4) - Math.floor((gy3 + 99) / 100) + Math.floor((gy3 + 399) / 400) - 80 + gd + ACCT_GDM[gm - 1];
+        var jy = jyBase;
+        jy += 33 * Math.floor(days / 12053);
+        days %= 12053;
+        jy += 4 * Math.floor(days / 1461);
+        days %= 1461;
+        if (days > 365) { jy += Math.floor((days - 1) / 365); days = (days - 1) % 365; }
+        var jm, jd, part;
+        if (days < 186) { jm = 1 + Math.floor(days / 31); part = days % 31; }
+        else { jm = 7 + Math.floor((days - 186) / 30); part = (days - 186) % 30; }
+        jd = 1 + part;
+        return [jy, jm, jd];
+    }
+    // شمسی → میلادی (جستجوی دودویی دقیق روی g2j — کاملاً سازگار/تست‌شده)
+    function jalaliToGregorian(jy, jm, jd) {
+        var DAY = 86400000;
+        var target = jy * 10000 + jm * 100 + jd;
+        var lo = Date.UTC(1800, 0, 1) / DAY;
+        var hi = Date.UTC(2100, 11, 31) / DAY;
+        while (lo <= hi) {
+            var mid = lo + ((hi - lo) >> 1);
+            var t = new Date(mid * DAY);
+            var g = [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()];
+            var j = gregorianToJalali(g[0], g[1], g[2]);
+            var cm = (j[0] * 10000 + j[1] * 100 + j[2]) - target;
+            if (cm === 0) return g;
+            if (cm < 0) lo = mid + 1; else hi = mid - 1;
+        }
+        return null;
+    }
+    function gregInputToJalaliStr(gregISO) {
+        var p = String(gregISO || '').split('-');
+        if (p.length !== 3) return '';
+        var j = gregorianToJalali(parseInt(p[0], 10), parseInt(p[1], 10), parseInt(p[2], 10));
+        return j[0] + '/' + pad2(j[1]) + '/' + pad2(j[2]);
+    }
+    function jalaliStrToGregInput(jalaliStr) {
+        var m = normalizeJalaliDigits(jalaliStr).match(/^(\d{4,})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+        if (!m) return '';
+        var g = jalaliToGregorian(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
+        return g ? (g[0] + '-' + pad2(g[1]) + '-' + pad2(g[2])) : '';
+    }
+
+
+  function normalizeJalaliDigits(value){
+    return String(value||'').trim().replace(/[۰-۹]/g,function(d){return String(d.charCodeAt(0)-1776);})
+      .replace(/[٠-٩]/g,function(d){return String(d.charCodeAt(0)-1632);});
+  }
+  function validGregorianISO(value){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value)))return false;
+    var a=value.split('-').map(Number);
+    var d=new Date(Date.UTC(a[0],a[1]-1,a[2]));
+    return a[0]>=1800 && a[0]<=2100 && d.getUTCFullYear()===a[0] && d.getUTCMonth()+1===a[1] && d.getUTCDate()===a[2];
+  }
+  function persianDigits(v){return String(v).replace(/[0-9]/g,function(n){return '۰۱۲۳۴۵۶۷۸۹'[Number(n)];});}
   function formatLedgerDate(date){
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date)))return 'افتتاحیه';
-    try{return new Intl.DateTimeFormat('fa-IR-u-ca-persian',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Tehran'}).format(new Date(date+'T12:00:00Z'));}
-    catch(e){return safe(date);}
+    if(date==='0000-00-00')return 'افتتاحیه';
+    return validGregorianISO(date)?persianDigits(gregInputToJalaliStr(date)):safe(date);
+  }
+  function setAcctDate(iso){
+    var valid=validGregorianISO(iso);
+    $('#acctDate').val(valid?iso:'');
+    $('#acctDateDisplay').val(valid?gregInputToJalaliStr(iso):'');
+  }
+  function syncAcctDate(){
+    var iso=jalaliStrToGregInput($('#acctDateDisplay').val());
+    if(!validGregorianISO(iso)){
+      $('#acctDate').val('');
+      return false;
+    }
+    $('#acctDate').val(iso);
+    return true;
+  }
+  function initAcctDatePicker(){
+    if(typeof window.kamaDatepicker==='function'){
+      window.kamaDatepicker('acctDateDisplay',{
+        placeholder:'',twodigit:true,closeAfterSelect:true,
+        nextButtonIcon:'بعدی',previousButtonIcon:'قبلی',forceFarsiDigits:true,
+        markToday:true,highlightSelectedDay:true,sync:true,gotoToday:true
+      });
+    }
+    $('#acctDateDisplay').off('change.acctDate').on('change.acctDate',syncAcctDate);
   }
   function input(v){return window.Currency.fromBase(v);}
   function raw(v){return window.Currency.toBase(v);}
@@ -43,7 +130,7 @@ $(function() {
     out+='<p class="setting-note">مبالغ بدون تخصیص در مانده نهایی طرف حساب منظور شده‌اند؛ تا زمانی که مانده بدهکار است، این مبالغ الزاماً پیش‌پرداخت محسوب نمی‌شوند. برای مانده افتتاحیه، فقط بدهی‌های خارج از فاکتورهای موجود را وارد کنید.</p>';
     out+='<h3>فاکتورها و مانده‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>فاکتور</th><th>تاریخ</th><th>مبلغ</th><th>تسویه</th><th>مانده</th><th>تخصیص پرداخت جدید</th></tr></thead><tbody>';
     (s.invoices||[]).forEach(function(i){
-      out+='<tr><td>'+safe(i.number)+'</td><td>'+safe(i.date)+'</td><td>'+fmt(i.total)+'</td><td>'+fmt(i.paid)+'</td><td>'
+      out+='<tr><td>'+safe(i.number)+'</td><td>'+safe(formatLedgerDate(i.date))+'</td><td>'+fmt(i.total)+'</td><td>'+fmt(i.paid)+'</td><td>'
       +(i.unreconciled?'<button type="button" class="button-secondary small acctReconcile" data-id="'+i.id+'" data-total="'+safe(i.total)+'">تطبیق پرداخت تاریخی</button>':fmt(i.remaining))
       +'</td><td>'+(!i.unreconciled&&!zero(i.remaining)?'<input class="acctAlloc" type="number" min="0" step="0.01" data-id="'+i.id+'" data-max="'+safe(i.remaining)+'" value="0" style="width:150px">':'—')+'</td></tr>';
     });
@@ -58,14 +145,14 @@ $(function() {
       +'</div></div><button type="button" class="button-secondary" id="acctAddPayment">+ افزودن روش پرداخت</button>'
       +'<button type="button" class="button-secondary" id="acctCreateCashAccount">+ حساب بانکی / صندوق جدید</button>'
       +'<div class="form-grid">'
-      +'<div class="form-row"><label>تاریخ میلادی ثبت مالی</label><input id="acctDate" type="date"></div>'
+      +'<div class="form-row"><label for="acctDateDisplay">تاریخ شمسی ثبت مالی</label><input id="acctDateDisplay" type="text" class="inv-date-display" readonly="readonly" autocomplete="off" placeholder="۱۴۰۵/۰۸/۰۱" style="direction:ltr;text-align:center"><input id="acctDate" type="hidden"></div>'
       +'<div class="form-row"><label>شماره پیگیری (اختیاری)</label><input id="acctRef" maxlength="120"></div>'
       +'<div class="form-row"><label>توضیحات</label><input id="acctNote" maxlength="2000"></div></div>'
       +'<p id="acctAllocationTotal"></p><p class="setting-note">هر روش پرداخت یک سند مجزا دارد، ولی همه روش‌ها و تخصیص‌ها با یک عملیات اتمیک ثبت می‌شوند؛ مبلغ مازاد اعتبار طرف حساب خواهد بود.</p>'
       +'<button id="acctSubmit" type="button" class="button">ثبت دریافت/پرداخت</button>';
     out+='<h3>سوابق پرداخت‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>کل</th><th>تخصیص</th><th>بدون تخصیص</th><th>شماره پیگیری</th><th>توضیحات</th><th>ثبت‌کننده</th><th>عملیات</th></tr></thead><tbody>';
     (s.payments||[]).forEach(function(p){
-      out+='<tr><td>'+safe(p.date)+'</td><td>'+safe(p.method)+'</td><td>'+fmt(p.amount)+'</td><td>'+fmt(p.allocated)+'</td><td>'+fmt(p.unallocated)+'</td>'
+      out+='<tr><td>'+safe(formatLedgerDate(p.date))+'</td><td>'+safe(p.method)+'</td><td>'+fmt(p.amount)+'</td><td>'+fmt(p.allocated)+'</td><td>'+fmt(p.unallocated)+'</td>'
         +'<td>'+(!p.is_reversal&&!p.is_reversed&&!zero(p.unallocated)&&p.direction===(kind==='customer'?'in':'out')?'<button type="button" class="button-secondary small acctUseCredit" data-id="'+p.id+'" data-available="'+safe(p.unallocated)+'">تخصیص اعتبار</button>':'')+' '+(!p.is_reversal&&!p.is_reversed?'<button type="button" class="button-secondary small acctReverse" data-id="'+p.id+'">ثبت سند اصلاحی</button>':'ابطال‌شده')+'</td></tr>';
     });
     out+='</tbody></table></div>';
@@ -89,11 +176,11 @@ $(function() {
     $('#acctContent').html(out);
     // Capture unenhanced HTML before the HCG select observer decorates it.
     cleanPaymentRow=$('#acctPaymentRows .acctPaymentRow').first().prop('outerHTML');
-    loadCashAccounts();updateTotals();
+    initAcctDatePicker();loadCashAccounts();updateTotals();
   }
   function loadCashAccounts(){
     $.getJSON('assets/php/accounting_ledger_action.php',{action:'accounts'}).done(function(r){cashAccounts=(r.data&&r.data.accounts)||[];
-      if(!$('#acctDate').val())$('#acctDate').val((r.data&&r.data.today)||'');
+      if(!$('#acctDate').val())setAcctDate((r.data&&r.data.today)||'');
       renderCashAccounts();}).fail(fail);
   }
 
@@ -193,6 +280,7 @@ $(function() {
       });
       if(total<=0||sum>total+0.00001)throw Error('invalid');
     }catch(e){alert('مبالغ یا حساب پرداخت نامعتبر هستند.');return;}
+    if(!syncAcctDate()){alert('تاریخ شمسی دریافت/پرداخت نامعتبر است؛ لطفاً تاریخ را از تقویم انتخاب کنید.');return;}
     posting=true;updateTotals();
     $.post('assets/php/accounting_ledger_action.php',{
       action:'payment_batch',csrf_token:csrf,party_kind:kind,party_id:partyId,

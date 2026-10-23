@@ -38,7 +38,8 @@ After deployment, locate every invoice flagged «تطبیق پرداخت تار�
 ## Operational workflow
 
 1. Create a final invoice or proforma. After saving, the financial dialog opens. Enter **actual** paid amount (not full invoice value by default), date, method, and cash/POS/bank account. The financial dialog is a separate confirmation step, so do not assume an invoice save also saves a payment.
-2. The selected final invoice is automatically assigned up to its remaining value. Staff may add up to 12 cash/POS/bank rows to one **atomic** receipt/remittance and manually distribute the summed amount across earlier invoices. Excess money becomes visible account credit.
+2. Financial date entry uses the existing `kamaDatepicker` Persian/Jalali calendar on all customer/supplier/invoice accounting dialogs; the display and statement/export dates are Jalali while a hidden ISO Gregorian field is sent to the unchanged accounting API and stored in MySQL. Invalid dates block posting. The existing invoice.js/jdf.php conversion algorithm is reused; no new calendar dependency is introduced.
+3. The selected final invoice is automatically assigned up to its remaining value. Staff may add up to 12 cash/POS/bank rows to one **atomic** receipt/remittance and manually distribute the summed amount across earlier invoices. Excess money becomes visible account credit.
 3. On later installments, open «دریافت/پرداخت و صورت‌حساب» from the invoice. New payments append history and update statuses atomically.
 4. When an existing payment has unused credit, use «تخصیص اعتبار» to clear a later invoice. Customer return credits have their own explicitly separate allocation action.
 5. From Customers/Suppliers, open «صورت حساب / دریافت و پرداخت» to view the chronological running balance and export it to currency-aware Excel. A documented opening balance may be entered **once**. A credit refund is limited to a verified credit amount.
@@ -57,6 +58,7 @@ After deployment, locate every invoice flagged «تطبیق پرداخت تار�
 | Mixed payment 2m POS + 1m cash + 2m bank | Three independently recorded receipts with correct selected accounts; same invoice fully paid |
 | Proforma advance 2m | No final debt and no stock change; unallocated credit recorded; credit can later settle converted final invoice |
 | Sales return credited 1m | Reduces customer net debt by 1m without fake receipt; available to allocate or refund |
+| Jalali receipt/payment date | Existing Persian calendar picks a day; hidden Gregorian ISO is persisted without date shift; invoices, receipt history, movement ledger and Excel statement show the same Jalali day. |
 | Change display currency TOMAN ↔ IRR | Every amount renders at correct scale while DB value and outstanding remain unchanged |
 | Correct duplicate submission using same token | One payment only; different payload with same token rejected |
 | Concurrent attempts to overpay the same invoice | Only allowed total may be allocated; no negative invoice remainder |

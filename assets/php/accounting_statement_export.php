@@ -6,6 +6,7 @@ require_once __DIR__.'/db.php';
 require_once __DIR__.'/currency.php';
 require_once __DIR__.'/accounting_ledger.php';
 require_once __DIR__.'/report_excel_lib.php';
+require_once __DIR__.'/jdf.php';
 date_default_timezone_set('Asia/Tehran');
 
 $kind=trim((string)($_GET['party_kind']??''));
@@ -14,12 +15,12 @@ if(!in_array($kind,['customer','supplier'],true)||!$id)respond_error('طرف ح�
 try{$statement=acct_party_statement($mysqli,$kind,(int)$id);}
 catch(InvalidArgumentException $e){respond_error($e->getMessage(),422);}
 $title=($kind==='customer'?'صورت حساب مشتری':'صورت حساب تامین‌کننده').' #'.$id.' - واحد: '.getCurrencyLabel();
-$columns=['date'=>'تاریخ میلادی','description'=>'شرح سند',
+$columns=['date'=>'تاریخ شمسی','description'=>'شرح سند',
     'debit'=>'افزایش بدهی','credit'=>'کاهش بدهی','balance'=>'مانده حساب'];
 $rows=[];
 foreach($statement['movements'] as $m) {
     $rows[]=[
-      'date'=>$m['date']==='0000-00-00'?'افتتاحیه':$m['date'],
+      'date'=>$m['date']==='0000-00-00'?'افتتاحیه':jdate('Y/m/d',strtotime($m['date'].' 12:00:00')),
       'description'=>$m['description'],
       'debit'=>convertFromBaseCurrency($m['debit']),
       'credit'=>convertFromBaseCurrency($m['credit']),

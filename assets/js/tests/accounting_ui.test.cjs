@@ -25,7 +25,13 @@ async function openInvoice(page,route,id) {
   await btn.waitFor({state:'visible',timeout:15000});
   await btn.click();
   await page.locator('#accountingModal.open').waitFor({state:'visible',timeout:10000});
-  await page.waitForFunction(()=>!!document.querySelector('#acctPaymentRows .acctCashAccount')?.value,null,{timeout:10000});
+  await page.waitForFunction(()=>!!document.querySelector('#acctPaymentRows .acctCashAccount')?.value &&
+    !!document.querySelector('#acctDateDisplay')?.value && !!document.querySelector('#acctDate')?.value,
+    null,{timeout:10000});
+  assert.equal(await page.locator('#acctDateDisplay').getAttribute('readonly'),'readonly','Jalali picker is read-only like invoice dates');
+  assert.match(await page.locator('#acctDateDisplay').inputValue(),/^\d{4}\/\d{2}\/\d{2}$/,'visible date is Jalali');
+  assert.match(await page.locator('#acctDate').inputValue(),/^\d{4}-\d{2}-\d{2}$/,'hidden date is Gregorian ISO');
+  assert.ok(await page.locator('#bd-main-acctDateDisplay').count(),'existing kamaDatepicker is attached');
 }
 async function submitBatch(page,amounts) {
   if(amounts.length>1) {
@@ -55,10 +61,23 @@ async function submitBatch(page,amounts) {
    const page=await context.newPage();
    page.on('pageerror',e=>browserErrors.push(e.message));
    await openInvoice(page,'factors',fixture.sales_invoice_id);
+   const invoiceDateText=await page.locator('#acctContent .action-table').first().locator('tbody tr td').nth(1).innerText();
+   assert.match(invoiceDateText,/^[۰-۹]{4}\/[۰-۹]{2}\/[۰-۹]{2}$/,'invoice dates are displayed in Jalali');
+   await page.locator('#acctDateDisplay').click();
+   await page.locator('#bd-main-acctDateDisplay .day-12').click();
+   const selectedGregorianDate=await page.locator('#acctDate').inputValue();
+   const selectedJalaliDate=await page.locator('#acctDateDisplay').inputValue();
+   assert.match(selectedGregorianDate,/^\d{4}-\d{2}-\d{2}$/);
+   assert.match(selectedJalaliDate,/^\d{4}\/\d{2}\/12$/,'calendar-selected day is shown in Jalali');
    await submitBatch(page,[3000000]);
    let statement=await getStatement(page,'customer',fixture.customer_id);
+   assert.equal(statement.payments[0].date,selectedGregorianDate,'Jalali picker posts Gregorian date to database');
    let invoice=statement.invoices.find(i=>i.id===fixture.sales_invoice_id);
    assert.equal(invoice.remaining,'2000000.00','partial receipt: 5m - 3m');
+   await openInvoice(page,'factors',fixture.sales_invoice_id);
+   const historyDate=await page.locator('#acctContent .action-table').nth(1).locator('tbody tr td').first().innerText();
+   assert.match(historyDate,/^[۰-۹]{4}\/[۰-۹]{2}\/[۰-۹]{2}$/,'payment history is Jalali');
+   await page.locator('#acctClose').click();
    await openInvoice(page,'factors',fixture.sales_invoice_id);
    await submitBatch(page,[1000000,1000000]);
    statement=await getStatement(page,'customer',fixture.customer_id);
