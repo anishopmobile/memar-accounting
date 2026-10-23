@@ -76,6 +76,17 @@ if ($invoiceId === '') {
 
 if ($result['ok']) {
     $data = ['invoice_id' => $result['invoice_id'] ?? 0];
+    // Suppress the manual payment dialog only when an automatic settlement
+    // actually exists for this newly created invoice. On idempotent retries,
+    // query the authoritative ledger rather than trusting a client-side flag.
+    if($invoiceId==='' && !empty($result['invoice_id'])) {
+        if(array_key_exists('auto_settled',$result)) {
+            $data['auto_settled']=(bool)$result['auto_settled'];
+        }else{
+            require_once __DIR__ . '/accounting_auto_settlement.php';
+            $data['auto_settled']=acct_auto_invoice_has_receipt($mysqli,(int)$result['invoice_id']);
+        }
+    }
     if (isset($result['invoice_id']) && $result['invoice_id']) {
         $full = getInvoice($mysqli, (int) $result['invoice_id']);
         if ($full) {
