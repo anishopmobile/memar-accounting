@@ -297,4 +297,38 @@ acct_apply_credit($mysqli,$legacyCash['payment_id'],$legacyNew,'5000');
 check_acct(acct_invoice_outstanding($mysqli,$legacyNew)['remaining']==='0.00',
   'correcting unmapped refund restores safe allocation');
 
+
+// Regression: a refund reserves unused cash credit and never settles a later
+// invoice twice. Reversing that refund restores allocation capacity.
+foreach (['customer','supplier'] as $kind) {
+    $party=$kind==='customer'?a_customer($mysqli):a_supplier($mysqli);
+    $oldInvoice=a_invoice($mysqli,$kind,$party,'100000');
+    $receipt=pay_acct($mysqli,$kind,$party,'150000',[['invoice_id'=>$oldInvoice,'amount'=>'100000']]);
+    $refundData=['party_kind'=>$kind,'party_id'=>$party,'amount'=>'30000','method'=>'cash',
+        'client_token'=>bin2hex(random_bytes(20)),'note'=>'Excess credit refund'];
+    $refund=acct_record_refund($mysqli,$refundData);
+    check_acct($refund['reserved_sources']===1,'refund has backing source '.$kind);
+    check_acct(acct_record_refund($mysqli,$refundData)['duplicate']===true,'idempotent refund '.$kind);
+    $balance=acct_party_statement($mysqli,$kind,$party);
+    check_acct($balance['balance']==='-20000.00','correct cash balance after refund '.$kind);
+    $newInvoice=a_invoice($mysqli,$kind,$party,'30000');
+    $blocked=false;
+    try {acct_apply_credit($mysqli,$receipt['payment_id'],$newInvoice,'30000');}
+    catch(InvalidArgumentException $e) {$blocked=true;}
+    check_acct($blocked,'refunded credit cannot be reused '.$kind);
+    $blocked=false;
+    try {acct_reverse_payment($mysqli,$receipt['payment_id'],'Incorrect receipt reversal',
+         bin2hex(random_bytes(20)));}
+    catch(InvalidArgumentException $e) {$blocked=true;}
+    check_acct($blocked,'refunded source receipt cannot be reversed '.$kind);
+    acct_reverse_payment($mysqli,$refund['payment_id'],'Reversal of mistaken credit refund',
+        bin2hex(random_bytes(20)));
+    acct_apply_credit($mysqli,$receipt['payment_id'],$newInvoice,'30000');
+    check_acct(acct_invoice_outstanding($mysqli,$newInvoice)['remaining']==='0.00',
+        'refund reversal restores allocated credit '.$kind);
+    $state=acct_party_statement($mysqli,$kind,$party);
+    check_acct(money_cmp($state['balance'],acct_party_balances($mysqli,$kind)[$party]['balance'])===0,
+        'full statement and debt report match '.$kind);
+}
+
 echo "PASS accounting integration suite\n";
