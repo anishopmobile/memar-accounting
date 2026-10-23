@@ -21,6 +21,7 @@ Invoices are sales/purchase documents; actual receipt/payment is an independent,
 * `account_payment_batches` — one atomic, idempotent posting for mixed cash/POS/transfer methods. Its child payments and allocations either all commit or all roll back.
 * `account_payment_allocations` — amount linked to a final invoice, with auditable reversal flag. Allocation rows are append-only to preserve reversed history.
 * `account_return_allocations` — explicit assignment of verified sales-return credit.
+* `account_refund_sources` — an immutable refund-to-credit-source reservation for payment, sales-return or negative opening balances. Reversing a refund releases only its reservations; duplicate allocations and reversal of receipts backing active refunds are rejected.
 * `account_opening_balances` — one opening balance per party, with an explanation and author; positive debt / negative credit.
 * `account_legacy_reconciliations` — one-time old partial invoice settlement correction, with reason, original status, author and timestamp.
 * `accounting_cash_accounts` — named active cash register, POS, or bank account.
@@ -63,7 +64,9 @@ After deployment, locate every invoice flagged «تطبیق پرداخت تار�
 | Correct duplicate submission using same token | One payment only; different payload with same token rejected |
 | Concurrent attempts to overpay the same invoice | Only allowed total may be allocated; no negative invoice remainder |
 | Attempt delete paid invoice, edit settled invoice below amount paid, change party | Server blocks unsafe operation |
-| Refund credit, then reverse mistaken refund | Refund has physical outflow and reversal restores credit; original records preserved |
+| Refund credit, then reverse mistaken refund | Refund has physical outflow, debits backed credit capacity without double-counting in the party balance, and reversal restores source capacity; original records preserved |
+| Refund payment/return credit then attempt to reassign it | Reallocation of the reserved credit is rejected; reversal of the original receipt is blocked until the dependent refund is reversed |
+| Older refunds without linked sources | Further credit allocation/refund is blocked for that party until the legacy refund is reviewed; never invent the backing cash provenance |
 | Old partial invoice with unknown historical amount | Marked "needs reconciliation"; cannot be assigned arbitrary new settlement until reconciled |
 | PDF and Excel export | Correct payable, paid, remaining and party balance, as of document generation date; historical unknown clearly labelled |
 | Security | Unauthenticated GET/POST blocked, POST without CSRF blocked, IDs/amounts/dates validated server-side |

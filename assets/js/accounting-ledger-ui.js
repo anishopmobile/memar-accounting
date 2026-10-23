@@ -125,8 +125,10 @@ $(function() {
     var s=statement, b=Number(s.balance), out='';
     out+='<p><strong>مانده حساب: '+(s.balance_final?fmt(Math.abs(b))+(b>=0?' بدهکار':' بستانکار'):'نیازمند تعیین وضعیت فاکتورهای قدیمی')+'</strong></p>';
     if(!s.has_opening_balance)out+='<button type="button" class="button-secondary small" id="acctOpening">ثبت مانده افتتاحیه</button>';
-    if(s.balance_final&&b<0)out+='<button type="button" class="button-secondary small" id="acctRefund">استرداد اعتبار طرف حساب</button>';
-    out+='<p>مبالغ بدون تخصیص به فاکتور: '+fmt(s.unallocated_credit||0)+' | اعتبار برگشت از فروش: '+fmt(s.return_credit||0)+'</p>';
+    if(s.balance_final&&b<0&&!s.has_unmapped_refunds)out+='<button type="button" class="button-secondary small" id="acctRefund">استرداد اعتبار طرف حساب</button>';
+    out+='<p>خالص پرداخت‌های تخصیص‌نیافته (با احتساب استرداد): '+fmt(s.unallocated_credit||0)
+      +' | اعتبار نقدی قابل تخصیص: '+fmt(s.available_payment_credit||0)
+      +' | اعتبار برگشت قابل تخصیص: '+fmt(s.available_return_credit||0)+'</p>';
     out+='<p class="setting-note">مبالغ بدون تخصیص در مانده نهایی طرف حساب منظور شده‌اند؛ تا زمانی که مانده بدهکار است، این مبالغ الزاماً پیش‌پرداخت محسوب نمی‌شوند. برای مانده افتتاحیه، فقط بدهی‌های خارج از فاکتورهای موجود را وارد کنید.</p>';
     out+='<h3>فاکتورها و مانده‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>فاکتور</th><th>تاریخ</th><th>مبلغ</th><th>تسویه</th><th>مانده</th><th>تخصیص پرداخت جدید</th></tr></thead><tbody>';
     (s.invoices||[]).forEach(function(i){
@@ -153,6 +155,7 @@ $(function() {
     out+='<h3>سوابق پرداخت‌ها</h3><div class="table-wrapper"><table class="action-table"><thead><tr><th>تاریخ</th><th>روش</th><th>کل</th><th>تخصیص</th><th>بدون تخصیص</th><th>شماره پیگیری</th><th>توضیحات</th><th>ثبت‌کننده</th><th>عملیات</th></tr></thead><tbody>';
     (s.payments||[]).forEach(function(p){
       out+='<tr><td>'+safe(formatLedgerDate(p.date))+'</td><td>'+safe(p.method)+'</td><td>'+fmt(p.amount)+'</td><td>'+fmt(p.allocated)+'</td><td>'+fmt(p.unallocated)+'</td>'
+        +'<td>'+safe(p.reference_no||'—')+'</td><td>'+safe(p.note||'—')+'</td><td>'+safe(p.operator_name||'—')+'</td>'
         +'<td>'+(!p.is_reversal&&!p.is_reversed&&!zero(p.unallocated)&&p.direction===(kind==='customer'?'in':'out')?'<button type="button" class="button-secondary small acctUseCredit" data-id="'+p.id+'" data-available="'+safe(p.unallocated)+'">تخصیص اعتبار</button>':'')+' '+(!p.is_reversal&&!p.is_reversed?'<button type="button" class="button-secondary small acctReverse" data-id="'+p.id+'">ثبت سند اصلاحی</button>':'ابطال‌شده')+'</td></tr>';
     });
     out+='</tbody></table></div>';

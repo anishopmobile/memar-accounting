@@ -145,6 +145,41 @@ function acct_record_payment(mysqli $db,array $input,bool $insideTransaction=fal
         return ['payment_id'=>$paymentId,'duplicate'=>false,'credit'=>money_sub($amount,$sum)];
     } catch (Throwable $e) { if (!$insideTransaction) $db->rollback(); throw $e; }
 }
+/**
+ * Reservation of a refundable credit source, excluding refunded cash whose
+ * refund has itself been reversed. A refund must reserve actual backing credit
+ * before cash leaves the shop; accounting balance already includes its cash
+ * movement so these reservations are for capacity only (no second debit).
+ */
+function acct_refund_reserved(mysqli $db,string $kind,int $partyId,string $sourceKind,int $sourceId): string {
+    $stmt=$db->prepare("SELECT COALESCE(SUM(rs.amount),0) amount
+        FROM account_refund_sources rs
+        JOIN account_payments refund ON refund.id=rs.refund_payment_id
+        WHERE rs.source_kind=? AND rs.source_id=? AND refund.party_kind=? AND refund.party_id=?
+          AND NOT EXISTS(SELECT 1 FROM account_payments rev WHERE rev.reversed_payment_id=refund.id)");
+    $stmt->bind_param('sisi',$sourceKind,$sourceId,$kind,$partyId);
+    $stmt->execute();$row=$stmt->get_result()->fetch_assoc();$stmt->close();
+    return $row['amount']??'0';
+}
+/**
+ * Older refunds recorded without source reservations must not silently free
+ * their original money for reuse. Reversal of the legacy refund is safe;
+ * otherwise operator-assisted reconciliation is required before allocation.
+ */
+function acct_assert_refunds_allocatable(mysqli $db,string $kind,int $partyId): void {
+    $opposite=$kind==='customer'?'out':'in';
+    $stmt=$db->prepare("SELECT p.id FROM account_payments p
+        WHERE p.party_kind=? AND p.party_id=? AND p.direction=?
+          AND p.reversed_payment_id IS NULL
+          AND NOT EXISTS(SELECT 1 FROM account_refund_sources rs WHERE rs.refund_payment_id=p.id)
+          AND NOT EXISTS(SELECT 1 FROM account_payments rev WHERE rev.reversed_payment_id=p.id)
+        LIMIT 1");
+    $stmt->bind_param('sis',$kind,$partyId,$opposite);
+    $stmt->execute();$unmapped=$stmt->get_result()->fetch_assoc();$stmt->close();
+    if($unmapped)
+        throw new InvalidArgumentException('استرداد تاریخی بدون تعیین منبع اعتبار وجود دارد؛ پیش از تخصیص مجدد یا استرداد تازه، این سند باید بررسی یا اصلاح شود.');
+}
+
 /** Signed party balance: positive means customer owes us / we owe supplier. */
 function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
     acct_party_kind($kind);
@@ -176,42 +211,71 @@ function acct_party_statement(mysqli $db,string $kind,int $partyId): array {
         TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))) AS operator_name,
         EXISTS(SELECT 1 FROM account_payments rev WHERE rev.reversed_payment_id=p.id) AS is_reversed,
         (SELECT COALESCE(SUM(a.amount),0) FROM account_payment_allocations a
-         WHERE a.payment_id=p.id AND a.reversed_at IS NULL) AS used_allocation
+         WHERE a.payment_id=p.id AND a.reversed_at IS NULL) AS used_allocation,
+        (SELECT COALESCE(SUM(rs.amount),0) FROM account_refund_sources rs
+         JOIN account_payments refund ON refund.id=rs.refund_payment_id
+         WHERE rs.source_kind='payment' AND rs.source_id=p.id
+           AND NOT EXISTS(SELECT 1 FROM account_payments rev WHERE rev.reversed_payment_id=refund.id)) AS refund_reserved
         FROM account_payments p
         LEFT JOIN accounting_cash_accounts ca ON ca.id=p.cash_account_id
         LEFT JOIN users u ON u.id=p.created_by
         WHERE p.party_kind=? AND p.party_id=? ORDER BY p.payment_date,p.id");
-    $stmt->bind_param('si',$kind,$partyId);$stmt->execute();$res=$stmt->get_result();$payments=[];$unallocated='0';
+    $stmt->bind_param('si',$kind,$partyId);$stmt->execute();$res=$stmt->get_result();$payments=[];$unallocated='0';$availablePaymentCredit='0';
     while ($p=$res->fetch_assoc()) {
         $pid=(int)$p['id'];
         $applied=$p['used_allocation'];
         $left=money_sub($p['amount'],$applied);
         $preferredDirection=$kind==='customer'?'in':'out';
+        // Financial balance uses cash movements exactly once. A source
+        // reservation only limits reuse; it is NOT another cash outflow.
         $unallocated=$p['direction']===$preferredDirection ? money_add($unallocated,$left) : money_sub($unallocated,$left);
-        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'cash_account_name'=>$p['cash_account_name'],'operator_name'=>$p['operator_name'],'allocated'=>$applied,'unallocated'=>$left,'reference_no'=>$p['reference_no'],'note'=>$p['note'],'source_proforma_id'=>$p['source_proforma_id'],'is_reversed'=>(bool)$p['is_reversed'],'is_reversal'=>$p['reversed_payment_id']!==null];
+        $allocatable='0';
+        if($p['direction']===$preferredDirection && $p['reversed_payment_id']===null && !(bool)$p['is_reversed']) {
+            $allocatable=money_sub($left,$p['refund_reserved']);
+            if(money_cmp($allocatable,'0')<0)throw new LogicException('Refund reservations exceed unallocated receipt.');
+            $availablePaymentCredit=money_add($availablePaymentCredit,$allocatable);
+        }
+        $payments[]=['id'=>$pid,'date'=>$p['payment_date'],'amount'=>$p['amount'],'direction'=>$p['direction'],'method'=>$p['method'],'cash_account_name'=>$p['cash_account_name'],'operator_name'=>$p['operator_name'],'allocated'=>$applied,
+        'refunded'=>$p['refund_reserved'],'unallocated'=>$allocatable,'reference_no'=>$p['reference_no'],'note'=>$p['note'],
+        'source_proforma_id'=>$p['source_proforma_id'],'is_reversed'=>(bool)$p['is_reversed'],'is_reversal'=>$p['reversed_payment_id']!==null];
     }
     $stmt->close();
     $stmt=$db->prepare('SELECT amount FROM account_opening_balances WHERE party_kind=? AND party_id=?');
     $stmt->bind_param('si',$kind,$partyId);$stmt->execute();$res=$stmt->get_result();$row=$res?$res->fetch_assoc():null;$stmt->close();
     $opening=$row['amount']??'0';
     $hasOpening=$row!==null;
-    $returnCredits='0';$returns=[];
+    $returnCredits='0';$availableReturnCredit='0';$returns=[];
     if ($kind==='customer') {
-        $stmt=$db->prepare('SELECT r.id,r.return_number,r.return_date,r.payable_amount,
-          COALESCE((SELECT SUM(amount) FROM account_return_allocations WHERE return_id=r.id),0) used
-          FROM sales_returns r WHERE r.customer_id=? ORDER BY r.return_date,r.id');
+        $stmt=$db->prepare("SELECT r.id,r.return_number,r.return_date,r.payable_amount,
+          COALESCE((SELECT SUM(amount) FROM account_return_allocations WHERE return_id=r.id),0) used,
+          COALESCE((SELECT SUM(rs.amount) FROM account_refund_sources rs
+            JOIN account_payments refund ON refund.id=rs.refund_payment_id
+            WHERE rs.source_kind='return' AND rs.source_id=r.id
+              AND NOT EXISTS(SELECT 1 FROM account_payments rev WHERE rev.reversed_payment_id=refund.id)),0) refunded
+          FROM sales_returns r WHERE r.customer_id=? ORDER BY r.return_date,r.id");
         $stmt->bind_param('i',$partyId);$stmt->execute();$res=$stmt->get_result();
         while($res && ($row=$res->fetch_assoc())) {
-            $available=money_sub($row['payable_amount'],$row['used']);
+            $freeBeforeRefund=money_sub($row['payable_amount'],$row['used']);
+            $available=money_sub($freeBeforeRefund,$row['refunded']);
+            if(money_cmp($available,'0')<0)throw new LogicException('Refund reservations exceed unallocated return credit.');
             $returns[]=['id'=>(int)$row['id'],'number'=>$row['return_number'],
                  'date'=>$row['return_date'],'amount'=>$row['payable_amount'],
-                 'allocated'=>$row['used'],'available'=>$available];
-            $returnCredits=money_add($returnCredits,$available);
+                 'allocated'=>$row['used'],'refunded'=>$row['refunded'],'available'=>$available];
+            $returnCredits=money_add($returnCredits,$freeBeforeRefund);
+            $availableReturnCredit=money_add($availableReturnCredit,$available);
         }
         $stmt->close();
     }
     $balance=money_sub(money_add($total,$opening),money_add($unallocated,$returnCredits));
-    $statement=['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'has_opening_balance'=>$hasOpening,'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'return_credit'=>$returnCredits,'returns'=>$returns,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
+    $openingAvailable='0';
+    if(money_cmp($opening,'0')<0) {
+        $openingAvailable=money_sub(money_abs($opening),acct_refund_reserved($db,$kind,$partyId,'opening',$partyId));
+        if(money_cmp($openingAvailable,'0')<0)throw new LogicException('Refund reservations exceed opening credit.');
+    }
+    $statement=['party_kind'=>$kind,'party_id'=>$partyId,'opening_balance'=>$opening,'has_opening_balance'=>$hasOpening,
+      'invoices'=>$invoices,'payments'=>$payments,'unallocated_credit'=>$unallocated,'available_payment_credit'=>$availablePaymentCredit,
+      'return_credit'=>$returnCredits,'available_return_credit'=>$availableReturnCredit,'available_opening_credit'=>$openingAvailable,
+      'returns'=>$returns,'balance'=>$balance,'unreconciled_invoices'=>$uncertain,'balance_final'=>$uncertain===0];
     $statement['movements']=acct_party_timeline($statement);
     return $statement;
 }
@@ -250,9 +314,11 @@ function acct_apply_credit(mysqli $db, int $paymentId, int $invoiceId, $rawAmoun
         if (($kind==='customer' && ($inv['type']!=='sales_invoice'||(int)$inv['customer_id']!==(int)$p['party_id']))
             || ($kind==='supplier' && ($inv['type']!=='purchase_invoice'||(int)$inv['supplier_id']!==(int)$p['party_id'])))
             throw new InvalidArgumentException('طرف حساب فاکتور و پرداخت متفاوت است.');
+        acct_assert_refunds_allocatable($db,$kind,(int)$p['party_id']);
         $stmt=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_payment_allocations WHERE reversed_at IS NULL AND payment_id=?');
         $stmt->bind_param('i',$paymentId);$stmt->execute();$used=$stmt->get_result()->fetch_assoc()['s'];$stmt->close();
-        if (money_cmp($amount,money_sub($p['amount'],$used))>0 || money_cmp($amount,$v['remaining'])>0)
+        $reserved=acct_refund_reserved($db,$kind,(int)$p['party_id'],'payment',$paymentId);
+        if (money_cmp($amount,money_sub(money_sub($p['amount'],$used),$reserved))>0 || money_cmp($amount,$v['remaining'])>0)
             throw new InvalidArgumentException('مبلغ از اعتبار آزاد یا مانده فاکتور بیشتر است.');
         $stmt=$db->prepare('INSERT INTO account_payment_allocations(payment_id,invoice_id,amount,client_token) VALUES(?,?,?,?)');
         $stmt->bind_param('iiss',$paymentId,$invoiceId,$amount,$token);$stmt->execute();$stmt->close();
@@ -345,16 +411,50 @@ function acct_record_refund(mysqli $db,array $input): array {
                 throw new InvalidArgumentException('شناسه تکراری برای سند مالی متفاوت استفاده شده است.');
             $db->commit();return ['payment_id'=>(int)$old['id'],'duplicate'=>true];
         }
-        $statement=acct_party_statement($db,$kind,$partyId);
+        acct_assert_refunds_allocatable($db,$kind,(int)$partyId);
+        $statement=acct_party_statement($db,$kind,(int)$partyId);
         if (!$statement['balance_final'] || money_cmp($statement['balance'],'0')>=0
             || money_cmp($amount,money_abs($statement['balance']))>0)
             throw new InvalidArgumentException('استرداد فقط تا سقف اعتبار قطعی طرف حساب مجاز است.');
+        $sources=[];$leftToReserve=$amount;
+        // Reserve actual, currently unallocated sources in deterministic order.
+        // Do not consume money belonging to an already settled invoice.
+        foreach($statement['payments'] as $p) {
+            if(money_cmp($leftToReserve,'0')<=0)break;
+            if($p['direction']!==($kind==='customer'?'in':'out') || $p['is_reversal'] || $p['is_reversed'])continue;
+            $available=(string)$p['unallocated'];
+            if(money_cmp($available,'0')<=0)continue;
+            $take=money_cmp($available,$leftToReserve)>0?$leftToReserve:$available;
+            $sources[]=['payment',(int)$p['id'],$take];
+            $leftToReserve=money_sub($leftToReserve,$take);
+        }
+        foreach($statement['returns'] as $ret) {
+            if(money_cmp($leftToReserve,'0')<=0)break;
+            $available=(string)$ret['available'];
+            if(money_cmp($available,'0')<=0)continue;
+            $take=money_cmp($available,$leftToReserve)>0?$leftToReserve:$available;
+            $sources[]=['return',(int)$ret['id'],$take];
+            $leftToReserve=money_sub($leftToReserve,$take);
+        }
+        if(money_cmp($leftToReserve,'0')>0 && money_cmp($statement['available_opening_credit'],'0')>0) {
+            $available=$statement['available_opening_credit'];
+            $take=money_cmp($available,$leftToReserve)>0?$leftToReserve:$available;
+            $sources[]=['opening',(int)$partyId,$take];
+            $leftToReserve=money_sub($leftToReserve,$take);
+        }
+        if(money_cmp($leftToReserve,'0')>0)
+            throw new InvalidArgumentException('منابع اعتبار آزاد برای استرداد کافی نیستند؛ وضعیت استردادهای پیشین را بررسی کنید.');
         $stmt=$db->prepare('INSERT INTO account_payments(party_kind,party_id,direction,amount,method,payment_date,note,client_token,cash_account_id,request_hash,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
         $createdBy=function_exists('auth_user_id')?auth_user_id():null;
         $stmt->bind_param('sissssssisi',$kind,$partyId,$direction,$amount,$method,$date,$note,$token,$cashAccountId,$requestHash,$createdBy);
         $stmt->execute();$pid=(int)$stmt->insert_id;$stmt->close();
+        foreach($sources as [$sourceKind,$sourceId,$reservedAmount]) {
+            $stmt=$db->prepare('INSERT INTO account_refund_sources(refund_payment_id,source_kind,source_id,amount) VALUES(?,?,?,?)');
+            $stmt->bind_param('isis',$pid,$sourceKind,$sourceId,$reservedAmount);
+            $stmt->execute();$stmt->close();
+        }
         $db->commit();
-        return ['payment_id'=>$pid,'duplicate'=>false];
+        return ['payment_id'=>$pid,'duplicate'=>false,'reserved_sources'=>count($sources)];
     } catch (Throwable $e) {$db->rollback();throw $e;}
 }
 /** A reversal is a new opposite-direction record; original receipts stay auditable. */
@@ -374,6 +474,12 @@ function acct_reverse_payment(mysqli $db,int $paymentId,string $reason,string $t
         $stmt=$db->prepare('SELECT id FROM account_payments WHERE reversed_payment_id=?');
         $stmt->bind_param('i',$paymentId);$stmt->execute();$res=$stmt->get_result();$already=$res?$res->fetch_assoc():null;$stmt->close();
         if ($already) {$db->commit();return ['payment_id'=>(int)$already['id'],'duplicate'=>true];}
+        $requiredDirection=$p['party_kind']==='customer'?'in':'out';
+        if($p['direction']===$requiredDirection) {
+            $reserved=acct_refund_reserved($db,$p['party_kind'],(int)$p['party_id'],'payment',$paymentId);
+            if(money_cmp($reserved,'0')>0)
+                throw new InvalidArgumentException('این سند منبع استرداد اعتبار است؛ ابتدا سند استرداد وابسته را اصلاح کنید.');
+        }
         $stmt=$db->prepare('SELECT invoice_id FROM account_payment_allocations WHERE payment_id=? AND reversed_at IS NULL ORDER BY invoice_id');
         $stmt->bind_param('i',$paymentId);$stmt->execute();$res=$stmt->get_result();$invoiceIds=[];
         while($res && ($r=$res->fetch_assoc()))$invoiceIds[]=(int)$r['invoice_id'];
@@ -420,9 +526,11 @@ function acct_allocate_return_credit(mysqli $db,int $returnId,int $invoiceId,$ra
         if($v['unreconciled'] || $v['invoice']['type']!=='sales_invoice' ||
             (int)$v['invoice']['customer_id']!==$customerId)
             throw new InvalidArgumentException('فاکتور مقصد معتبر نیست یا نیازمند تطبیق تاریخی است.');
+        acct_assert_refunds_allocatable($db,'customer',$customerId);
         $stmt=$db->prepare('SELECT COALESCE(SUM(amount),0) AS s FROM account_return_allocations WHERE return_id=?');
         $stmt->bind_param('i',$returnId);$stmt->execute();$used=$stmt->get_result()->fetch_assoc()['s'];$stmt->close();
-        if(money_cmp($amount,money_sub($ret['payable_amount'],$used))>0 ||
+        $reserved=acct_refund_reserved($db,'customer',$customerId,'return',$returnId);
+        if(money_cmp($amount,money_sub(money_sub($ret['payable_amount'],$used),$reserved))>0 ||
            money_cmp($amount,$v['remaining'])>0)
             throw new InvalidArgumentException('مبلغ تخصیص از اعتبار برگشت یا مانده فاکتور بیشتر است.');
         $stmt=$db->prepare('INSERT INTO account_return_allocations(return_id,invoice_id,amount,created_by,client_token) VALUES(?,?,?,?,?)');

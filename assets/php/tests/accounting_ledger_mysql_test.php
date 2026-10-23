@@ -189,4 +189,112 @@ check_acct($secondReturn['duplicate']===true,'sales return-credit replays do not
 acct_allocate_return_credit($mysqli,$returnId2,$returnInvoice,'70000',bin2hex(random_bytes(20)));
 check_acct(acct_invoice_outstanding($mysqli,$returnInvoice)['remaining']==='80000.00',
   'separate return-credit allocations preserve original rows and settle 120k');
+
+// Refund-source protection: actual cash/return credits may be refunded only
+// once. The refund cash movement affects the party balance exactly once.
+foreach(['customer','supplier'] as $kind) {
+    $party=$kind==='customer'?a_customer($mysqli):a_supplier($mysqli);
+    $invoice=a_invoice($mysqli,$kind,$party,'100000');
+    $paid=pay_acct($mysqli,$kind,$party,'150000',[['invoice_id'=>$invoice,'amount'=>'100000']]);
+    $paymentId=$paid['payment_id'];
+    $start=acct_party_statement($mysqli,$kind,$party);
+    check_acct($start['balance']==='-50000.00','excess '.$kind.' receipt/transfer is actual 50k credit');
+    $refundToken=bin2hex(random_bytes(20));
+    $refundInput=['party_kind'=>$kind,'party_id'=>$party,'amount'=>'30000',
+       'method'=>'bank_transfer','client_token'=>$refundToken,'note'=>'Return excess remittance'];
+    $refund=acct_record_refund($mysqli,$refundInput);
+    check_acct($refund['reserved_sources']===1,'refund reserves a documented original payment source');
+    $retry=acct_record_refund($mysqli,$refundInput);
+    check_acct($retry['duplicate']===true && $retry['payment_id']===$refund['payment_id'],
+      'same refund token is idempotent '.$kind);
+    $conflict=$refundInput;$conflict['amount']='31000';$caught=false;
+    try{acct_record_refund($mysqli,$conflict);}catch(InvalidArgumentException $e){$caught=true;}
+    check_acct($caught,'refund token cannot represent two amounts '.$kind);
+    $state=acct_party_statement($mysqli,$kind,$party);
+    check_acct($state['balance']==='-20000.00','refund decreases party credit exactly once '.$kind);
+    $pRow=current(array_filter($state['payments'],static fn($row)=>$row['id']===$paymentId));
+    check_acct($pRow['unallocated']==='20000.00' && $pRow['refunded']==='30000.00',
+      'refunded '.$kind.' credit is not allocatable twice');
+    $newInv=a_invoice($mysqli,$kind,$party,'30000');
+    $caught=false;
+    try{acct_apply_credit($mysqli,$paymentId,$newInv,'30000');}catch(InvalidArgumentException $e){$caught=true;}
+    check_acct($caught,'refunded '.$kind.' credit cannot settle later invoice');
+    $caught=false;
+    try{acct_reverse_payment($mysqli,$paymentId,'Correction of original credit',bin2hex(random_bytes(20)));}
+    catch(InvalidArgumentException $e){$caught=true;}
+    check_acct($caught,'receipt backing active '.$kind.' refund cannot be reversed');
+    $caught=false;
+    try{acct_record_refund($mysqli,array_merge($refundInput,['client_token'=>bin2hex(random_bytes(20)),'amount'=>'21000']));}
+    catch(InvalidArgumentException $e){$caught=true;}
+    check_acct($caught,'new '.$kind.' debt limits repeated refund even if source has available credit');
+    $back=acct_reverse_payment($mysqli,$refund['payment_id'],'Return refund credit to account',bin2hex(random_bytes(20)));
+    check_acct($back['duplicate']===false,'refund reversal is immutable and auditable '.$kind);
+    $state=acct_party_statement($mysqli,$kind,$party);
+    check_acct($state['balance']==='-20000.00','refund reversal restores 30k credit against the new 30k invoice '.$kind);
+    $pRow=current(array_filter($state['payments'],static fn($row)=>$row['id']===$paymentId));
+    check_acct($pRow['unallocated']==='50000.00','reversed refund releases original credit source '.$kind);
+    acct_apply_credit($mysqli,$paymentId,$newInv,'30000');
+    check_acct(acct_invoice_outstanding($mysqli,$newInv)['remaining']==='0.00',
+      'released credit settles '.$kind.' invoice');
+    check_acct(acct_party_statement($mysqli,$kind,$party)['balance']==='-20000.00',
+      'allocation is balance-neutral '.$kind);
+    $summary=acct_party_statement($mysqli,$kind,$party);
+    $balances=acct_party_balances($mysqli,$kind);
+    check_acct(money_cmp($balances[$party]['balance'],$summary['balance'])===0,
+      'batch report and statement balances agree '.$kind);
+}
+
+// Full refund from customer return credit requires reservation, no synthetic cash.
+$retParty=a_customer($mysqli);
+$retInvoice=a_invoice($mysqli,'customer',$retParty,'100000');
+$no='CI-RET-'.bin2hex(random_bytes(5));
+$st=$mysqli->prepare("INSERT INTO sales_returns(return_number,invoice_id,customer_id,return_date,payable_amount) VALUES(?,?,?,CURDATE(),'120000')");
+$st->bind_param('sii',$no,$retInvoice,$retParty);$st->execute();$retId=(int)$st->insert_id;$st->close();
+$retRefund=acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$retParty,
+  'amount'=>'20000','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);
+check_acct(acct_party_statement($mysqli,'customer',$retParty)['return_credit']==='120000.00',
+  'raw customer return credit remains on ledger to avoid double subtraction');
+$state=acct_party_statement($mysqli,'customer',$retParty);
+check_acct($state['returns'][0]['available']==='100000.00' && $state['returns'][0]['refunded']==='20000.00',
+  'refunded return portion unavailable to reallocate');
+$blocked=false;
+try{acct_allocate_return_credit($mysqli,$retId,$retInvoice,'110000');}
+catch(InvalidArgumentException $e){$blocked=true;}
+check_acct($blocked,'return credit cannot settle invoice using refunded amount');
+acct_allocate_return_credit($mysqli,$retId,$retInvoice,'100000');
+check_acct(acct_invoice_outstanding($mysqli,$retInvoice)['remaining']==='0.00',
+  'unrefunded return credit settles customer invoice');
+check_acct(acct_party_statement($mysqli,'customer',$retParty)['balance']==='0.00',
+  'refund and return credit plus invoice reconcile to zero');
+$blocked=false;
+try{acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$retParty,
+   'amount'=>'1','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);}
+catch(InvalidArgumentException $e){$blocked=true;}
+check_acct($blocked,'no second refund allowed after full return-credit consumption');
+acct_reverse_payment($mysqli,$retRefund['payment_id'],'Undo credit refund transaction',bin2hex(random_bytes(20)));
+check_acct(acct_party_statement($mysqli,'customer',$retParty)['returns'][0]['available']==='20000.00',
+  'reversing return-source refund frees the exact remainder');
+
+// Historical legacy refunds with no documented source are quarantined rather
+// than guessing which receipt/return originally funded them.
+$legacyParty=a_customer($mysqli);
+$legacyCash=pay_acct($mysqli,'customer',$legacyParty,'40000',[]);
+$legacyRefund=acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$legacyParty,
+  'amount'=>'10000','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);
+$mysqli->query("DELETE FROM account_refund_sources WHERE refund_payment_id=".(int)$legacyRefund['payment_id']);
+$legacyNew=a_invoice($mysqli,'customer',$legacyParty,'5000');
+$blocked=false;
+try{acct_apply_credit($mysqli,$legacyCash['payment_id'],$legacyNew,'5000');}
+catch(InvalidArgumentException $e){$blocked=true;}
+check_acct($blocked,'unmapped historical refund blocks silent reuse of original payment');
+$blocked=false;
+try{acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$legacyParty,
+  'amount'=>'5000','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);}
+catch(InvalidArgumentException $e){$blocked=true;}
+check_acct($blocked,'additional refund blocked while prior refund has no backing provenance');
+acct_reverse_payment($mysqli,$legacyRefund['payment_id'],'Reverse undocumented legacy refund',bin2hex(random_bytes(20)));
+acct_apply_credit($mysqli,$legacyCash['payment_id'],$legacyNew,'5000');
+check_acct(acct_invoice_outstanding($mysqli,$legacyNew)['remaining']==='0.00',
+  'correcting unmapped refund restores safe allocation');
+
 echo "PASS accounting integration suite\n";
