@@ -41,11 +41,12 @@ function ready(page,selector) {
         await page.goto(base+'/index.php?page='+name,{waitUntil:'domcontentloaded'});
         assert.equal(await page.locator('script[src="assets/vendor/hcg-searchable-select/hcg-select.js"]').count(),1);
         assert.equal(await page.locator('link[href="assets/vendor/hcg-searchable-select/hcg-select.css"]').count(),1);
-        const all = page.locator('select:not([multiple]):not([size]):not([data-hcg-exclude])');
+        const all = page.locator('select:not([multiple]):not([size]):not([data-hcg-exclude]):not(.bd-month):not(.bd-year)');
         const count=await all.count();
         if(count) {
           await page.waitForFunction(()=>Array.from(document.querySelectorAll('select'))
-            .filter(el=>!el.multiple && el.size<=1)
+            .filter(el=>!el.multiple && el.size<=1 && !el.hasAttribute('data-hcg-exclude') &&
+              !el.closest('[data-hcg-exclude], .bd-main'))
             .every(el=>!!el._hcgApi),null,{timeout:10000});
           const samples=await all.evaluateAll(nodes=>nodes.map(el=>({
             id:el.id,tag:el.parentElement.className,
@@ -57,6 +58,10 @@ function ready(page,selector) {
             assert.equal(item.match,1,name+' '+item.id+' single control');
           }
         }
+        // Calendars may be present on dynamic pages at load time.
+        // Their month/year selects are intentionally excluded, not regressions.
+        assert.equal(await page.locator('.bd-main select.hcg-select-native').count(),0,
+          name+' calendar internal select must remain native');
         const dims=await page.evaluate(()=>({
           width:document.documentElement.scrollWidth,
           client:document.documentElement.clientWidth
