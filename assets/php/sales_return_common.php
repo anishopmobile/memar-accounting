@@ -894,7 +894,6 @@ function deleteSalesReturn(mysqli $mysqli, int $returnId): array
         $msg = $e->getMessage();
         if ($msg === 'invoice_not_found') {
             $msg = 'فاکتور مرتبط با این برگشت یافت نشد.';
-        }
         } elseif ($msg === 'refund_source_used') {
             $msg = 'سند برگشت دارای اعتبار تخصیص‌یافته یا استردادشده قابل ویرایش یا حذف نیست.';
         } elseif ($msg === 'negative_stock') {
