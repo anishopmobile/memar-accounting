@@ -331,4 +331,44 @@ foreach (['customer','supplier'] as $kind) {
         'full statement and debt report match '.$kind);
 }
 
+
+// Return credit and a negative supplier opening balance also back refunds,
+// never synthetic cash allocation.
+$openingSupplier=a_supplier($mysqli);
+$st=$mysqli->prepare("INSERT INTO account_opening_balances(party_kind,party_id,amount,note)
+    VALUES('supplier',?,'-40000','Previously documented overpayment')");
+$st->bind_param('i',$openingSupplier);$st->execute();$st->close();
+$openingRefund=acct_record_refund($mysqli,['party_kind'=>'supplier','party_id'=>$openingSupplier,
+    'amount'=>'15000','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);
+check_acct(acct_party_statement($mysqli,'supplier',$openingSupplier)['available_opening_credit']==='25000.00',
+    'negative opening credit is reserved when refunded');
+acct_reverse_payment($mysqli,$openingRefund['payment_id'],'Reverse incorrect opening refund',
+    bin2hex(random_bytes(20)));
+check_acct(acct_party_statement($mysqli,'supplier',$openingSupplier)['available_opening_credit']==='40000.00',
+    'reversal restores opening credit availability');
+$returnParty=a_customer($mysqli);
+$returnInvoice=a_invoice($mysqli,'customer',$returnParty,'100000');
+$returnNumber2='CI-REFUND-RET-'.bin2hex(random_bytes(5));
+$st=$mysqli->prepare("INSERT INTO sales_returns(return_number,invoice_id,customer_id,return_date,payable_amount)
+    VALUES(?,?,?,CURDATE(),'120000')");
+$st->bind_param('sii',$returnNumber2,$returnInvoice,$returnParty);$st->execute();
+$refundReturnId=(int)$st->insert_id;$st->close();
+$returnRefund=acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$returnParty,
+    'amount'=>'20000','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);
+require_once dirname(__DIR__) . '/sales_return_common.php';
+$blockDelete=deleteSalesReturn($mysqli,$refundReturnId);
+check_acct(!$blockDelete['ok'] && str_contains($blockDelete['message'],'استردادشده'),
+    'sales return backing a refund cannot be deleted');
+$blocked=false;
+try {acct_allocate_return_credit($mysqli,$refundReturnId,$returnInvoice,'110000');}
+catch (InvalidArgumentException $e) {$blocked=true;}
+check_acct($blocked,'refunded sales-return credit is unavailable to allocate');
+acct_allocate_return_credit($mysqli,$refundReturnId,$returnInvoice,'100000');
+check_acct(acct_party_statement($mysqli,'customer',$returnParty)['balance']==='0.00',
+    'refund plus return-credit allocation reconcile to zero customer balance');
+acct_reverse_payment($mysqli,$returnRefund['payment_id'],'Reverse mistaken return refund',
+    bin2hex(random_bytes(20)));
+check_acct(acct_party_statement($mysqli,'customer',$returnParty)['returns'][0]['available']==='20000.00',
+    'reversed refund releases the remaining return credit');
+
 echo "PASS accounting integration suite\n";
