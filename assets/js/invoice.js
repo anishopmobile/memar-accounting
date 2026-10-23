@@ -744,7 +744,10 @@ $(function () {
                 var created = currentInvoiceId === '';
                 showList(created ? 1 : currentPage);
                 alert(res.message);
-                if (created && res.data && res.data.invoice && window.AccountingLedger) {
+                // The backend committed the opted-in public customer's cash
+                // receipt atomically with the invoice. Keep the manual workflow
+                // unchanged for all other customers and when the setting is off.
+                if (created && res.data && res.data.invoice && !res.data.auto_settled && window.AccountingLedger) {
                     window.AccountingLedger.openInvoice(res.data.invoice);
                 }
             }
