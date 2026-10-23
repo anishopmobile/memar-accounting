@@ -214,7 +214,7 @@ $(function() {
         openCustomerModal('add');
     });
 
-    $('#closeCustomerModal, #cancelCustomerModal, .modal-backdrop').on('click', function() {
+    $('#closeCustomerModal, #cancelCustomerModal, #customerModal .modal-backdrop').on('click', function() {
         $('#customerModal').removeClass('open');
         $('body').removeClass('modal-open');
         $('#customerForm')[0].reset();
