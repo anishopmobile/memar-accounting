@@ -55,6 +55,11 @@ check 401 "unauthenticated customer debt Excel export" "$url/assets/php/report_c
 check 401 "unauthenticated supplier debt Excel export" "$url/assets/php/report_supplier_debt_export.php"
 check 401 "unauthenticated tax settings" "$url/assets/php/tax_settings.php"
 check 401 "unauthenticated invoice settings" "$url/assets/php/invoice_settings.php"
+check 401 "unauthenticated automatic settlement settings read" "$url/assets/php/accounting_auto_settlement_settings.php"
+check 401 "unauthenticated automatic settlement settings mutation" --data 'enabled=1&customer_id=1' "$url/assets/php/accounting_auto_settlement_settings.php"
+check 403 "auto settlement update without CSRF" -b "$owner" --data 'enabled=1&customer_id=1' "$url/assets/php/accounting_auto_settlement_settings.php"
+check 422 "auto settlement cannot be enabled without customer" -b "$owner" --data 'csrf_token=ci-security-test-token&enabled=1&customer_id=' "$url/assets/php/accounting_auto_settlement_settings.php"
+check 422 "auto settlement rejects nonexistent customer" -b "$owner" --data 'csrf_token=ci-security-test-token&enabled=1&customer_id=999999999' "$url/assets/php/accounting_auto_settlement_settings.php"
 # Financial ledger endpoints must obey the same auth/CSRF contract.
 check 401 "unauthenticated account statement" "$url/assets/php/accounting_ledger_action.php?action=statement&party_kind=customer&party_id=1"
 check 401 "unauthenticated refund attempt" --data 'action=refund&party_kind=customer&party_id=1&amount=1000' "$url/assets/php/accounting_ledger_action.php"
