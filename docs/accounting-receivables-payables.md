@@ -11,7 +11,7 @@ Invoices are sales/purchase documents; actual receipt/payment is an independent,
 * Payment and credit allocation must never exceed the invoice's open amount. Unallocated payment is visible on the party statement.
 * A verified financial record is not deleted: reversal creates an offsetting, opposite-direction entry, and allocated rows carry a reversal mark. Stock actions do not stand in for refunds.
 * Return-credit allocation settles a customer invoice **without** creating fictitious cash; sales returns are always recorded separately.
-* Invoices with allocations, allocated return credit or historical settlements are protected from deletion. Return documents with assigned credit are protected from edits/deletions.
+* Invoices with allocations, allocated return credit or historical settlements are protected from deletion. Return documents whose credits were allocated or reserved for refunds (including reversed refund history) cannot be edited/deleted; the customer row lock serializes changes with financial postings.
 * The customer/supplier debt reports, exports, and dashboard use real ledger-based settlement amounts. Unreconciled historical partials are marked rather than guessed.
 * All changing endpoints require an authenticated session and CSRF. Financial changes validate server-side and use database transactions and row locks. Request tokens detect duplicate or conflicting retries.
 
@@ -43,7 +43,7 @@ After deployment, locate every invoice flagged «تطبیق پرداخت تار�
 3. The selected final invoice is automatically assigned up to its remaining value. Staff may add up to 12 cash/POS/bank rows to one **atomic** receipt/remittance and manually distribute the summed amount across earlier invoices. Excess money becomes visible account credit.
 3. On later installments, open «دریافت/پرداخت و صورت‌حساب» from the invoice. New payments append history and update statuses atomically.
 4. When an existing payment has unused credit, use «تخصیص اعتبار» to clear a later invoice. Customer return credits have their own explicitly separate allocation action.
-5. From Customers/Suppliers, open «صورت حساب / دریافت و پرداخت» to view the chronological running balance and export it to currency-aware Excel. A documented opening balance may be entered **once**. A credit refund is limited to a verified credit amount.
+5. From Customers/Suppliers, open «صورت حساب / دریافت و پرداخت» to view the chronological running balance and export it to currency-aware Excel. A documented opening balance may be entered **once**. A credit refund is limited to a verified net credit and its actual unallocated payment/return/negative-opening sources. Record a documented reason (5–2000 chars), choose the exact cash/POS/bank account, and choose the Jalali refund date (ISO Gregorian is stored).
 6. To correct an erroneous entry, use «ثبت سند اصلاحی» with a reason. Original and reversing rows both remain visible.
 7. Payments must never be recorded through the online gateway module as though they had been received by this ledger; the modules are intentionally separate.
 
@@ -62,10 +62,10 @@ After deployment, locate every invoice flagged «تطبیق پرداخت تار�
 | Jalali receipt/payment date | Existing Persian calendar picks a day; hidden Gregorian ISO is persisted without date shift; invoices, receipt history, movement ledger and Excel statement show the same Jalali day. Month and year selects inside kamaDatepicker remain native and select the requested Jalali month/year, without HCG enhancement. |
 | Change display currency TOMAN ↔ IRR | Every amount renders at correct scale while DB value and outstanding remain unchanged |
 | Correct duplicate submission using same token | One payment only; different payload with same token rejected |
-| Concurrent attempts to overpay the same invoice | Only allowed total may be allocated; no negative invoice remainder |
+| Concurrent attempts to overpay the same invoice | Only allowed total may be allocated; no negative invoice remainder; MySQL party row locks serialize parallel refund writers. |
 | Attempt delete paid invoice, edit settled invoice below amount paid, change party | Server blocks unsafe operation |
 | Refund credit, then reverse mistaken refund | Refund has physical outflow, debits backed credit capacity without double-counting in the party balance, and reversal restores source capacity; original records preserved |
-| Refund payment/return credit then attempt to reassign it | Reallocation of the reserved credit is rejected; reversal of the original receipt is blocked until the dependent refund is reversed |
+| Refund payment/return credit then attempt to reassign it | Reallocation of the reserved credit is rejected; reversal of the original receipt is blocked until the dependent refund is reversed; a refunded sales return document cannot be changed or removed. |
 | Older refunds without linked sources | Further credit allocation/refund is blocked for that party until the legacy refund is reviewed; never invent the backing cash provenance |
 | Old partial invoice with unknown historical amount | Marked "needs reconciliation"; cannot be assigned arbitrary new settlement until reconciled |
 | PDF and Excel export | Correct payable, paid, remaining and party balance, as of document generation date; historical unknown clearly labelled |
