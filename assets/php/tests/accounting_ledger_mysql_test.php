@@ -96,7 +96,7 @@ check_acct($statement['balance']==='-20000.00','20k unallocated customer credit 
 $refund=acct_record_refund($mysqli,[
  'party_kind'=>'customer','party_id'=>$c2,'amount'=>'10000','method'=>'cash',
  'client_token'=>bin2hex(random_bytes(16))
-]);
+,'note'=>'Refund authorized after document review']);
 check_acct(acct_party_statement($mysqli,'customer',$c2)['balance']==='-10000.00','customer refund reduces available credit');
 acct_reverse_payment($mysqli,$refund['payment_id'],'اشتباه در استرداد',bin2hex(random_bytes(16)));
 check_acct(acct_party_statement($mysqli,'customer',$c2)['balance']==='-20000.00','refund reversal is auditable');
@@ -251,7 +251,7 @@ $no='CI-RET-'.bin2hex(random_bytes(5));
 $st=$mysqli->prepare("INSERT INTO sales_returns(return_number,invoice_id,customer_id,return_date,payable_amount) VALUES(?,?,?,CURDATE(),'120000')");
 $st->bind_param('sii',$no,$retInvoice,$retParty);$st->execute();$retId=(int)$st->insert_id;$st->close();
 $retRefund=acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$retParty,
-  'amount'=>'20000','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);
+  'amount'=>'20000','method'=>'cash','client_token'=>bin2hex(random_bytes(20)),'note'=>'Refund authorized after document review']);
 check_acct(acct_party_statement($mysqli,'customer',$retParty)['return_credit']==='120000.00',
   'raw customer return credit remains on ledger to avoid double subtraction');
 $state=acct_party_statement($mysqli,'customer',$retParty);
@@ -268,7 +268,7 @@ check_acct(acct_party_statement($mysqli,'customer',$retParty)['balance']==='0.00
   'refund and return credit plus invoice reconcile to zero');
 $blocked=false;
 try{acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$retParty,
-   'amount'=>'1','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);}
+   'amount'=>'1','method'=>'cash','client_token'=>bin2hex(random_bytes(20)),'note'=>'Refund authorized after document review']);}
 catch(InvalidArgumentException $e){$blocked=true;}
 check_acct($blocked,'no second refund allowed after full return-credit consumption');
 acct_reverse_payment($mysqli,$retRefund['payment_id'],'Undo credit refund transaction',bin2hex(random_bytes(20)));
@@ -280,7 +280,7 @@ check_acct(acct_party_statement($mysqli,'customer',$retParty)['returns'][0]['ava
 $legacyParty=a_customer($mysqli);
 $legacyCash=pay_acct($mysqli,'customer',$legacyParty,'40000',[]);
 $legacyRefund=acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$legacyParty,
-  'amount'=>'10000','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);
+  'amount'=>'10000','method'=>'cash','client_token'=>bin2hex(random_bytes(20)),'note'=>'Refund authorized after document review']);
 $mysqli->query("DELETE FROM account_refund_sources WHERE refund_payment_id=".(int)$legacyRefund['payment_id']);
 $legacyNew=a_invoice($mysqli,'customer',$legacyParty,'5000');
 $blocked=false;
@@ -289,7 +289,7 @@ catch(InvalidArgumentException $e){$blocked=true;}
 check_acct($blocked,'unmapped historical refund blocks silent reuse of original payment');
 $blocked=false;
 try{acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$legacyParty,
-  'amount'=>'5000','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);}
+  'amount'=>'5000','method'=>'cash','client_token'=>bin2hex(random_bytes(20)),'note'=>'Refund authorized after document review']);}
 catch(InvalidArgumentException $e){$blocked=true;}
 check_acct($blocked,'additional refund blocked while prior refund has no backing provenance');
 acct_reverse_payment($mysqli,$legacyRefund['payment_id'],'Reverse undocumented legacy refund',bin2hex(random_bytes(20)));
@@ -339,7 +339,7 @@ $st=$mysqli->prepare("INSERT INTO account_opening_balances(party_kind,party_id,a
     VALUES('supplier',?,'-40000','Previously documented overpayment')");
 $st->bind_param('i',$openingSupplier);$st->execute();$st->close();
 $openingRefund=acct_record_refund($mysqli,['party_kind'=>'supplier','party_id'=>$openingSupplier,
-    'amount'=>'15000','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);
+    'amount'=>'15000','method'=>'cash','client_token'=>bin2hex(random_bytes(20)),'note'=>'Refund authorized after document review']);
 check_acct(acct_party_statement($mysqli,'supplier',$openingSupplier)['available_opening_credit']==='25000.00',
     'negative opening credit is reserved when refunded');
 acct_reverse_payment($mysqli,$openingRefund['payment_id'],'Reverse incorrect opening refund',
@@ -354,7 +354,7 @@ $st=$mysqli->prepare("INSERT INTO sales_returns(return_number,invoice_id,custome
 $st->bind_param('sii',$returnNumber2,$returnInvoice,$returnParty);$st->execute();
 $refundReturnId=(int)$st->insert_id;$st->close();
 $returnRefund=acct_record_refund($mysqli,['party_kind'=>'customer','party_id'=>$returnParty,
-    'amount'=>'20000','method'=>'cash','client_token'=>bin2hex(random_bytes(20))]);
+    'amount'=>'20000','method'=>'cash','client_token'=>bin2hex(random_bytes(20)),'note'=>'Refund authorized after document review']);
 require_once dirname(__DIR__) . '/sales_return_common.php';
 $blockDelete=deleteSalesReturn($mysqli,$refundReturnId);
 check_acct(!$blockDelete['ok'] && str_contains($blockDelete['message'],'استردادشده'),
