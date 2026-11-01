@@ -17,15 +17,36 @@ $where = [];
 $types = '';
 $params = [];
 
+
 if ($search !== '') {
-    $like = '%' . $search . '%';
-    $where[] = '(code LIKE ? OR name LIKE ? OR barcode LIKE ? OR EXISTS (SELECT 1 FROM product_units pu2 WHERE pu2.product_id = products.id AND pu2.barcode = ?))';
-    $types .= 'ssss';
-    $params[] = $like;
-    $params[] = $like;
-    $params[] = $like;
-    $params[] = $search;
+    // تقسیم عبارت جستجو به کلمات مستقل
+    $searchWords = preg_split('/\s+/u', $search, -1, PREG_SPLIT_NO_EMPTY);
+
+    // تمام کلمات باید در اطلاعات کالا وجود داشته باشند
+    foreach ($searchWords as $word) {
+        $like = '%' . $word . '%';
+
+        $where[] = '(
+            products.code LIKE ?
+            OR products.name LIKE ?
+            OR products.barcode LIKE ?
+            OR EXISTS (
+                SELECT 1
+                FROM product_units pu2
+                WHERE pu2.product_id = products.id
+                AND pu2.barcode LIKE ?
+            )
+        )';
+
+        $types .= 'ssss';
+
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+    }
 }
+
 if ($category !== '' && ctype_digit($category)) {
     $where[] = 'category_id = ?';
     $types .= 'i';
