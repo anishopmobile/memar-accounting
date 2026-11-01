@@ -1,0 +1,539 @@
+-- ============================================================
+-- MEMAR ACCOUNTING - CONSOLIDATED DATABASE MIGRATION
+-- Based on six supplied PHP migration files
+-- Target: existing database represented by the SQL backup
+-- MySQL 8.0.16+
+--
+-- No DROP TABLE
+-- No TRUNCATE
+-- No DELETE
+-- No overwrite of existing financial transactions
+-- ============================================================
+
+SET NAMES utf8mb4;
+
+-- ------------------------------------------------------------
+-- 1. Migration version registry
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS accounting_migrations (
+    migration_key VARCHAR(80) PRIMARY KEY,
+    applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ------------------------------------------------------------
+-- 2. Cash and bank accounts
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS accounting_cash_accounts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    account_type ENUM(
+        'cash',
+        'pos',
+        'bank_transfer'
+    ) NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_ac_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO accounting_cash_accounts
+    (name, account_type)
+VALUES
+    ('صندوق فروشگاه', 'cash'),
+    ('کارت‌خوان فروشگاه', 'pos'),
+    ('حساب بانکی فروشگاه', 'bank_transfer');
+
+
+-- ------------------------------------------------------------
+-- 3. Payment batches
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS account_payment_batches (
+    token VARCHAR(64) PRIMARY KEY,
+    request_hash CHAR(64) NOT NULL,
+    party_kind ENUM('customer','supplier') NOT NULL,
+    party_id INT NOT NULL,
+    created_by INT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ------------------------------------------------------------
+-- 4. Accounting payments
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS account_payments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    party_kind ENUM('customer','supplier') NOT NULL,
+    party_id INT NOT NULL,
+
+    direction ENUM('in','out') NOT NULL,
+
+    amount DECIMAL(14,2) NOT NULL,
+
+    method ENUM(
+        'cash',
+        'pos',
+        'bank_transfer'
+    ) NOT NULL,
+
+    payment_date DATE NOT NULL,
+
+    reference_no VARCHAR(120) NULL,
+    note TEXT NULL,
+
+    client_token VARCHAR(64) NOT NULL,
+    request_hash CHAR(64) NULL,
+
+    source_proforma_id INT NULL,
+    batch_token VARCHAR(64) NULL,
+    cash_account_id INT NULL,
+
+    reversed_payment_id BIGINT UNSIGNED NULL,
+
+    created_by INT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uq_ap_token (client_token),
+    UNIQUE KEY uq_ap_reversal (reversed_payment_id),
+
+    KEY idx_ap_account (cash_account_id),
+    KEY idx_ap_proforma (source_proforma_id),
+    KEY idx_ap_batch (batch_token),
+    KEY idx_ap_party (party_kind,party_id,payment_date),
+
+    CONSTRAINT fk_ap_batch
+        FOREIGN KEY (batch_token)
+        REFERENCES account_payment_batches(token)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_ap_proforma
+        FOREIGN KEY (source_proforma_id)
+        REFERENCES invoices(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_ap_account
+        FOREIGN KEY (cash_account_id)
+        REFERENCES accounting_cash_accounts(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_ap_reversal
+        FOREIGN KEY (reversed_payment_id)
+        REFERENCES account_payments(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_ap_amount
+        CHECK (amount > 0)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ------------------------------------------------------------
+-- 5. Payment allocations to invoices
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS account_payment_allocations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    payment_id BIGINT UNSIGNED NOT NULL,
+    invoice_id INT NOT NULL,
+
+    amount DECIMAL(14,2) NOT NULL,
+
+    client_token VARCHAR(64) NULL,
+    reversed_at DATETIME NULL,
+
+    KEY idx_apa_pair (payment_id,invoice_id),
+    UNIQUE KEY uq_apa_token (client_token),
+    KEY idx_apa_invoice (invoice_id),
+
+    CONSTRAINT fk_apa_payment
+        FOREIGN KEY (payment_id)
+        REFERENCES account_payments(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_apa_invoice
+        FOREIGN KEY (invoice_id)
+        REFERENCES invoices(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_apa_amount
+        CHECK (amount > 0)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ------------------------------------------------------------
+-- 6. Sales return allocations
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS account_return_allocations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    return_id INT NOT NULL,
+    invoice_id INT NOT NULL,
+
+    amount DECIMAL(14,2) NOT NULL,
+
+    client_token VARCHAR(64) NULL,
+    created_by INT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uq_ara_token (client_token),
+
+    KEY idx_ara_pair (return_id,invoice_id),
+    KEY idx_ara_invoice (invoice_id),
+
+    CONSTRAINT fk_ara_return
+        FOREIGN KEY (return_id)
+        REFERENCES sales_returns(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_ara_invoice
+        FOREIGN KEY (invoice_id)
+        REFERENCES invoices(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_ara_amount
+        CHECK (amount > 0)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ------------------------------------------------------------
+-- 7. Refund source tracking
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS account_refund_sources (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    refund_payment_id BIGINT UNSIGNED NOT NULL,
+
+    source_kind ENUM(
+        'payment',
+        'return',
+        'opening'
+    ) NOT NULL,
+
+    source_id BIGINT UNSIGNED NOT NULL,
+
+    amount DECIMAL(14,2) NOT NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uq_refund_source (
+        refund_payment_id,
+        source_kind,
+        source_id
+    ),
+
+    KEY idx_refund_source (source_kind,source_id),
+
+    CONSTRAINT fk_refund_payment
+        FOREIGN KEY (refund_payment_id)
+        REFERENCES account_payments(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_refund_source_amount
+        CHECK (amount > 0)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ------------------------------------------------------------
+-- 8. Opening balances
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS account_opening_balances (
+    party_kind ENUM('customer','supplier') NOT NULL,
+    party_id INT NOT NULL,
+
+    amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+
+    note TEXT NULL,
+    created_by INT NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (party_kind,party_id)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ------------------------------------------------------------
+-- 9. Invoice revision history
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS account_invoice_revisions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    invoice_id INT NULL,
+    invoice_number VARCHAR(40) NOT NULL,
+
+    previous_total DECIMAL(14,2) NOT NULL,
+    new_total DECIMAL(14,2) NOT NULL,
+
+    previous_status VARCHAR(20) NOT NULL,
+    new_status VARCHAR(20) NOT NULL,
+
+    performed_by INT NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    KEY idx_air_invoice (invoice_id),
+    KEY idx_air_number (invoice_number),
+
+    CONSTRAINT fk_air_invoice
+        FOREIGN KEY (invoice_id)
+        REFERENCES invoices(id)
+        ON DELETE SET NULL
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ------------------------------------------------------------
+-- 10. Historical payment reconciliation
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS account_legacy_reconciliations (
+    invoice_id INT PRIMARY KEY,
+
+    historical_paid_amount DECIMAL(14,2) NOT NULL,
+
+    old_payment_status ENUM(
+        'paid',
+        'unpaid',
+        'partial'
+    ) NOT NULL,
+
+    reason TEXT NOT NULL,
+    performed_by INT NULL,
+
+    performed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_alr_invoice
+        FOREIGN KEY (invoice_id)
+        REFERENCES invoices(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_alr_paid
+        CHECK (historical_paid_amount >= 0)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ------------------------------------------------------------
+-- 11. Customer auto-settlement settings
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS accounting_auto_settlement_settings (
+    id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+
+    enabled TINYINT(1) NOT NULL DEFAULT 0,
+
+    customer_id INT NULL,
+    updated_by INT NULL,
+
+    updated_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_auto_settle_customer
+        FOREIGN KEY (customer_id)
+        REFERENCES customers(id)
+        ON DELETE RESTRICT
+
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO accounting_auto_settlement_settings
+    (id,enabled,customer_id)
+VALUES
+    (1,0,NULL);
+
+
+-- ------------------------------------------------------------
+-- 12. Add historical paid amount column if missing
+-- Uses information_schema for repeat-safe execution
+-- ------------------------------------------------------------
+
+SET @memar_sql = (
+    SELECT IF(
+        COUNT(*) = 0,
+        'ALTER TABLE invoices ADD COLUMN legacy_paid_amount DECIMAL(14,2) NULL DEFAULT NULL',
+        'SELECT ''invoices.legacy_paid_amount already exists'' AS info'
+    )
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'invoices'
+      AND column_name = 'legacy_paid_amount'
+);
+
+PREPARE memar_stmt FROM @memar_sql;
+EXECUTE memar_stmt;
+DEALLOCATE PREPARE memar_stmt;
+
+
+-- ------------------------------------------------------------
+-- 13. Preserve old payment status as historical settlement
+--
+-- paid    -> payable_amount
+-- partial -> NULL (unknown historical paid amount)
+-- unpaid  -> 0
+--
+-- Only runs when ledger_v1 has not been registered.
+-- ------------------------------------------------------------
+
+UPDATE invoices
+SET legacy_paid_amount =
+    CASE
+        WHEN payment_status = 'paid'
+             AND type IN (
+                 'sales_invoice',
+                 'purchase_invoice'
+             )
+        THEN payable_amount
+
+        WHEN payment_status = 'partial'
+             AND type IN (
+                 'sales_invoice',
+                 'purchase_invoice'
+             )
+        THEN NULL
+
+        ELSE 0
+    END
+WHERE legacy_paid_amount IS NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM accounting_migrations
+      WHERE migration_key = 'ledger_v1'
+  );
+
+INSERT IGNORE INTO accounting_migrations (migration_key)
+VALUES ('ledger_v1');
+
+
+-- ------------------------------------------------------------
+-- 14. Preserve migration revision markers
+-- ------------------------------------------------------------
+
+INSERT IGNORE INTO accounting_migrations (migration_key)
+VALUES
+    ('ledger_schema_v8_20261022'),
+    ('auto_settlement_v1_20261023');
+
+
+-- ------------------------------------------------------------
+-- 15. Payment transaction sequence
+-- Already present in supplied backup, kept idempotent
+-- ------------------------------------------------------------
+
+INSERT IGNORE INTO invoice_sequences
+    (seq_key,current_value)
+VALUES
+    ('payment_transaction',0);
+
+
+-- ------------------------------------------------------------
+-- 16. Verification: required tables
+-- ------------------------------------------------------------
+
+SELECT
+    expected.table_name,
+    IF(
+        actual.table_name IS NULL,
+        'MISSING',
+        'OK'
+    ) AS migration_status
+FROM (
+    SELECT 'accounting_migrations' AS table_name
+    UNION ALL SELECT 'accounting_cash_accounts'
+    UNION ALL SELECT 'account_payment_batches'
+    UNION ALL SELECT 'account_payments'
+    UNION ALL SELECT 'account_payment_allocations'
+    UNION ALL SELECT 'account_return_allocations'
+    UNION ALL SELECT 'account_refund_sources'
+    UNION ALL SELECT 'account_opening_balances'
+    UNION ALL SELECT 'account_invoice_revisions'
+    UNION ALL SELECT 'account_legacy_reconciliations'
+    UNION ALL SELECT 'accounting_auto_settlement_settings'
+) AS expected
+LEFT JOIN information_schema.tables AS actual
+    ON actual.table_schema = DATABASE()
+   AND actual.table_name = expected.table_name
+ORDER BY expected.table_name;
+
+
+-- ------------------------------------------------------------
+-- 17. Verification: important columns
+-- ------------------------------------------------------------
+
+SELECT
+    table_name,
+    column_name,
+    column_type,
+    is_nullable
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND (
+      (table_name = 'invoices'
+       AND column_name = 'legacy_paid_amount')
+
+      OR
+
+      (table_name = 'products'
+       AND column_name = 'barcode')
+
+      OR
+
+      (table_name = 'payment_settings'
+       AND column_name = 'default_form_id')
+  )
+ORDER BY table_name,column_name;
+
+
+-- ------------------------------------------------------------
+-- 18. Verification: migration revisions
+-- ------------------------------------------------------------
+
+SELECT
+    migration_key,
+    applied_at
+FROM accounting_migrations
+ORDER BY applied_at,migration_key;
+
+
+-- ------------------------------------------------------------
+-- 19. Verification: historical invoice balances
+-- ------------------------------------------------------------
+
+SELECT
+    payment_status,
+    COUNT(*) AS invoice_count,
+    SUM(
+        CASE
+            WHEN legacy_paid_amount IS NULL
+            THEN 1 ELSE 0
+        END
+    ) AS unresolved_count,
+    SUM(
+        COALESCE(legacy_paid_amount,0)
+    ) AS historical_paid_total
+FROM invoices
+WHERE type IN (
+    'sales_invoice',
+    'purchase_invoice'
+)
+GROUP BY payment_status;
+
+
+-- ============================================================
+-- END OF CONSOLIDATED MIGRATION
+-- ============================================================
