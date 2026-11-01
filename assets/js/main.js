@@ -2170,28 +2170,65 @@ $('#productImportSubmit').on('click', function() {
             });
         }
 
-        function refreshInventoryReport() {
-            var term = $('#inventorySearch').val() || '';
-            var category = $('#inventoryCategoryFilter').val() || '';
-            var type = $('#inventoryTypeFilter').val() || '';
-            var visible = 0;
-            $('#inventoryReportTable tbody tr.inventory-report-row').each(function() {
-                var $r = $(this);
-                var text = ($r.data('name') + ' ' + $r.data('category') + ' ' + $r.data('type')
-                    + ' ' + $r.data('code') + ' ' + $r.data('barcode')).toLowerCase();
-                var match = text.indexOf(term.toLowerCase()) !== -1;
-                if (category !== '' && String($r.data('categoryId') || '') !== category) {
-                    match = false;
-                }
-                if (type !== '' && $r.data('type') !== type) {
-                    match = false;
-                }
-                $r.toggle(match);
-                if (match) { visible++; }
-            });
-            updateEmptyState($('#inventoryReportTable tbody'), visible, 7);
-            sortInventoryTable();
+
+function normalizeInventorySearch(value) {
+    return String(value == null ? '' : value)
+        .toLowerCase()
+        .replace(/ي/g, 'ی')
+        .replace(/ك/g, 'ک')
+        .replace(/ۀ/g, 'ه')
+        .replace(/ة/g, 'ه')
+        .replace(/ؤ/g, 'و')
+        .replace(/[إأٱ]/g, 'ا')
+        .replace(/[\u064B-\u065F\u0670]/g, '')
+        .replace(/\u200c/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function refreshInventoryReport() {
+    var term = normalizeInventorySearch($('#inventorySearch').val());
+    var searchWords = term ? term.split(' ') : [];
+
+    var category = $('#inventoryCategoryFilter').val() || '';
+    var type = $('#inventoryTypeFilter').val() || '';
+    var visible = 0;
+
+    $('#inventoryReportTable tbody tr.inventory-report-row').each(function() {
+        var $r = $(this);
+
+        var text = normalizeInventorySearch(
+            ($r.attr('data-name') || '') + ' ' +
+            ($r.attr('data-category') || '') + ' ' +
+            ($r.attr('data-type') || '') + ' ' +
+            ($r.attr('data-code') || '') + ' ' +
+            ($r.attr('data-barcode') || '')
+        );
+
+        // تمام کلمات جستجو باید در اطلاعات کالا وجود داشته باشند.
+        var match = searchWords.every(function(word) {
+            return text.indexOf(word) !== -1;
+        });
+
+        if (category !== '' && String($r.attr('data-category-id') || '') !== category) {
+            match = false;
         }
+
+        if (type !== '' && $r.attr('data-type') !== type) {
+            match = false;
+        }
+
+        $r.toggle(match);
+
+        if (match) {
+            visible++;
+        }
+    });
+
+    updateEmptyState($('#inventoryReportTable tbody'), visible, 7);
+    sortInventoryTable();
+}
+
 
         $('#inventorySearch').on('input', refreshInventoryReport);
         $('#inventoryCategoryFilter').on('change', refreshInventoryReport);
