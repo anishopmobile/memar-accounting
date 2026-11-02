@@ -21,6 +21,9 @@ require_once __DIR__ . '/captcha/pure_captcha_provider.php';
 require_once __DIR__ . '/captcha/captcha_service.php';
 
 if (session_status() === PHP_SESSION_NONE) {
+    // Reject attacker-chosen unknown session IDs instead of adopting them.
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
     $secure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
 
     session_set_cookie_params([
@@ -32,6 +35,13 @@ if (session_status() === PHP_SESSION_NONE) {
     ]);
 
     session_start();
+}
+// Safe headers for authenticated pages and auth forms. Avoid CSP until all
+// inline legacy scripts have been migrated to nonces/external local bundles.
+if (!headers_sent()) {
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
 }
 
 /* ==================== CSRF (مشترک login/register + boot) ==================== */
@@ -75,15 +85,20 @@ function auth_last_failure(): string
 
 function auth_client_ip(): string
 {
-    foreach (['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR'] as $header) {
-        if (!empty($_SERVER[$header])) {
-            $ip = trim(explode(',', (string) $_SERVER[$header])[0]);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return $ip;
-            }
-        }
+    // Never trust client-provided forwarding headers by default. Otherwise
+    // anyone can rotate X-Forwarded-For to bypass IP-based login throttling.
+    $remote = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+    if (!filter_var($remote, FILTER_VALIDATE_IP)) return 'unknown';
+    $rawProxies = (string) (getenv('MEMAR_TRUSTED_PROXIES') ?: '');
+    $trusted = array_filter(array_map('trim', explode(',', $rawProxies)));
+    if (in_array($remote, $trusted, true)) {
+        $forwarded = trim((string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
+        // Trusted reverse proxy must overwrite the incoming XFF header and
+        // send exactly one origin address; refuse ambiguous chains.
+        if (preg_match('/^[0-9a-fA-F:.]+$/D', $forwarded)
+            && filter_var($forwarded, FILTER_VALIDATE_IP)) return $forwarded;
     }
-    return (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    return $remote;
 }
 
 /**

@@ -1,16 +1,38 @@
 <?php
-$dbHost = '127.0.0.1';
-$dbUser = 'root';
-$dbPass = '';
-$dbName = 'memar_accounting';
-
-$mysqli = new mysqli($dbHost, $dbUser, $dbPass);
-if ($mysqli->connect_errno) {
-    die('خطا در اتصال به دیتابیس: ' . $mysqli->connect_error);
+// Prefer host-provided secrets and a minimally privileged database account.
+// Legacy local defaults remain for existing installations until configured.
+$dbHost = getenv('MEMAR_DB_HOST') ?: '127.0.0.1';
+$dbUser = getenv('MEMAR_DB_USER') ?: 'root';
+$dbPass = getenv('MEMAR_DB_PASSWORD');
+$dbPass = $dbPass === false ? '' : $dbPass;
+$dbName = getenv('MEMAR_DB_NAME') ?: 'memar_accounting';
+if (!preg_match('/^[A-Za-z0-9_]+$/D', $dbName)) {
+    http_response_code(500);
+    exit('نام پایگاه داده در تنظیمات معتبر نیست.');
 }
 
-$mysqli->query("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-$mysqli->select_db($dbName);
+try {
+    $mysqli = new mysqli($dbHost, $dbUser, $dbPass);
+} catch (mysqli_sql_exception $e) {
+    error_log('Database connection failed: ' . $e->getMessage());
+    http_response_code(503);
+    exit('ارتباط با پایگاه داده برقرار نشد. لطفاً با مدیر سامانه تماس بگیرید.');
+}
+if ($mysqli->connect_errno) {
+    error_log('Database connection failed: ' . $mysqli->connect_error);
+    http_response_code(503);
+    exit('ارتباط با پایگاه داده برقرار نشد. لطفاً با مدیر سامانه تماس بگیرید.');
+}
+
+// Do not demand global CREATE DATABASE privileges on every request.
+// Installations with an existing schema may use a database-scoped account.
+try {
+    $mysqli->select_db($dbName);
+} catch (mysqli_sql_exception $e) {
+    if ((int)$e->getCode() !== 1049) throw $e;
+    $mysqli->query("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $mysqli->select_db($dbName);
+}
 $mysqli->set_charset('utf8mb4');
 
 // Authenticated image streaming uses an existing schema and MUST NOT execute

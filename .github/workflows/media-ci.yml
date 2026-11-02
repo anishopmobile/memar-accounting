@@ -3,9 +3,14 @@ on:
   push:
     branches:
       - feature/product-media-library-20261022
+      - security/hardening-audit-20261022
   pull_request:
     paths:
       - 'assets/php/media_*.php'
+      - 'assets/php/auth.php'
+      - 'assets/php/db.php'
+      - 'assets/php/db_backup.php'
+      - 'tests/media_http_smoke.sh'
       - 'assets/js/media-ui.js'
       - 'pages/**'
       - 'tests/media_smoke.php'
