@@ -2885,7 +2885,7 @@ $(function () {
             if (response && response.success && response.data && response.data.barcode) {
                 var newBarcode = String(response.data.barcode);
                 $row.attr('data-barcode', newBarcode);
-                var $barcodeCell = $row.find('td').eq(1);
+                var $barcodeCell = $row.find('td').eq(2);
                 if ($barcodeCell.length) { $barcodeCell.text(newBarcode); }
                 if ($btn.hasClass('generate-barcode')) {
                     $btn.replaceWith('<button type="button" class="button-secondary small print-barcode" title="چاپ بارکد">چاپ بارکد</button>');
