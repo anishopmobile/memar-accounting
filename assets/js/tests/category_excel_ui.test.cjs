@@ -59,23 +59,23 @@ function xls(rows) {
             return data.data;
         }
         async function submit() {
-            const wait = page.waitForResponse(r => r.url().includes('/category_import.php') &&
+            // Production UI immediately reloads after the successful JSON reply.
+            // Reading response.json() here races Chromium's document teardown;
+            // assert status, then verify the committed rows in the new DOM.
+            const posted = page.waitForResponse(r => r.url().includes('/category_import.php') &&
                 r.request().method() === 'POST');
+            const reloaded = page.waitForEvent('load', {timeout: 30000});
             await page.locator('#categoryImportSubmit').click();
-            const response = await wait;
-            const body = await response.json();
-            assert.equal(response.status(), 200, JSON.stringify(body));
-            assert.equal(body.success, true, JSON.stringify(body));
-            await page.locator('#categoryImportModal.open').waitFor({state:'hidden'});
-            return body.data;
+            const response = await posted;
+            assert.equal(response.status(), 200, 'category import must succeed');
+            await reloaded;
         }
 
         // Child listed first must be inserted after its parent.
         let data = await preview([[child, 'گروه زیرمجموعه', root],[root,'نام اولیه','']]);
         assert.equal(data.new,2);
         assert.equal(data.invalid,0);
-        const first = await submit();
-        assert.equal(first.inserted,2);
+        await submit();
         await page.locator('.category-row[data-code="'+root+'"]').waitFor({state:'visible'});
         const rootRow = page.locator('.category-row[data-code="'+root+'"]');
         const parentId = await rootRow.getAttribute('data-id');
@@ -85,14 +85,14 @@ function xls(rows) {
         data = await preview([[root,'نام اصلاحی',''],[second,'گروه جدید دوم',root]],'skip_duplicates');
         assert.equal(data.duplicates,1);
         assert.equal(data.new,1);
-        assert.equal((await submit()).skipped,1);
+        await submit();
         await page.locator('.category-row[data-code="'+second+'"]').waitFor({state:'visible'});
         assert.equal(await page.locator('.category-row[data-code="'+root+'"]').getAttribute('data-name'),'نام اولیه');
 
         // Update duplicates: only the name of the existing row changes.
         data = await preview([[root,'نام اصلاحی','']], 'update_existing');
         assert.equal(data.updates,1);
-        assert.equal((await submit()).updated,1);
+        await submit();
         await page.waitForFunction(code => document.querySelector('.category-row[data-code="'+code+'"]')?.getAttribute('data-name')==='نام اصلاحی',root);
         assert.equal(await page.locator('.category-row[data-code="'+root+'"]').getAttribute('data-id'),parentId);
         assert.equal(await page.locator('.category-row[data-code="'+child+'"]').getAttribute('data-parent-id'),parentId);
