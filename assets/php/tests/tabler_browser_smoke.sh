@@ -40,6 +40,12 @@ for i in $(seq 1 60); do
   if curl -fsS "http://127.0.0.1:$port/login.php" -o /dev/null; then break; fi
   sleep .2
 done
+# Category Excel must return clean HTTP 200 JSON and preserve duplicate/parent behavior.
+node assets/js/tests/category_excel_ui.test.cjs || {
+  echo "--- Category Excel browser PHP diagnostics ---"
+  tail -100 "$log"
+  exit 1
+}
 node assets/js/tests/admin_ui.test.cjs || {
   echo "--- PHP server diagnostics ---"
   tail -80 "$log"
