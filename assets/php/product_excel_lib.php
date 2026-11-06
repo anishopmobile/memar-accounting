@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * product_excel_lib.php
  *

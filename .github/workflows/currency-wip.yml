@@ -82,7 +82,8 @@ jobs:
         run: php assets/php/tests/auth_http_test.php
 
   responsive-ui-browser:
-    runs-on: ubuntu-latest
+    # Playwright 1.56 browser binaries do not support ubuntu-26.04 runners.
+    runs-on: ubuntu-24.04
     services:
       mysql:
         image: mysql:8.0

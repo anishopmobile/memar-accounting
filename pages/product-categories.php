@@ -108,6 +108,8 @@ $tree = buildCategoryTree($categories);
 <div class="card category-page">
     <div class="page-actions">
         <button class="button" id="openCategoryModal">اضافه کردن دسته بندی</button>
+        <a href="assets/php/export_categories.php" class="button-secondary">خروجی اکسل</a>
+        <button type="button" class="button-secondary" id="openCategoryImportModal">ورود از اکسل</button>
         <div class="filter-panel">
             <input type="search" id="categorySearch" placeholder="جستجو...">
         </div>
@@ -188,6 +190,60 @@ $tree = buildCategoryTree($categories);
                     </div>
                 </form>
             </div>
+        </div>
+    </div>
+</div>
+<!-- Same modal/preview styling as the product Excel import -->
+<div class="modal" id="categoryImportModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content-wide">
+        <div class="modal-header">
+            <h2>ورود دسته‌بندی‌ها از اکسل</h2>
+            <button type="button" class="modal-close" id="closeCategoryImportModal">×</button>
+        </div>
+        <div class="form-grid">
+            <div class="form-row" style="grid-column:span 2">
+                <label for="categoryImportFile">فایل اکسل (.xlsx یا .xls)</label>
+                <input type="file" id="categoryImportFile" accept=".xlsx,.xls">
+                <span class="import-help">ستون‌های کد گروه و نام گروه الزامی هستند؛ کد گروه مادر اختیاری است. فایل خروجی همین صفحه، قالب استاندارد ورود است.</span>
+            </div>
+            <div class="form-row" style="grid-column:span 2">
+                <label>دسته‌بندی‌های تکراری (بر اساس کد گروه)</label>
+                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                    <label style="display:flex;gap:6px;align-items:center">
+                        <input type="radio" name="category_import_mode" value="skip_duplicates" checked>
+                        صرف‌نظر از دسته‌بندی‌های تکراری
+                    </label>
+                    <label style="display:flex;gap:6px;align-items:center">
+                        <input type="radio" name="category_import_mode" value="update_existing">
+                        به‌روزرسانی اطلاعات
+                    </label>
+                </div>
+                <span class="import-help">در به‌روزرسانی فقط نام دسته‌بندی تغییر می‌کند؛ کد گروه، شناسه، گروه مادر و ارتباط با کالاها ثابت می‌مانند.</span>
+            </div>
+        </div>
+        <div class="import-actions">
+            <button type="button" class="button" id="categoryImportPreview" disabled>خواندن و پیش‌نمایش</button>
+            <button type="button" class="button button-success" id="categoryImportSubmit" disabled>ثبت نهایی</button>
+            <span class="import-spinner" id="categoryImportSpinner" style="display:none">در حال پردازش...</span>
+        </div>
+        <div class="import-result" id="categoryImportResult" style="display:none"></div>
+        <div class="import-summary" id="categoryImportSummary" style="display:none"></div>
+        <div class="import-errors-wrap" id="categoryImportErrorsWrap" style="display:none">
+            <div class="import-sub-title">خطاهای فایل:</div>
+            <ul class="import-errors" id="categoryImportErrors"></ul>
+        </div>
+        <div class="import-preview-wrap" id="categoryImportPreviewWrap" style="display:none">
+            <div class="import-sub-title">پیش‌نمایش دسته‌بندی‌ها:</div>
+            <div class="import-preview-scroll">
+                <table class="action-table import-preview-table" id="categoryImportPreviewTable">
+                    <thead><tr><th>ردیف</th><th>کد گروه</th><th>نام گروه</th><th>کد گروه مادر</th><th>وضعیت</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="form-actions modal-actions">
+            <button type="button" class="button-secondary" id="cancelCategoryImportModal">بستن</button>
         </div>
     </div>
 </div>

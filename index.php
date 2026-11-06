@@ -77,6 +77,9 @@ if (!array_key_exists($page, $pages)) {
     <script src="assets/js/currency.js" defer></script>
     <script src="assets/js/currency-settings.js" defer></script>
     <script src="assets/js/main.js" defer></script>
+    <?php if ($page === 'product-categories'): ?>
+    <script src="assets/js/category-excel.js?v=<?php echo (int) filemtime(__DIR__ . '/assets/js/category-excel.js'); ?>" defer></script>
+    <?php endif; ?>
     <?php if (in_array($page, ['goods-and-services','product-categories','media-library','settings','factors','purchase-invoice','sales-return','defective-goods','report-inventory','report-sold-items-detail','dashboard'], true)): ?>
     <script src="assets/vendor/dropzone/dropzone.min.js" defer></script>
     <script src="assets/js/media-ui.js" defer></script>
