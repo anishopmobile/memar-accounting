@@ -31,6 +31,7 @@ jobs:
           node --check assets/js/accounting-auto-settlement-settings.js
           node --check assets/js/main.js
           node --check assets/js/category-excel.js
+          node --check assets/js/tests/category_excel_ui.test.cjs
           node --check assets/js/tests/accounting_auto_settlement_ui.test.cjs
           node --check assets/js/currency.js
   accounting-mysql:
