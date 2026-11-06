@@ -68,9 +68,40 @@ if ($search !== '') {
     }
 }
 if ($category !== '') {
-    $conditions[] = 'category_id = ?';
-    $types .= 'i';
-    $params[] = (int) $category;
+    // Selecting a parent includes its products and all descendants, recursively.
+    // The existing category tree provides parent => children links using DB IDs.
+    list($categoryTree, $categoryChildren) = getCategoryTree($mysqli);
+
+    $categoryIds = [];
+    $pendingIds = [(int) $category];
+    $visited = [];
+
+    while (!empty($pendingIds)) {
+        $currentId = array_pop($pendingIds);
+        if (isset($visited[$currentId])) {
+            continue;
+        }
+
+        $visited[$currentId] = true;
+        $categoryIds[] = $currentId;
+
+        if (isset($categoryChildren[$currentId])) {
+            foreach ($categoryChildren[$currentId] as $child) {
+                $childId = (int) $child['id'];
+                if (!isset($visited[$childId])) {
+                    $pendingIds[] = $childId;
+                }
+            }
+        }
+    }
+
+    // Bind all category IDs, never interpolate selected IDs directly into SQL.
+    $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
+    $conditions[] = "category_id IN ($placeholders)";
+    $types .= str_repeat('i', count($categoryIds));
+    foreach ($categoryIds as $id) {
+        $params[] = $id;
+    }
 }
 
 $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
