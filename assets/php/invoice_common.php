@@ -502,6 +502,19 @@ function normalizeItems(mysqli $mysqli, $rawItems): array
         return ['ok' => false, 'message' => 'حداقل یک ردیف کالا باید ارسال شود.', 'items' => []];
     }
 
+    $unitIds = [];
+    foreach ($rawItems as $candidate) {
+        if (is_array($candidate) && ctype_digit((string)($candidate['unit_id'] ?? ''))) {
+            $unitIds[] = (int)$candidate['unit_id'];
+        }
+    }
+    $unitMap = [];
+    if ($unitIds) {
+        $ids = implode(',', array_unique($unitIds)); // integers only
+        $units = $mysqli->query('SELECT pu.*, p.type AS product_type FROM product_units pu LEFT JOIN products p ON p.id=pu.product_id WHERE pu.id IN (' . $ids . ')');
+        while ($unitRow = $units->fetch_assoc()) { $unitMap[(int)$unitRow['id']] = $unitRow; }
+        $units->free();
+    }
     $merged = [];
     foreach ($rawItems as $raw) {
         if (!is_array($raw)) {
@@ -540,18 +553,8 @@ function normalizeItems(mysqli $mysqli, $rawItems): array
                 return ['ok' => false, 'message' => "واحد اندازه‌گیری کالای {$pid} نامعتبر است.", 'items' => []];
             }
             // بارگذاری واحد از دیتابیس و اطمینان از تعلق آن به این کالا
-            $stmt = $mysqli->prepare(
-                'SELECT pu.*, p.type AS product_type FROM product_units pu
-                 LEFT JOIN products p ON p.id = pu.product_id
-                 WHERE pu.id = ? AND pu.product_id = ? LIMIT 1'
-            );
-            $unitIdInt = (int) $unitIdRaw;
-            $pidInt = $pid;
-            $stmt->bind_param('ii', $unitIdInt, $pidInt);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            $stmt->close();
-            $row = $res ? $res->fetch_assoc() : null;
+            $row = $unitMap[(int)$unitIdRaw] ?? null;
+            if ($row && (int)$row['product_id'] !== $pid) { $row = null; }
             if (!$row) {
                 return ['ok' => false, 'message' => "واحد اندازه‌گیری انتخابی برای کالای {$pid} معتبر نیست.", 'items' => []];
             }
@@ -1030,7 +1033,8 @@ function invoiceErrorMessage(Exception $e, mysqli $mysqli, ?string $clientToken)
             return 'DOUBLE_SUBMIT_REUSE';
         }
     }
-    return 'خطا در ذخیره‌سازی: ' . $msg;
+    error_log('Invoice operation failed: ' . $msg);
+    return 'خطا در ذخیره‌سازی؛ لطفاً وضعیت سند را بررسی کنید.';
 }
 
 /* ============================================================

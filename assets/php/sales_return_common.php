@@ -518,6 +518,8 @@ function createSalesReturn(mysqli $mysqli, array $in): array
         $rawItems = [];
     }
 
+    $clientToken = trim((string) ($in['client_token'] ?? ''));
+    $requestHash = hash('sha256', json_encode([$invoiceId, $in['return_date'], $note, $rawItems], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     $mysqli->begin_transaction();
     try {
         /* قفل فاکتور: تمام سندهای برگشت یک فاکتور سریالی اجرا می‌شوند */
@@ -534,6 +536,18 @@ function createSalesReturn(mysqli $mysqli, array $in): array
             throw new Exception('not_final_sales');
         }
 
+        if ($clientToken !== '') {
+            $dedup = $mysqli->prepare('SELECT id, return_number, request_hash FROM sales_returns WHERE client_token = ?');
+            $dedup->bind_param('s', $clientToken); $dedup->execute();
+            $existing = $dedup->get_result()->fetch_assoc(); $dedup->close();
+            if ($existing) {
+                if (!hash_equals((string)$existing['request_hash'], $requestHash)) {
+                    throw new Exception('request_token_conflict');
+                }
+                $mysqli->commit();
+                return ['ok'=>true, 'message'=>'این درخواست قبلاً ثبت شده است.', 'return_id'=>(int)$existing['id'], 'return_number'=>$existing['return_number']];
+            }
+        }
         $ctx = sr_invoice_context($mysqli, $invoiceId, null);
         if (!$ctx['ok']) {
             throw new Exception('invoice_context');
@@ -579,6 +593,10 @@ function createSalesReturn(mysqli $mysqli, array $in): array
         $returnId = (int) $stmt->insert_id;
         $stmt->close();
 
+        if ($clientToken !== '') {
+            $dedup = $mysqli->prepare('UPDATE sales_returns SET client_token = ?, request_hash = ? WHERE id = ?');
+            $dedup->bind_param('ssi', $clientToken, $requestHash, $returnId); $dedup->execute(); $dedup->close();
+        }
         sr_insert_return_items($mysqli, $returnId, $items);
         sr_apply_stock_for_items($mysqli, $items, $returnId, 'create');
 
@@ -598,6 +616,8 @@ function createSalesReturn(mysqli $mysqli, array $in): array
         } elseif ($msg === 'product_not_found') {
             $msg = 'یکی از کالاهای برگشتی دیگر معتبر نیست.';
         }
+        if ($e instanceof mysqli_sql_exception) { error_log('Sales return SQL failure: ' . $msg); $msg = 'خطای ذخیره‌سازی؛ وضعیت سند را بررسی کنید.'; }
+        if ($msg === 'request_token_conflict') { $msg = 'شناسه درخواست برای محتوای دیگری استفاده شده است.'; }
         return ['ok' => false, 'message' => $msg];
     }
 }
@@ -822,6 +842,8 @@ function editSalesReturn(mysqli $mysqli, int $returnId, array $in): array
         } elseif ($msg === 'product_not_found') {
             $msg = 'یکی از کالاهای برگشتی دیگر معتبر نیست.';
         }
+        if ($e instanceof mysqli_sql_exception) { error_log('Sales return SQL failure: ' . $msg); $msg = 'خطای ذخیره‌سازی؛ وضعیت سند را بررسی کنید.'; }
+        if ($msg === 'request_token_conflict') { $msg = 'شناسه درخواست برای محتوای دیگری استفاده شده است.'; }
         return ['ok' => false, 'message' => $msg];
     }
 }
@@ -901,6 +923,8 @@ function deleteSalesReturn(mysqli $mysqli, int $returnId): array
         } elseif ($msg === 'product_not_found') {
             $msg = 'یکی از کالاهای برگشتی دیگر معتبر نیست.';
         }
+        if ($e instanceof mysqli_sql_exception) { error_log('Sales return SQL failure: ' . $msg); $msg = 'خطای ذخیره‌سازی؛ وضعیت سند را بررسی کنید.'; }
+        if ($msg === 'request_token_conflict') { $msg = 'شناسه درخواست برای محتوای دیگری استفاده شده است.'; }
         return ['ok' => false, 'message' => $msg];
     }
 }

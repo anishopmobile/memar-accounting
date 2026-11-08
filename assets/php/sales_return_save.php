@@ -25,6 +25,7 @@ if (!is_array($items)) {
 }
 
 $in = [
+    'client_token' => trim((string) ($_POST['client_token'] ?? '')),
     'invoice_id'  => trim((string) ($_POST['invoice_id'] ?? '')),
     'return_date' => trim((string) ($_POST['return_date'] ?? '')),
     'note'        => trim((string) ($_POST['note'] ?? '')),
@@ -32,6 +33,9 @@ $in = [
 ];
 
 if ($returnId === '') {
+    if (!preg_match('/^[a-f0-9]{32,64}$/D', $in['client_token'])) {
+        respond_error('شناسه درخواست نامعتبر است؛ صفحه را تازه کنید.', 422);
+    }
     $result = createSalesReturn($mysqli, $in);
 } else {
     if (!ctype_digit($returnId) || (int) $returnId <= 0) {

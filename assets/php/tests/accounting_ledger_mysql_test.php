@@ -376,7 +376,7 @@ check_acct(acct_party_statement($mysqli,'customer',$returnParty)['returns'][0]['
 // while the first writer owns its party lock. Final amounts remain bounded.
 $concurrentParty=a_customer($mysqli);
 pay_acct($mysqli,'customer',$concurrentParty,'50000',[]);
-$waiter=new mysqli('127.0.0.1','root','','memar_accounting');
+$waiter=new mysqli($dbHost,$dbUser,$dbPass,$dbName,$dbPort);
 $waiter->set_charset('utf8mb4');
 $waiter->query('SET SESSION innodb_lock_wait_timeout=1');
 $mysqli->begin_transaction();

@@ -16,6 +16,9 @@
 require_once __DIR__ . '/auth.php';
 
 require_login();
+// Persist CSRF before releasing the session; endpoints only read this snapshot.
+csrf_token();
+if (session_status() === PHP_SESSION_ACTIVE) { session_write_close(); }
 
 /**
  * پاسخ JSON استاندارد پروژه + خروج

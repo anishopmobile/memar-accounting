@@ -11,6 +11,8 @@ if (!$id || !in_array($size, ['thumb','original'], true)) {
     http_response_code(400); exit;
 }
 $m = media_get($mysqli, (int)$id);
+// No database work remains while a potentially large file is streamed.
+$mysqli->close();
 $path = $m ? media_absolute_path((string)$m[$size === 'thumb' ? 'thumbnail_path' : 'original_path']) : null;
 if (!$path) { http_response_code(404); exit; }
 header('Content-Type: ' . ($size === 'thumb' ? 'image/jpeg' : $m['mime_type']));

@@ -412,6 +412,17 @@ $ret = createSalesReturn($mysqli, t_ret_input($saleInv, [t_ret_item((int) $ii[0]
 t_check('return 2 cartons (base 20) ok', $ret['ok'], $ret['message']);
 $stockNow = t_stock_of($mysqli, $pid);
 t_check('stock increased by 20 (base units)', money_cmp($stockNow, '470') === 0, $stockNow);
+$retryInput = t_ret_input($saleInv, [t_ret_item((int)$ii[0]['id'], $pid, $cartonUnit, 1)]);
+$retryInput['client_token'] = bin2hex(random_bytes(16));
+$firstRetry = createSalesReturn($mysqli, $retryInput);
+$stockBeforeRetry = t_stock_of($mysqli, $pid);
+$secondRetry = createSalesReturn($mysqli, $retryInput);
+t_check('same token returns same return document', $firstRetry['ok'] && $secondRetry['ok'] && $firstRetry['return_id'] === $secondRetry['return_id']);
+t_check('retry does not change stock', money_cmp(t_stock_of($mysqli, $pid), $stockBeforeRetry) === 0);
+$retryInput['note'] = 'different content';
+$conflictRetry = createSalesReturn($mysqli, $retryInput);
+t_check('same token different content rejected', !$conflictRetry['ok']);
+
 
 echo "\n== Test J2: CSRF via endpoint (subprocess) ==\n";
 /** اجرای کد PHP در یک process جداگانه (بدون مشکل نقل‌قول shell) */
@@ -431,7 +442,7 @@ $out1 = t_run_child($code1);
 t_check('invalid CSRF => success false', str_contains($out1, '"success":false'), substr($out1, 0, 80));
 t_check('invalid CSRF message mentions CSRF', mb_strpos($out1, 'CSRF') !== false);
 $code2 = 'session_start();$_SESSION["auth_user"]="memar";$_SESSION["csrf_token"]="good-token";'
-    . '$_POST=["csrf_token"=>"good-token","invoice_id"=>"9999999","return_date"=>"2026-01-01","note"=>"","items"=>"[]"];'
+    . '$_POST=["csrf_token"=>"good-token","client_token"=>"0123456789abcdef0123456789abcdef","invoice_id"=>"9999999","return_date"=>"2026-01-01","note"=>"","items"=>"[]"];'
     . 'require ' . var_export($saveAbs, true) . ';';
 $out2 = t_run_child($code2);
 t_check('valid CSRF passed (moved to invoice validation)', str_contains($out2, 'فاکتور موردنظر یافت نشد'), substr($out2, 0, 80));
@@ -441,7 +452,7 @@ $p = t_make_product($mysqli, 'T-SR-K-1', 'همزمانی');
 $r = t_purchase($mysqli, $p['id'], $p['unit_id'], 100, '1000');
 $r = t_sell($mysqli, $p['id'], $p['unit_id'], 10, '2000');
 $saleInv = (int) $r['invoice_id'];
-$c2 = new mysqli('127.0.0.1', 'root', '', 'memar_accounting');
+$c2 = new mysqli($dbHost, $dbUser, $dbPass, $dbName, $dbPort);
 $c2->set_charset('utf8mb4');
 $c2->query('SET SESSION innodb_lock_wait_timeout = 1');
 $mysqli->begin_transaction();

@@ -66,6 +66,9 @@ $in = [
 ];
 
 if ($invoiceId === '') {
+    if (!preg_match('/^[A-Za-z0-9_-]{16,64}$/D', $in['client_token'])) {
+        respond_error('شناسه درخواست نامعتبر است؛ صفحه را تازه کنید.', 422);
+    }
     $result = createInvoice($mysqli, $in);
 } else {
     if (!ctype_digit($invoiceId)) {

@@ -53,6 +53,10 @@ jobs:
         with:
           php-version: '8.4'
           extensions: mysqli, mysqlnd, bcmath, mbstring, gd
+      - name: Provision explicit core schema
+        run: |
+          php -r '$m=new mysqli("127.0.0.1","root",""); $m->query("CREATE DATABASE IF NOT EXISTS memar_accounting CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");'
+          php tools/migrate-database.php
       - name: Settlement and balance tests
         run: php assets/php/tests/accounting_ledger_mysql_test.php
       - name: Automatic public customer settlement integrity tests

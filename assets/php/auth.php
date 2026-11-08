@@ -12,7 +12,6 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/auth/auth_users.php';
 require_once __DIR__ . '/auth/auth_rate_limiter.php';
 require_once __DIR__ . '/auth/auth_settings.php';
@@ -33,6 +32,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
     session_start();
 }
+
+require_once __DIR__ . '/db.php';
 
 /* ==================== CSRF (مشترک login/register + boot) ==================== */
 

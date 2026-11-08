@@ -117,5 +117,9 @@ jobs:
             sudo apt-get update -qq
             sudo apt-get install -y -qq poppler-utils
           fi
+      - name: Provision explicit core schema
+        run: |
+          php -r '$m=new mysqli("127.0.0.1","root",""); $m->query("CREATE DATABASE IF NOT EXISTS memar_accounting CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");'
+          php tools/migrate-database.php
       - name: Browser and actual rasterized PDF regression
         run: bash assets/php/tests/tabler_browser_smoke.sh

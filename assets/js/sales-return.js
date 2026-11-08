@@ -9,6 +9,7 @@ $(function () {
     var csrf = String($('#srCsrfToken').val() || '');
     var currentPage = 1;
     var currentReturnId = '';
+    var requestToken = '';
     var currentInvoiceId = '';
     var currentCtx = null;      // invoice + items بارگذاری‌شده از سرور
     var taxRate = 0, taxEnabled = false;
@@ -193,6 +194,9 @@ $(function () {
         var invId = $(this).data('id');
         closeModal('srInvoiceModal');
         currentReturnId = '';
+        var tokenBytes = new Uint8Array(16);
+        window.crypto.getRandomValues(tokenBytes);
+        requestToken = Array.from(tokenBytes, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
         fetchCtx(invId, 0, null);
     });
 
@@ -420,6 +424,7 @@ $(function () {
         var payload = {
             csrf_token: csrf,
             return_id: currentReturnId,
+            client_token: requestToken,
             invoice_id: invoiceId,
             return_date: dateIso,
             note: String($('#srNote').val() || ''),
