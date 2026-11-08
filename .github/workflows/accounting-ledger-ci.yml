@@ -104,5 +104,9 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq poppler-utils
+      - name: Provision explicit core schema for browser tests
+        run: |
+          php -r '$m=new mysqli("127.0.0.1","root",""); $m->query("CREATE DATABASE IF NOT EXISTS memar_accounting CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");'
+          php tools/migrate-database.php
       - name: Existing UI and RTL browser regressions
         run: bash assets/php/tests/tabler_browser_smoke.sh

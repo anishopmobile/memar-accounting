@@ -194,10 +194,7 @@ const cookie = process.env.UI_TEST_SESSION || 'ci-tabler-browser-123456789';
           assert.equal(await page.locator('#invoiceServiceModal.open').count(), 0,
             'legacy service modal still closes');
         }
-// Existing Payment transaction client references an absent renderPagination helper.
-        // This is a pre-existing Payment module defect, deliberately excluded from this UI-only migration.
-        const newErrors = errors.filter(e => !e.includes('renderPagination is not defined'));
-        assert.equal(newErrors.length, 0, id + ' JS errors at ' + width + ': ' + newErrors.join(' | '));
+        assert.equal(errors.length, 0, id + ' JS errors at ' + width + ': ' + errors.join(' | '));
         errors.length = 0;
         checked++;
         console.log('OK ' + id + ' at ' + width + 'px');

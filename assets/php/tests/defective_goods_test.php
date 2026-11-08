@@ -237,7 +237,7 @@ function t_dg_run_export(string $runner, string $tmpOut, array $filters): string
     @unlink($runner);
     file_put_contents($runner, $code);
     @unlink($tmpOut);
-    shell_exec('php -d extension=mysqli ' . escapeshellarg($runner) . ' > ' . escapeshellarg($tmpOut) . ' 2>&1');
+    shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($runner) . ' > ' . escapeshellarg($tmpOut) . ' 2>&1');
     return (string) file_get_contents($tmpOut);
 }
 
@@ -276,7 +276,7 @@ function t_dg_run_action(string $runner, string $outFile, array $post, bool $csr
     @unlink($runner);
     file_put_contents($runner, $code);
     @unlink($outFile);
-    shell_exec('php -d extension=mysqli ' . escapeshellarg($runner) . ' > ' . escapeshellarg($outFile) . ' 2>&1');
+    shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($runner) . ' > ' . escapeshellarg($outFile) . ' 2>&1');
     $raw = (string) file_get_contents($outFile);
     $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw);
     $json = json_decode($raw, true);

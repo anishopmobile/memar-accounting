@@ -40,23 +40,15 @@ function t_count(mysqli $m, string $sql): int
 }
 
 /* ---------- throwaway database setup ---------- */
-$root = new mysqli('127.0.0.1', 'root', '');
-if ($root->connect_errno) {
-    echo "NO DB\n";
-    exit(1);
-}
+if (getenv('GITHUB_ACTIONS') !== 'true') { exit(2); }
+$root = new mysqli(getenv('MEMAR_DB_HOST') ?: '127.0.0.1', getenv('MEMAR_DB_USER') ?: 'root', getenv('MEMAR_DB_PASS') ?: '', '', (int)(getenv('MEMAR_DB_PORT') ?: 3306));
 $root->query('DROP DATABASE IF EXISTS memar_accounting_ca_test');
 $root->query('CREATE DATABASE memar_accounting_ca_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
 $root->close();
-
-$orig = file_get_contents(__DIR__ . '/../db.php');
-$patched = str_replace(
-    '$dbName = \'memar_accounting\';',
-    '$dbName = \'memar_accounting_ca_test\';',
-    (string) $orig
-);
-file_put_contents(__DIR__ . '/../db_ca_patch.php', $patched);
-require __DIR__ . '/../db_ca_patch.php'; // defines global $mysqli
+putenv('MEMAR_DB_NAME=memar_accounting_ca_test');
+require __DIR__ . '/../db.php';
+define('MEMAR_RUN_SCHEMA', true);
+require __DIR__ . '/../db_schema.php';
 require __DIR__ . '/../current_affairs/ca_loader.php';
 
 $migErrs = current_affairs_migrate($mysqli);
@@ -666,7 +658,7 @@ t_check('current affairs IRR input converted to TOMAN exactly',
 /* ============================================================
  * 9) Teardown + summary
  * ========================================================== */
-@unlink(__DIR__ . '/../db_ca_patch.php');
+@// No patched source file is created.
 $mysqli->query('DROP DATABASE IF EXISTS memar_accounting_ca_test');
 $mysqli->close();
 

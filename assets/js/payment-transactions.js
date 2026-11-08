@@ -66,6 +66,20 @@ $(function () {
             });
     }
 
+    function renderPagination(data) {
+        var page = Math.max(1, parseInt(data.page, 10) || 1);
+        var pages = Math.max(1, parseInt(data.totalPages, 10) || 1);
+        state.page = page;
+        var html = '';
+        function button(target, label, disabled) {
+            return '<button type="button" class="dashboard-page-button" data-page="' + target + '"' + (disabled ? ' disabled' : '') + '>' + label + '</button>';
+        }
+        html += button(page - 1, 'قبلی', page <= 1);
+        html += '<span> ' + page + ' / ' + pages + ' </span>';
+        html += button(page + 1, 'بعدی', page >= pages);
+        $('#txPagination').html(html);
+    }
+
     function statusBadge(status) {
         var map = {
             paid: '<span class="badge">پرداخت شده</span>',
